@@ -12,12 +12,17 @@ directive that **`./run.sh` is the user's and agents must never invoke it**. The
 `external/psxport/docs/workspace/WORKSPACE.md`; the multi-agent protocol is `…/PROTOCOL.md`; the
 methodology is `…/docs/porting-a-new-psx-game.md`.
 
-## THE STATE OF THIS PORT: nothing is reverse-engineered. Do not read anything else as progress
+## THE STATE OF THIS PORT: one RE step done, no substrate. Do not read anything else as progress
 
-Created 2026-08-12. There is **no recompiled substrate, no port binary, and no RE'd guest address.**
-`game/core/game_config.cpp` is all zeros with each field pointing at its open step in
-`docs/re-frontier.md`. If something here looks like it works, check `docs/codemap.md` — the honest
-inventory is provisioning, a compiling seam, and the registries.
+Created 2026-08-12. There is **no recompiled substrate and no port binary.** Exactly one RE step has
+landed: **RE-01, the crt0 boot group, is MEASURED** (11 values derived from `SLUS_005.61`'s entry
+function, each with its disassembly line, re-derivable by `python3 tools/verify_crt0.py --check`, which DIFFS the constants `game/core/game_config.cpp` ships against those bytes — the tool keeps no second copy). It is
+`re-partial` rather than done because the values still cannot be written into `GameConfig` — psxport's
+`crt0_setup` transcribes Tomba!2's crt0 and two of the fields have no correct value here. That is a
+FRAMEWORK defect (`docs/issues/0005-*`, claims C005/C006), fixed upstream by the operator, not here.
+Every other guest address in `game/core/game_config.cpp` is still zero with its open step named in
+`docs/re-frontier.md`. If something looks like it works, check `docs/codemap.md` — the honest inventory
+is provisioning, a compiling seam, the registries, and that one boot measurement.
 
 What DOES build today, and is the gate for a change to the seam:
 
@@ -136,6 +141,13 @@ supply of addresses sitting in `external/mmx4`, which is precisely why the rule 
   own byte-exact build target, so its symbol addresses are OUR addresses with no translation.
 - **`SYSTEM.CNF`**: `BOOT = cdrom:\SLUS_005.61;1`, `TCB = 4`, `EVENT = 16`, `STACK = 801FFF00`. One
   boot executable, no boot stub — psxport's stub stage is unused.
+- **The crt0 at `pc0 = 0x800DAE8C`, disassembled and symbolically executed to its `break`** (RE-01,
+  claim C005, `tools/verify_crt0.py`): `.bss` clear `[0x8012F418, 0x80175F38)` = `0x46B20`; `sp = fp =
+  0x80200000` from `mem[0x800DAF3C]` with **no bias**; heap `0x80175F3C` size `0x820C8` (532,680 B) from
+  `stackTop - mem[0x8011CB74] - maskedBase`, handed to **BIOS `A(39h) InitHeap`** at `0x800EDCDC` in
+  `a0`/`a1`; `gp = 0x8012F418`; game-main `0x80012024`. **This crt0 stores the heap base/size in NO
+  global** — the function's only absolute store is `sw ra` to `0x8012F418`. The 532 KB heap is the
+  measured premise under RE-04: `PL00_U.ARC` (796,672 B) cannot be loaded whole.
 - **NO CODE OVERLAYS. The boot executable IS the whole engine.** Measured three independent ways over
   all 163 disc files, with a control, plus corroboration from the decomp's overlay-free splat config.
   X4 is structurally the OPPOSITE of Vagrant Story. `GameConfig` needs no overlay load bases and the

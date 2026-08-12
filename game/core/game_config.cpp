@@ -305,8 +305,11 @@ static const GameConfig g_x4_cfg = {
     // crt0 stack-top bias, MEASURED by psxport tools/crt0_extract over this game's own boot
     // executable (SLUS_005.61, entry 0x800DAE8C). `declared = 1` is mandatory: crt0_plan REFUSES a boot when it is 0,
     // because this game's measured bias IS 0 — its crt0 has no bias instruction, which is why the
-    // framework's old hardcoded -8 put sp at 0x801FFFF8 instead of 0x80200000.
-    .stackBias = {1, 0},
+    // framework's old hardcoded -8 put sp at 0x801FFFF8 instead of 0x80200000. The value NAMES
+    // kCrt0StackBias rather than repeating the literal: a second `0` here would be a second copy of a
+    // measured value with nothing comparing the two, which is the exact defect that let
+    // kCrt0GameMain = 0x80999999 pass every gate. tools/verify_crt0.py --check diffs BOTH members.
+    .stackBias = {1, kCrt0StackBias},
 };
 
 const GameConfig* x4_game_config() { return &g_x4_cfg; }
