@@ -1,0 +1,6 @@
+[submodule "external/psxport"]
+	path = external/psxport
+	url = https://github.com/SomeoneIsWorking/psxport.git
+[submodule "external/mmx4"]
+	path = external/mmx4
+	url = https://github.com/sozud/mmx4.git

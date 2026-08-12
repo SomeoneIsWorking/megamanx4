@@ -1,0 +1,44 @@
+# Build + generated artifacts (the recompiled substrate is ~hundreds of MB of emitted C)
+build/
+scratch/
+generated/
+
+# The recompiled substrate's INPUTS come from YOUR OWN disc and are never committed: the disc image
+# and anything extracted from it are the copyright holder's, not this repo's.
+#
+# Kept NARROW on purpose. Everything extracted lands under scratch/ (already ignored above); the
+# patterns here are the belt to that braces, for a file dropped in the repo root. Broad patterns
+# (*.exe, *.bin) would also match ordinary PROSE naming those files in docs, which floods
+# tools/go_public.py's "docs referencing gitignored items" check with false positives — and a gate
+# that cries wolf is one people stop reading.
+*.chd
+.env
+# NOT listed here, deliberately: `SLUS_005.61` / `SLUS_*.*`. go_public.py's check C ("docs referencing
+# SENSITIVE gitignored items") turns every gitignore pattern into a search token, so those two would
+# produce the tokens `SLUS_005.61` and `SLUS_`, which every doc in this repo names in prose — the audit
+# becomes a wall of false positives and a gate that cries wolf is one people stop reading. The
+# extracted executable lands under `scratch/bin/megamanx4/`, ignored above, which is where the tooling
+# puts it; a copy dropped loose in the repo root is caught by review and by go_public.py's check A
+# (which matches PATHS, not prose, and does list SLUS_005.61). Same tradeoff vagrant's and spyro's
+# .gitignore document.
+
+# The framework submodule's own working-tree noise (its build/ is where discdump is built from)
+external/psxport/build/
+external/psxport/scratch/
+# The vendored AGPL decomp is a REFERENCE; we never build it here, but a curious session might.
+# external/mmx4/disks/ matters specifically: upstream's README says the retail SLUS_005.61 goes in
+# disks/us, i.e. the natural way to use that repo is to drop OUR extracted executable into it.
+external/mmx4/build/
+external/mmx4/disks/
+external/mmx4/.venv/
+external/mmx4/expected/
+*.log
+
+# Python bytecode — never committed. Compiled .pyc embed ABSOLUTE SOURCE PATHS, i.e. a machine-path
+# leak that a TEXT-only audit cannot see, because they are binary.
+__pycache__/
+*.pyc
+
+# Editor / OS noise
+compile_commands.json
+.DS_Store
