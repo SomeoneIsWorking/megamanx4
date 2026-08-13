@@ -123,8 +123,10 @@ downstream of RE-07 should be attempted before it.
   `SetGeomScreen(0x200)`. Its caller `func_80012024` is the measured `gameMain` (RE-01), so this is
   the game's boot-time GTE projection initialisation: OFX=160, OFY=120, H=512. C001 establishes that
   the decomp's addresses need no region translation for our retail target; nevertheless this is a
-  SOURCE LEAD, not a runtime observation from this port. The next measurement must establish whether
-  later game modes overwrite CR24/25/26 and which writes are world projection versus 2D/HUD setup.
+  SOURCE LEAD, not a runtime observation from this port. A source census on 2026-08-13 found no other
+  `SetGeomOffset`, `SetGeomScreen`, inline `gte_SetGeom*`, or source-assembly `ctc2` CR24/25/26 writer
+  in `external/mmx4/src`; this narrows the remaining work to raw COP2 writers in the retail binary and
+  a runtime classification of their use as world projection versus 2D/HUD setup.
 - where: game/ (the widescreen feature will hang off cv_widescreen)
 - gap: The boot setup site is now located, but it does not yet justify a patch: X4 may write a
   different projection per scene, camera, or 2D pass after boot. Find and classify every subsequent
