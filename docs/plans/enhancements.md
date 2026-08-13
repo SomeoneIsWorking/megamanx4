@@ -41,7 +41,11 @@ the **guest's own projection setup**. That makes it `affect: full`, which is why
 `pc_enh` and not a render overlay. Misfiling it as `affect: none` would skip both the suppression
 requirement and `behavior.py check`'s only real assertion.
 
-**What must be RE'd first.** `RE-08` — where the guest sets up its projection / FOV. Nothing is located.
+**What must be RE'd first.** `RE-08` — classify every guest projection/FOV setup write. The matching
+decomp locates the boot-time setup in `func_8001213C`: `SetGeomOffset(160, 120)` and
+`SetGeomScreen(512)`, i.e. GTE OFX/OFY/H = 160/120/512. That is only the initial state; a runtime
+write census must still identify later world-camera writes and separate them from 2D/HUD setup before
+the widescreen CVar can change anything.
 
 **Open, and deliberately not guessed:** whether X4 uses a single GTE projection setup for the whole
 frame or several (HUD, background layers, sprites) that would need different treatment; and whether

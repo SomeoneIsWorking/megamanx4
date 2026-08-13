@@ -118,10 +118,27 @@ downstream of RE-07 should be attempted before it.
 ### RE-08 — the projection / FOV setup site widescreen must drive from game state
 - status: todo
 - deps: RE-01, RE-02
-- evidence:
+- evidence: STATIC REFERENCE LEAD, 2026-08-13: the matching `external/mmx4` decomp's fully written
+  `func_8001213C` (`src/main/2824.c`) calls `SetGeomOffset(0xA0, 0x78)` then
+  `SetGeomScreen(0x200)`. Its caller `func_80012024` is the measured `gameMain` (RE-01), so this is
+  the game's boot-time GTE projection initialisation: OFX=160, OFY=120, H=512. C001 establishes that
+  the decomp's addresses need no region translation for our retail target; nevertheless this is a
+  SOURCE LEAD, not a runtime observation from this port. The next measurement must establish whether
+  later game modes overwrite CR24/25/26 and which writes are world projection versus 2D/HUD setup.
 - where: game/ (the widescreen feature will hang off cv_widescreen)
-- gap: Nothing located. The structural point that matters more than the address: psxport's own widescreen is `affect: none` — a host-side read-only overlay driven by a native renderer, shifting the projection centre OFX rather than stretching the present. X4 has NO native renderer, so a widescreen change here reaches the GUEST's own projection setup and is therefore `affect: full`. That reclassification is why it is a suppressed pc_enh and not a render overlay, and misfiling it as `affect: none` would skip both the suppression requirement and behavior.py check's only real assertion.
-- notes:
+- gap: The boot setup site is now located, but it does not yet justify a patch: X4 may write a
+  different projection per scene, camera, or 2D pass after boot. Find and classify every subsequent
+  CR24/CR25/CR26 writer before changing the guest state. The structural point that matters more than
+  the address: psxport's own widescreen is `affect: none` — a host-side read-only overlay driven by a
+  native renderer, shifting the projection centre OFX rather than stretching the present. X4 has NO
+  native renderer, so a widescreen change here reaches the GUEST's own projection setup and is
+  therefore `affect: full`. That reclassification is why it is a suppressed `pc_enh` and not a render
+  overlay, and misfiling it as `affect: none` would skip both the suppression requirement and
+  behavior.py check's only real assertion.
+- notes: The target behavior is still a wider FOV, not a stretched display: a 16:9 path must set the
+  appropriate world-projection state through `x4::enh(x4::cv_widescreen)` while leaving it unchanged
+  when disabled or in oracle/SBS runs. Do not attach the CVar until the write census distinguishes
+  world from HUD.
 
 ### RE-09 — the game's OWN scripted wait states, fade ramps and frame-count timers
 - status: todo
