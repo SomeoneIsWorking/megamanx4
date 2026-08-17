@@ -22,9 +22,9 @@ generated/
 # (which matches PATHS, not prose, and does list SLUS_005.61). Same tradeoff vagrant's and spyro's
 # .gitignore document.
 
-# The framework submodule's own working-tree noise (its build/ is where discdump is built from)
-external/psxport/build/
-external/psxport/scratch/
+# The framework. Not tracked: either a symlink to the workspace shared clone (local) or a
+# private clone at psxport.pin (fresh machine). Managed by tools/psxport_sync.py.
+/external/psxport
 # The vendored AGPL decomp is a REFERENCE; we never build it here, but a curious session might.
 # external/mmx4/disks/ matters specifically: upstream's README says the retail SLUS_005.61 goes in
 # disks/us, i.e. the natural way to use that repo is to drop OUR extracted executable into it.

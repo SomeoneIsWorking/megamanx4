@@ -27,18 +27,20 @@ is provisioning, a compiling seam, the registries, and that one boot measurement
 What DOES build today, and is the gate for a change to the seam:
 
 ```sh
-git submodule update --init external/psxport external/mmx4                        # once
-git -C external/psxport submodule update --init vendor/lucent vendor/beetle-psx    # once, PER PATH
+python3 tools/psxport_sync.py --auto                                    # resolve external/psxport (symlink to the shared clone, or a private clone at psxport.pin)
+git submodule update --init external/mmx4                              # once (the AGPL reference decomp, not needed to build)
 cmake -S . -B build && cmake --build build --target megamanx4_seam -j$(nproc)
 ```
 
-**The second line is not optional, and neither `--recurse-submodules` nor `sync-submodules.sh`
-replaces it.** Initialising `external/psxport` leaves psxport's own `vendor/lucent` empty and
-`vendor/beetle-psx/deps/libchdr` absent, and cmake then dies inside the framework; `--recursive` aborts
-on beetle-psx's url-less `deps/lightning/gnulib`, and `sync-submodules.sh` prints "all at recorded
-gitlinks" over vendors it never reached (`external/psxport/docs/workspace/KNOWN-DEFECT-sync-submodules.md`).
-The per-path form sidesteps the url-less path. `CMakeLists.txt` checks both vendors and fails with that
-exact command, and `tools/discdump.py` says the same when its build fails.
+**`external/psxport` is NOT a submodule any more (2026-08-16)** — it is a symlink to the workspace's
+shared framework clone when one exists, or a private clone at this repo's `psxport.pin` on a fresh
+machine; `tools/psxport_sync.py --auto` establishes whichever applies. The framework's own nested
+vendors (`vendor/lucent`, `vendor/beetle-psx/deps/libchdr`) are the SHARED clone's concern — initialized
+once there, never per-port (`--recursive` aborts on beetle-psx's url-less `deps/lightning/gnulib`, and
+`sync-submodules.sh` prints "all at recorded gitlinks" over vendors it never reached —
+`external/psxport/docs/workspace/KNOWN-DEFECT-sync-submodules.md`). `CMakeLists.txt` fails with a clear
+message if they are missing in the shared clone, and `tools/discdump.py` says the same when its build
+fails.
 
 `megamanx4_seam` is an OBJECT library over `game/core/{game_config,game_hooks,enhancements,main}.cpp`:
 it compiles but does not link, which is the strongest check possible before a substrate exists — it
@@ -188,16 +190,21 @@ prints: it carries its denominator and its blind spots. Refuse (non-zero) rather
 a missing corpus. Every tool here ships a `--selftest` that feeds one case which MUST pass and one
 which MUST fail.
 
-## Where the framework source comes from — NEVER edit `external/psxport`
+## Where the framework source comes from — `external/psxport` is the shared tree
 
-It is a **read-only pinned consumer**. Framework edits happen in the workspace's framework DEV CLONE
-(`../psxport`) and nowhere else; `run.sh` re-syncs this submodule to the recorded gitlink, so an edit
-made here is liable to be silently reverted mid-gate. Build against in-progress framework work without
-touching the submodule:
+`external/psxport` is **not a submodule** (2026-08-16): it is a SYMLINK to the workspace's shared
+framework clone (`$PSX/psxport`) when one exists, or a private clone at this repo's `psxport.pin` on a
+fresh machine. `tools/psxport_sync.py --auto` (called by `run.sh`) establishes whichever applies. A
+framework edit made through either path is the SAME directory, live in every port at once — commit and
+push framework work in `psxport/`, never here. `psxport.pin` records the framework commit this game
+was built and VERIFIED against; `tools/psxport_sync.py --bump` updates it, and the gate's `--check`
+fails when the framework you built against is not the recorded one.
+
+Build against in-progress framework work:
 
 ```sh
-cmake -S . -B build -DPSXPORT_DIR=/path/to/psxport      # or: PSXPORT_DIR=... ./run.sh   (user only)
+cmake -S . -B build -DPSXPORT_DIR=/path/to/psxport      # or just ./run.sh — it resolves external/psxport
 ```
 
-`PSXPORT_DIR` defaults to the submodule, so a bare clone of this repo builds standalone — keep it that
-way, and never re-spell `external/psxport` at a call site in cmake or in a tool.
+`PSXPORT_DIR` defaults to `external/psxport`, so a bare clone of this repo builds standalone — keep it
+that way, and never re-spell `external/psxport` at a call site in cmake or in a tool.
