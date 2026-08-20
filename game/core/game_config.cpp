@@ -28,11 +28,10 @@
 //   PS-X EXE  pc0 = 0x800DAE8C   text = 0x80010000 + 0x11F800   sp = 0x801FFFF0
 //             d_addr/d_size and b_addr/b_size are all 0 in the header — this game clears its own BSS.
 //   SYSTEM.CNF  BOOT = cdrom:\SLUS_005.61;1   TCB = 4   EVENT = 16   STACK = 801FFF00
-static constexpr uint32_t kPsExeEntry     = 0x800DAE8Cu;   // header pc0
-static constexpr uint32_t kPsExeTextAddr  = 0x80010000u;   // header t_addr
-static constexpr uint32_t kPsExeTextSize  = 0x0011F800u;   // header t_size
-static_assert(kPsExeEntry >= kPsExeTextAddr &&
-              kPsExeEntry < kPsExeTextAddr + kPsExeTextSize,
+static constexpr uint32_t kPsExeEntry = 0x800DAE8Cu;    // header pc0
+static constexpr uint32_t kPsExeTextAddr = 0x80010000u; // header t_addr
+static constexpr uint32_t kPsExeTextSize = 0x0011F800u; // header t_size
+static_assert(kPsExeEntry >= kPsExeTextAddr && kPsExeEntry < kPsExeTextAddr + kPsExeTextSize,
               "the PS-EXE entry must lie inside the loaded text — if this fires, the header was "
               "misread and every number in this file's comment block is suspect");
 
@@ -108,17 +107,17 @@ static_assert(kPsExeEntry >= kPsExeTextAddr &&
 // is safe to land in psxport): add `int32_t stackTopBias` to GameConfig (Tomba!2 = -8, X4 = 0); treat
 // heapSizePtr/heapBasePtr == 0 as "this crt0 keeps them in registers only — do not store"; and set
 // `c->r[5] = heapsz` unconditionally, which is faithful to BOTH consumers and is a plain bug fix
-// rather than a new knob. Tracked in docs/re-frontier.md RE-01 and docs/issues/. Until it lands, zero
-// is the honest value and the framework fails fast on it. THE RE IS DONE; THE PLUMBING IS NOT.
-static constexpr uint32_t kCrt0BssZeroLo    = 0x8012F418u;
-static constexpr uint32_t kCrt0BssZeroHi    = 0x80175F38u;
+// rather than a new knob. psxport 726d10c9 landed that fix; the measured group below now ships and
+// `tools/verify_crt0.py --check` gates the framework mechanisms as well as these values.
+static constexpr uint32_t kCrt0BssZeroLo = 0x8012F418u;
+static constexpr uint32_t kCrt0BssZeroHi = 0x80175F38u;
 static constexpr uint32_t kCrt0StackTopBase = 0x800DAF3Cu;
 static constexpr uint32_t kCrt0StackTopBas2 = 0x8011CB74u;
-static constexpr uint32_t kCrt0HeapBase     = 0x80175F38u;
-static constexpr uint32_t kCrt0Gp           = 0x8012F418u;
-static constexpr uint32_t kCrt0LibcInit     = 0x800EDCDCu;   // BIOS A(39h) InitHeap thunk
-static constexpr uint32_t kCrt0GameMain     = 0x80012024u;
-static constexpr uint32_t kCrt0Entry        = kPsExeEntry;   // crt0 IS the PS-EXE entry
+static constexpr uint32_t kCrt0HeapBase = 0x80175F38u;
+static constexpr uint32_t kCrt0Gp = 0x8012F418u;
+static constexpr uint32_t kCrt0LibcInit = 0x800EDCDCu; // BIOS A(39h) InitHeap thunk
+static constexpr uint32_t kCrt0GameMain = 0x80012024u;
+static constexpr uint32_t kCrt0Entry = kPsExeEntry; // crt0 IS the PS-EXE entry
 // THE STACK-TOP BIAS, and it is 0 BECAUSE THE INSTRUCTION IS NOT THERE — not because nobody looked.
 // The stock PSY-Q crt0 does `addi v0,v0,-8` between loading the stack-top word and OR-ing it into $sp;
 // four of this workspace's five executables really do (Tomba!2 @0x80089710, Spyro @0x8005B910,
@@ -127,7 +126,7 @@ static constexpr uint32_t kCrt0Entry        = kPsExeEntry;   // crt0 IS the PS-E
 // so sp = 0x80200000 exactly and the heap-size subtraction is 8 bytes larger than the framework used to
 // compute. Zero here is a MEASURED value, which is why psxport's `stackBias` field carries a separate
 // `declared` flag: for this one field zero cannot double as "unset".
-static constexpr int32_t  kCrt0StackBias    = 0;
+static constexpr int32_t kCrt0StackBias = 0;
 static_assert(kCrt0BssZeroHi - kCrt0BssZeroLo == 0x46B20u,
               "the measured .bss size must stay 0x46B20 — if this fires, the clear-loop bounds were "
               "re-derived to something else and tools/verify_crt0.py --check is the arbiter");
@@ -171,8 +170,7 @@ static_assert(kCrt0BssZeroLo < kPsExeTextAddr + kPsExeTextSize,
 static constexpr uint32_t kPadSlot0Buf = 0x80166D68u;
 static constexpr uint32_t kPadSlot1Buf = 0x8012F46Cu;
 static constexpr uint32_t kPadCapacity = 0x22u;
-static_assert(kPadSlot0Buf + kPadCapacity <= kPadSlot1Buf ||
-              kPadSlot1Buf + kPadCapacity <= kPadSlot0Buf,
+static_assert(kPadSlot0Buf + kPadCapacity <= kPadSlot1Buf || kPadSlot1Buf + kPadCapacity <= kPadSlot0Buf,
               "the two InitPAD buffers must not overlap");
 
 // DESIGNATED initialisers, deliberately. GameConfig is initialised POSITIONALLY by the older
@@ -197,20 +195,25 @@ static const GameConfig g_x4_cfg = {
     // neither store and SAYS "0 of 2 declared" in the boot log. Putting a plausible address here to keep
     // the framework quiet would inject two writes the real game never makes — and crt0_audit would now
     // catch it, because the guest crt0 has no such store to point at.
-    .bssZeroLo = kCrt0BssZeroLo, .bssZeroHi = kCrt0BssZeroHi,
-    .stackTopBase = kCrt0StackTopBase, .stackTopBase2 = kCrt0StackTopBas2,
+    .bssZeroLo = kCrt0BssZeroLo,
+    .bssZeroHi = kCrt0BssZeroHi,
+    .stackTopBase = kCrt0StackTopBase,
+    .stackTopBase2 = kCrt0StackTopBas2,
     .heapBase = kCrt0HeapBase,
-    .heapSizePtr = 0, .heapBasePtr = 0,   // ABSENT — measured, see above. NOT unset.
+    .heapSizePtr = 0,
+    .heapBasePtr = 0, // ABSENT — measured, see above. NOT unset.
     .gp = kCrt0Gp,
     .libcInit = kCrt0LibcInit,
-    .gameMain = kCrt0GameMain, .crt0 = kCrt0Entry,
+    .gameMain = kCrt0GameMain,
+    .crt0 = kCrt0Entry,
 
     // --- recompiled MAIN .text range (physical) ---------------------------------- RE-02, NOT DONE --
     // These come from the RECOMPILER's own generated/overlay_table.h (REC_MAIN_LO / REC_MAIN_HI) so
     // they can never drift from the substrate they describe. There is no substrate yet, so they are
     // zero and this file does not #include that header — including a generated header that does not
     // exist would make the tree un-configurable rather than honestly incomplete.
-    .recMainLo = 0, .recMainHi = 0,
+    .recMainLo = 0,
+    .recMainHi = 0,
 
     // --- disc key ----------------------------------------------- this port's own env name, not RE --
     // Not an RE fact but a port fact, and it belongs here because the framework must not know it: the
@@ -224,7 +227,7 @@ static const GameConfig g_x4_cfg = {
     // port asks for nothing: there is no native boot here, so any movie is the GUEST's to play on the
     // substrate. The disc does carry 11 .STR streams (CAPCOM20, OP_U, X1-X4_U, Z1-Z5_U); naming one
     // here without knowing which the boot plays would be a guess wearing a citation.
-    .bootFmv = { nullptr, nullptr, nullptr, nullptr },
+    .bootFmv = {nullptr, nullptr, nullptr, nullptr},
 
     // --- per-frame OT / packet pool -------------------------------- RE-05, ➖ SKIP-BY-DESIGN here --
     // NOT a todo. This group only has a reader if the port stands up the framework's NATIVE frame loop,
@@ -232,22 +235,32 @@ static const GameConfig g_x4_cfg = {
     // native producer to drive (USER decision 2026-08-12, quoted in CLAUDE.md). The guest's own loop
     // runs on the substrate and owns its OT. If that decision is ever reversed, RE-05 is where it
     // starts — but zero here is the correct value for the port as scoped, not an outstanding gap.
-    .otRegionBase = 0, .otRegionStride = 0,
-    .packetPoolBase = 0, .packetPoolStride = 0,
+    .otRegionBase = 0,
+    .otRegionStride = 0,
+    .packetPoolBase = 0,
+    .packetPoolStride = 0,
     .otBasePtr = 0,
     .dwellCounter = 0,
-    .poolPtrCur = 0, .poolPtrLast = 0,
-    .clearOtagR = 0, .putDrawEnv = 0, .drawSync = 0,
+    .poolPtrCur = 0,
+    .poolPtrLast = 0,
+    .clearOtagR = 0,
+    .putDrawEnv = 0,
+    .drawSync = 0,
     .irqEventClasses = {0, 0, 0},
-    .dualviewRenderOrch = 0, .dualviewSubmit = 0,
+    .dualviewRenderOrch = 0,
+    .dualviewSubmit = 0,
 
     // --- scheduler task layout ------------------------------- N/A until a native frame loop exists --
     // The framework's PcScheduler is not wired for this port, and per the scope decision above it is
     // not going to be: GameHooks' scheduler entries are fail-fast stubs, so these values would have no
     // reader even if they were known.
-    .taskTableBase = 0, .taskSlotStride = 0, .taskCount = 0,
+    .taskTableBase = 0,
+    .taskSlotStride = 0,
+    .taskCount = 0,
     .curTaskPtr = 0,
-    .stageStart = 0, .stageDemo = 0, .stageGame = 0,
+    .stageStart = 0,
+    .stageDemo = 0,
+    .stageGame = 0,
 
     // --- overlay router slots --------------------------------------- ➖ NO OVERLAYS ON THIS DISC ---
     // MEASURED, and it is the defining structural fact of this port: **X4 has no code overlays. The
@@ -264,14 +277,21 @@ static const GameConfig g_x4_cfg = {
     // still applies to anyone tempted by a number in the reference: an overlay is keyed BY its load
     // address, so a wrong base emits a whole module of correctly-decoded instructions at wrong
     // addresses and every jal target, pointer test and router lookup is then silently wrong.
-    .overlaySlots = { {0, nullptr}, {0, nullptr}, {0, nullptr} },
+    .overlaySlots = {{0, nullptr}, {0, nullptr}, {0, nullptr}},
 
     // --- CD chokepoints ---------------------------------------------------------- RE-04, NOT DONE --
     // Load-bearing for BOTH enhancement job A (raw I/O latency, which psxport's synchronous FAIL-FAST
     // CD path largely removes by construction) and for knowing where the game's own wait states are
     // NOT. Nothing located.
-    .cdInit = 0, .cdCommand = 0, .cdSync = 0, .cdReadPrim = 0, .cdFileLoad = 0, .cdAsyncRead = 0,
-    .voicePlay = 0, .voiceStop = 0, .lastSectorTracker = 0,
+    .cdInit = 0,
+    .cdCommand = 0,
+    .cdSync = 0,
+    .cdReadPrim = 0,
+    .cdFileLoad = 0,
+    .cdAsyncRead = 0,
+    .voicePlay = 0,
+    .voiceStop = 0,
+    .lastSectorTracker = 0,
     .cdInlineLoad = 0,
     .cdCmdStream = 0,
     .cdCallbackTable = {0, 0, 0, 0},
@@ -279,7 +299,8 @@ static const GameConfig g_x4_cfg = {
     .cdGetSector = 0,
     .cdReadyCbPtr = 0,
     .cdLastPosBuf = 0,
-    .cdReadStock = 0, .cdReadSync = 0,
+    .cdReadStock = 0,
+    .cdReadSync = 0,
     .cdSearchFile = 0,
     .dmaCallbackTable = 0,
 
@@ -291,11 +312,13 @@ static const GameConfig g_x4_cfg = {
     // supported by anything is the PLAYER-OBJECT half (one player struct, one camera, one input route):
     // that is RE-07, and it is the step this whole port turns on. Do not read a working second pad as
     // co-op being close.
-    .padSlot0Buf = kPadSlot0Buf, .padSlot1Buf = kPadSlot1Buf, .padDriverFn = 0,
+    .padSlot0Buf = kPadSlot0Buf,
+    .padSlot1Buf = kPadSlot1Buf,
+    .padDriverFn = 0,
     .padSlotPtrTable = 0,
     .padSlotPtrStride = 0,
 
-    // --- platform HLE (the hardware-sync primitives) ----------------------------- RE-01, NOT DONE --
+    // --- platform HLE (the hardware-sync primitives) ----------------------------- RE-11, NOT DONE --
     // ZERO MEANS "not RE'd, install nothing". initBuiltins() then registers no handler and says so;
     // a run that needs one hangs in the guest's real spin loop, which is the honest signal that the RE
     // is outstanding. The windows are zero too, so register_() refuses everything — this game has not
@@ -337,11 +360,13 @@ static const GameConfig g_x4_cfg = {
     .stackBias = {1, kCrt0StackBias},
 };
 
-const GameConfig* x4_game_config() { return &g_x4_cfg; }
+const GameConfig *x4_game_config() {
+  return &g_x4_cfg;
+}
 
 // Installs BOTH halves of the seam, because a Core's ctor snapshots them together — installing a
 // config without its hooks leaves a Core holding a half-seam.
 void x4_install_game_config() {
-  extern const GameHooks* x4_game_hooks();   // game/core/game_hooks.cpp
+  extern const GameHooks *x4_game_hooks(); // game/core/game_hooks.cpp
   psxport_install_game(&g_x4_cfg, x4_game_hooks());
 }

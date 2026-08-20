@@ -7,16 +7,16 @@
 #                      nothing game-specific present. (psxport_smoke, the framework's agnosticism proof,
 #                      CANNOT be built from a consumer tree — docs/issues/0001. Leave
 #                      -DPSXPORT_BUILD_SMOKE at its OFF default.)
-#   megamanx4_seam     AN OBJECT LIBRARY over the seam TUs (game_config / game_hooks / enhancements /
-#                      main). It COMPILES but does not link, which is exactly the check that is possible
+#   megamanx4_seam     AN OBJECT LIBRARY over every first-party game/core TU. It COMPILES but does not
+#                      link, which is exactly the check that is possible
 #                      before a substrate exists: it proves this port's GameConfig/GameHooks still
 #                      satisfy the pinned framework's seam — every designator binds, every hook
 #                      signature matches — AND that the three pc_enh CVars compile against the
 #                      framework's config_var.h / config_vars.h. That is the gate for this repo today.
 #   megamanx4_port     the game binary. Configured ONLY when generated/rec_sources.cmake exists, i.e.
 #                      once the recompiled substrate has been emitted. It has NOT been: emit.py needs
-#                      this game's seeds (docs/re-frontier.md RE-02), and RE-01 has not produced a boot
-#                      group. A loud STATUS message says so at configure time rather than a cryptic
+#                      this game's seeds (docs/re-frontier.md RE-02). RE-01's boot group is measured
+#                      and wired. A loud STATUS message says so at configure time rather than a cryptic
 #                      missing-file error, and rather than a stub binary that looks like a port.
 
 option(PSXPORT_BUILD_PORT "Build the Mega Man X4 native port binary (needs generated/)" ON)
@@ -26,17 +26,15 @@ option(PSXPORT_BUILD_PORT "Build the Mega Man X4 native port binary (needs gener
 include(${PSXPORT_DIR}/cmake/psxport.cmake)
 
 # ---- the seam, compile-only --------------------------------------------------------------------
-# recomp_register.cpp is EXCLUDED on purpose: it is the one TU that names generated/ symbols, so it
-# cannot compile before the substrate exists (see that file's header).
-#
-# enhancements.cpp IS included, deliberately — it is what makes this port what it is, and the whole
-# point of a compile-only gate is that the enhancement CVars are checked from the first commit rather
-# than the first time someone tries to link a binary.
+# This includes every first-party translation unit. recomp_register.cpp has an honest no-substrate
+# body until generated code exists; compiling it here keeps it in the real compile database used by
+# clang-tidy rather than leaving one source outside every gate.
 set(SEAM_SRC
   game/core/game_config.cpp
   game/core/game_hooks.cpp
   game/core/enhancements.cpp
   game/core/main.cpp
+  game/core/recomp_register.cpp
 )
 add_library(megamanx4_seam OBJECT ${SEAM_SRC})
 # C++20, NOT the 17 the sibling trees' seam targets use. DEVIATION WITH A REASON: enhancements.cpp
@@ -51,6 +49,21 @@ target_include_directories(megamanx4_seam PRIVATE game game/core)
 target_link_libraries(megamanx4_seam PRIVATE psxport)
 target_compile_options(megamanx4_seam PRIVATE -g)
 
+include(CTest)
+if(BUILD_TESTING)
+  find_package(Python3 COMPONENTS Interpreter REQUIRED)
+  add_test(
+    NAME cpp_policy
+    COMMAND ${Python3_EXECUTABLE} ${PSXPORT_DIR}/tools/check_cpp_style.py
+            --root ${CMAKE_SOURCE_DIR}
+            --compile-commands ${CMAKE_BINARY_DIR}
+  )
+  add_test(
+    NAME launcher_policy
+    COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/tools/test_run.py
+  )
+endif()
+
 if(NOT PSXPORT_BUILD_PORT)
   return()
 endif()
@@ -59,7 +72,8 @@ if(NOT EXISTS ${CMAKE_SOURCE_DIR}/generated/rec_sources.cmake)
   message(STATUS
     "megamanx4_port: NOT configured — generated/rec_sources.cmake is absent, i.e. the recompiled "
     "substrate has never been emitted for this game. That is the honest state of this port, not a "
-    "build problem: see docs/re-frontier.md (RE-01 crt0/GameConfig, RE-02 seeds). NOTE that RE-03 "
+    "build problem: see docs/re-frontier.md (RE-02 seeds). NOTE that RE-01's boot group is verified "
+    "and RE-03 "
     "(overlay load bases) is ➖ skip-by-design here — this game has NO code overlays, measured; the "
     "boot executable is the whole engine. `--target megamanx4_seam` is the gate that DOES run today.")
   return()
@@ -79,7 +93,7 @@ set_source_files_properties(${GEN_REC_SRCS}
   PROPERTIES LANGUAGE CXX
   COMPILE_OPTIONS "-O1;-foptimize-sibling-calls;-fno-strict-aliasing;-fwrapv")
 
-add_executable(megamanx4_port ${SEAM_SRC} game/core/recomp_register.cpp ${GEN_REC_SRCS})
+add_executable(megamanx4_port ${SEAM_SRC} ${GEN_REC_SRCS})
 
 # Tripwire, deliberately: recomp_register.cpp #errors under this define until someone writes the real
 # RecompRegistry for the emitted substrate. The alternative — a registry written against guessed

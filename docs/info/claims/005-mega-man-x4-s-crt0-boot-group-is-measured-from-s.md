@@ -5,8 +5,8 @@ status: holds
 created: 2026-08-12
 tags: boot,crt0,re-01
 depends: game/core/game_config.cpp, tools/verify_crt0.py
-reconfirmed: 2026-08-20 22:21:54
-verified_at: 2026-08-20 22:21:54
+reconfirmed: 2026-08-21 00:55:36
+verified_at: 2026-08-21 00:55:36
 ---
 
 ## Claim
@@ -32,3 +32,7 @@ Re-verified 2026-08-12 after psxport 726d10c9 and the stackBias declaration chan
 ## Re-confirmed 2026-08-20 22:21:54
 
 Re-run 2026-08-20: python3 tools/verify_crt0.py --check reports 19 shipped-vs-measured comparisons agree and the measured boot-group values remain unchanged after the nearby RE-06 pad constants were added.
+
+## Re-confirmed 2026-08-21 00:55:36
+
+Re-verified 2026-08-21 after making the framework-source recognizer formatting-insensitive: verify_crt0.py --check matched 19/19 shipping facts and 15/15 framework mechanisms; --selftest passed 25/25 and the Tomba!2 cross-control passed 28/28.

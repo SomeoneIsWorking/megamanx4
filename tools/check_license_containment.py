@@ -606,10 +606,6 @@ void character_select_state_0(struct EngineObj* arg0) {
 '''
 
 
-# Selftest fixtures live OUTSIDE this repo, in the system temp dir. They are a handful of KB of text
-# created and deleted inside one function call, so the workspace's /tmp rule (that mount is a small
-# RAM-backed tmpfs which LOGS AND DUMPS fill) is not what it is aimed at.
-#
 # CORRECTION, 2026-08-12. An earlier version of this comment said "a fixture inside a gitignored
 # directory cannot test a git-aware scanner", and moved the fixtures out to make 6 failing checks pass.
 # That was fixing the fixture and leaving the LIE: the failures were the enumerator returning nothing
@@ -617,9 +613,12 @@ void character_select_state_0(struct EngineObj* arg0) {
 # `PASS — scanned 0 text files`, exit 0, over it. Both halves are fixed — scan_files() falls through to
 # the walk when git lists nothing, and run() refuses on total_scanned == 0 — and there is now a check
 # that plants a leak in a tree whose every file git ignores and asserts it FIRES. Fixture location is
-# no longer load-bearing; it is just tidiness.
+# no longer load-bearing. Keep it under the repository's gitignored scratch tree: `/tmp` is a small
+# shared RAM-backed filesystem in this workspace and is forbidden even for selftest fixtures.
 def _tmpdir(prefix):
-    return tempfile.TemporaryDirectory(prefix=prefix)
+    scratch = os.path.join(ROOT, "scratch", "raw")
+    os.makedirs(scratch, exist_ok=True)
+    return tempfile.TemporaryDirectory(prefix=prefix, dir=scratch)
 
 
 def selftest(corpus_real=None, baseline_file=None):

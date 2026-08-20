@@ -19,21 +19,11 @@ intended behaviour of the real target being reproduced.
 Statuses: ✅ re-verified · 🟡 re-partial (honest gap) · 🔬 in-progress · ⛔ hack (debt, must remove) ·
 ⬜ todo · ➖ skip-by-design · ⏸ blocked (computed).
 
-## THE STATE OF THIS PORT, 2026-08-12: ONE step is RE'd. Everything else is scaffolding
+## THE STATE OF THIS PORT: two steps are RE-verified; the substrate is still absent
 
-**Zero entries are `re-verified`. Exactly one — `RE-01`, the crt0 boot group — is `re-partial`,** and
-the honest reading of that is: its reverse engineering is COMPLETE and gated by a tool, but its output
-still cannot be written into `GameConfig` because psxport's `crt0_setup` transcribes Tomba!2's crt0 and
-two of the eleven fields have no correct value for this game. See RE-01's gap, `docs/issues/0005-*`, and
-claims C005 (what X4's crt0 does) / C006 (why the framework cannot run it). The framework fix is the
-operator's — `external/psxport` here is a read-only pinned consumer.
-
-Everything else below is `todo`, `blocked` or `skip-by-design`. There is still no recompiled substrate,
-no native producer (and none planned), and no native body. `game/core/game_config.cpp` holds no guest
-address in its struct: the eleven measured crt0 values sit beside it as `kCrt0*` constants with the
-disassembly line behind each one, which is the honest shape while the plumbing is missing. A
-plausible-looking wrong address breaks boot in a way that reads as a framework bug; six-of-eleven
-written with the rest zeroed would be the same failure wearing a citation.
+RE-01 owns the measured and wired crt0 group. RE-06 owns the two measured InitPAD buffers. There is
+still no recompiled substrate, native producer (none is planned), or native body. Every other guest
+address remains zero until its frontier step measures it.
 
 **The one thing that IS measured is the SUPPLY, not the port** — see `docs/references.md`. An AGPL-3.0
 matching decompilation (`external/mmx4`) declares a byte-exact build target whose SHA-1 equals the SHA-1
@@ -52,12 +42,12 @@ downstream of RE-07 should be attempted before it.
 ## boot
 
 ### RE-01 — crt0 / boot layout: the GameConfig boot group for SLUS_005.61
-- status: re-partial
+- status: re-verified
 - deps:
-- evidence: MEASURED 2026-08-12 from the extracted SLUS_005.61 (sha1 213733031136d095ca275d6957695aa25011cfa5) by disassembling and symbolically executing the PS-EXE entry function at pc0=0x800DAE8C straight through to its terminating break (43 instructions). Reproduce with per-field citations: `python3 tools/verify_crt0.py --check` (exit 0, 'CHECK PASSED: 17 shipped-vs-measured comparisons agree ... There is no second copy of these values' — the tool PARSES game/core/game_config.cpp and diffs the kCrt0*/kPsExe* constants it SHIPS against what it measures from the bytes in the same run, so a hand-edit of either side is red; it holds no expectation table of its own any more); `--selftest [--cross <other game exe>]` gates both classes 14/14 (16/16 with --cross), sabotaging BOTH sides of that comparison — a flipped immediate in the binary, three hand-edited constants in a copy of the shipping file, a hand-edited CITED SHA1, a HALF-filled GameConfig group, and three malformed-corpus shapes (missing / 0-byte / garbage) that must all refuse. THE GROUP: bssZeroLo 0x8012F418, bssZeroHi 0x80175F38 (size 0x46B20 = 289,568 B), stackTopBase 0x800DAF3C (word 0x00200000) with NO bias so sp=fp=0x80200000, stackTopBase2 0x8011CB74 (word 0x00008000), heapBase 0x80175F38 (== bss end; heap size 0x820C8 = 532,680 B), gp 0x8012F418, libcInit 0x800EDCDC (= 'addiu t2,0xA0; jr t2; addiu t1,0x39' i.e. BIOS A(39h) InitHeap(ptr,size); external/mmx4's symbols.us.txt independently names 0x800EDCDC InitHeap), gameMain 0x80012024, crt0 0x800DAE8C. heapSizePtr/heapBasePtr DO NOT EXIST in this crt0 — it passes base/size in a0/a1 and the function's ONE absolute store is 'sw ra' to 0x8012F418. mmx4's splat hypothesis (.bss 0x8012F418 size 0x46B20) is CONFIRMED, derived not pasted. Corroboration: the 0x3E8-byte overlap of .bss into the sector-padded text tail is all zero, so the clear loop destroys nothing.
+- evidence: Retail SLUS_005.61 (SHA-1 213733031136d095ca275d6957695aa25011cfa5): `tools/verify_crt0.py --check` symbolically executes the 43-instruction entry function, compares 19 shipping facts, and locates 15/15 required mechanisms in psxport; `--selftest` is 25/25 and the Tomba!2 cross-control is 28/28. The group is bss [0x8012F418,0x80175F38), stackTopBase 0x800DAF3C with bias 0, stackTopBase2 0x8011CB74, heapBase 0x80175F38, gp 0x8012F418, libcInit 0x800EDCDC, gameMain 0x80012024, crt0 0x800DAE8C. heapSizePtr/heapBasePtr are measured absent: the function has one absolute store and it saves ra.
 - where: game/core/game_config.cpp (bssZeroLo/Hi, stackTopBase/2, heapBase, heapSizePtr, heapBasePtr, gp, libcInit, gameMain, crt0)
-- gap: THE RE IS DONE; the GameConfig write is blocked on a FRAMEWORK fix, so the struct's boot group stays zero and this step is re-partial rather than re-verified. psxport's crt0_setup (external/psxport/runtime/recomp/native_boot.cpp:218) is a faithful transcription of TOMBA!2's crt0: 6 of 10 steps match X4 exactly, 4 contradict it. (1) line 221 hardcodes 'mem_r32(stackTopBase) - 8'; X4 has no bias instruction, so sp would be 0x801FFFF8, 8 bytes low. (2) line 226 stores heapsz to heapSizePtr unconditionally; X4 stores it nowhere, so field 0 writes to guest 0x00000000. (3) line 228 same for heapBasePtr. (4) only c->r[4] is set before rec_dispatch(libcInit), but BOTH games' libcInit is the BIOS A(39h) InitHeap thunk taking the size in a1, so c->r[5] is missing entirely — a latent framework bug affecting Tomba!2 too, not just X4. (2) and (3) are decisive: no address exists that is not a lie, because the correct answer is 'this game has no such global'. Generic upstream fix (no X4 literal, no AGPL line, safe for psxport): add int32_t stackTopBias to GameConfig (Tomba!2 = -8, X4 = 0); treat heapSizePtr/heapBasePtr == 0 as 'kept in registers only, do not store'; set c->r[5] = heapsz unconditionally. Framework edits are NOT this agent's to make (external/psxport is a read-only pinned consumer) — handed to the operator.
-- notes: Cross-checked two ways. (a) The extractor was run on Tomba!2's MAIN.EXE and re-derived all 12 of the boot-group values Tomba2Engine/game/core/game_config.cpp recorded independently by hand (bssZeroLo 0x800BE0D8, bssZeroHi 0x80106228, stackTopBase 0x800A3F88, bias -8, stackTopBase2 0x800A3F8C, heapBase 0x80106228, heapSizePtr 0x800ABEF8, heapBasePtr 0x800ABEF4, gp 0x800BE0D4, libcInit 0x80089860, gameMain 0x80050B08, crt0 0x800896E0) — that is the positive control proving the tool reads binaries rather than echoing constants, and it is what turned 'the framework hardcodes -8' from a suspicion into a measurement. (b) 0x800EDCDC decodes as a BIOS A-table thunk for function 0x39 and external/mmx4 independently names that address InitHeap. RE-02 (recompiler seeds) is unblocked by this step: gameMain 0x80012024 and crt0 0x800DAE8C are now real seed candidates with a justification.
+- gap: Runtime boot cannot be observed until RE-02 emits a substrate; that is a separate integration gate, not missing RE-01 data.
+- notes: psxport 726d10c9 made the boot mechanism generic; issue #5 and falsified claim C006 preserve the root cause. The cross-control re-derives all 12 independently recorded Tomba!2 values.
 
 ### RE-02 — recompiler seed set for SLUS_005.61
 - status: todo
@@ -159,3 +149,15 @@ downstream of RE-07 should be attempted before it.
 - where: game/ (no native body exists yet)
 - gap: Blocked on there being a substrate to byte-match AGAINST. psxport's override registry wants (addr, native, gen) triples whose native body byte-matches the substrate body, and a matching decomp is a supply of exactly that — but nothing may be imported before there is a substrate and a byte gate. **An imported body with no byte-gate is a hack with a citation attached.** mmx4 is a PARTIAL supply (18.5% upper bound) and dormant since 2025-08-25.
 - notes: Anything imported here is AGPL-derived and stays in THIS repo forever — never lifted into psxport, which five ports share. Mark such files with `// SPDX-License-Identifier: AGPL-3.0-or-later` + `// derived from external/mmx4` (LICENSING.md), and keep `tools/check_license_containment.py` green.
+
+## platform synchronization
+
+### RE-11 — platform-HLE synchronization entry points and executable windows
+- status: todo
+- deps: RE-01
+- evidence:
+- where: game/core/game_config.cpp (hle)
+- gap: No hardware-sync entry point or executable window has been measured. `GameConfig::hle` therefore
+  stays empty and `initBuiltins()` installs nothing; guessing another game's addresses could route an
+  unrelated function into an HLE handler.
+- notes: Static address derivation can precede RE-02, but runtime proof needs the emitted substrate.

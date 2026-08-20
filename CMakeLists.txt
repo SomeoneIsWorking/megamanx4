@@ -1,10 +1,10 @@
 # Mega Man X4 (SLUS-00561, USA) — a PC-native port built on the psxport framework
-# (external/psxport submodule).
+# (external/psxport shared checkout or pin-resolved private clone).
 #
 # The framework (PSX-generic static-recomp substrate + runtime + HW backends + SBS harness + SDL_GPU
 # renderer) is the reusable `psxport` library; this repo adds the game (game/**) and — once it exists —
-# the recompiled SLUS_005.61 substrate (generated/**). NOTHING IS RE'd YET: see docs/re-frontier.md and
-# cmake/megamanx4_port.cmake for what does and does not build today.
+# the recompiled SLUS_005.61 substrate (generated/**). The crt0 and pad buffers are measured, but no
+# substrate has been emitted yet; see docs/re-frontier.md and cmake/megamanx4_port.cmake.
 #
 # THIS PORT IS AN ENHANCEMENT PORT (CLAUDE.md): the game already runs at 60fps, so there is no native
 # producer, no frame interpolation and no native renderer here. What this repo builds beyond the seam is
@@ -23,6 +23,13 @@ if(CCACHE_PROGRAM)
 endif()
 
 project(megamanx4 CXX C)
+
+if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+  message(FATAL_ERROR
+    "Mega Man X4 requires clang++ for every C++ translation unit; configured compiler is "
+    "${CMAKE_CXX_COMPILER_ID} (${CMAKE_CXX_COMPILER}). Reconfigure a clean build tree with "
+    "-DCMAKE_CXX_COMPILER=clang++.")
+endif()
 
 # PSXPORT_DIR — WHERE THE FRAMEWORK SOURCE COMES FROM. Defaults to external/psxport, which is no
 # longer a git submodule (2026-08-16): tools/psxport_sync.py --auto (called by run.sh) makes it a

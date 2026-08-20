@@ -20,19 +20,19 @@
 // rather than at each call site". Same reason here: EVERY read goes through x4::enh(), so
 // "enhancement-free under the oracle" is true BY CONSTRUCTION rather than by per-call-site discipline.
 // Calling `.get()` at a feature call site is the bug this header exists to prevent.
-#include "config_vars.h"   // psx::config::cv_oracle — the suppression input
-#include "config_var.h"    // psx::config::BoolVar
+#include "config_var.h"  // psx::config::BoolVar
+#include "config_vars.h" // psx::config::cv_oracle — the suppression input
 
 namespace x4 {
 
-extern psx::config::BoolVar cv_widescreen;   // PSXPORT_X4_WIDESCREEN
-extern psx::config::BoolVar cv_coop;         // PSXPORT_X4_COOP
-extern psx::config::BoolVar cv_fastwait;     // PSXPORT_X4_FASTWAIT
+extern psx::config::BoolVar cv_widescreen; // PSXPORT_X4_WIDESCREEN
+extern psx::config::BoolVar cv_coop;       // PSXPORT_X4_COOP
+extern psx::config::BoolVar cv_fastwait;   // PSXPORT_X4_FASTWAIT
 
 // Returns false — with a ONE-TIME-PER-KNOB [cfg:warn] naming the knob and the reason — whenever this
 // run is a byte-compare run (PSXPORT_ORACLE, PSXPORT_SBS, PSXPORT_SBS_MODE), WHATEVER the user asked
 // for. Otherwise returns the knob's resolved value off the CVar ladder.
-bool enh(psx::config::BoolVar& v);
+bool enh(psx::config::BoolVar &v);
 
 // Call ONCE at bring-up (main.cpp). Announces every knob the user turned on that no feature reads yet
 // — the case enh() cannot report, because a knob with no consumer is never read. A registered CVar with
@@ -41,6 +41,6 @@ bool enh(psx::config::BoolVar& v);
 // removed the one signal that would have said so. This puts it back until each feature lands.
 void audit_declared_enhancements();
 
-}  // namespace x4
+} // namespace x4
 
-#endif  // MMX4_ENHANCEMENTS_H
+#endif // MMX4_ENHANCEMENTS_H

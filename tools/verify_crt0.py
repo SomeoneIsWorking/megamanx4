@@ -24,9 +24,8 @@ what this run measured from the bytes. The tool keeps NO table of its own. It us
 the port kept a second copy, nothing compared them, and with both gates green `kCrt0GameMain` could be
 and was set to 0x80999999. The `static_assert`s in that file check the constants' internal RELATIONS
 and are worth keeping, but they are not this: `hi - lo == 0x46B20` holds just as well when both values
-are wrong. `--check` also asserts the GameConfig initialiser's crt0 group is either ALL ZERO (the
-blocked state, issue #5) or every field naming its measured constant — a PARTIAL fill is the faked-step
-failure and is the one state that looks like progress.
+are wrong. `--check` also asserts every GameConfig crt0 field names its measured constant — a PARTIAL
+fill is the faked-step failure and is the one state that looks like progress.
 
 WHAT A NEGATIVE PRINTS — the point of the file. Nothing here reports a bare "ok"/"none":
   * a MALFORMED corpus of any shape EXITS 2 saying it scanned NOTHING — a missing path, a 0-byte file
@@ -54,12 +53,13 @@ BLIND SPOTS, stated because the tool cannot see past them:
 
 --selftest gates BOTH classes THROUGH THE SHIPPING PATH — every case calls the same check_shipped()
 that --check calls, not a pure helper beside it. The positive: the shipped constants must equal this
-run's measurement (17 comparisons). The negatives sabotage each side of that comparison in turn — a
+run's measurement (19 comparisons). The negatives sabotage each side of that comparison in turn — a
 flipped immediate in the BINARY, a hand-edited constant in a copy of the SHIPPING FILE (three of them,
 including one PS-EXE header fact), a hand-edited CITED SHA1, a HALF-filled GameConfig group, a wrong
 entry PC (main() must be refused, not partially parsed), and three malformed-corpus shapes (missing /
-0-byte / garbage) that must all refuse. 14/14 without --cross; with --cross, a second game's executable
-adds a cross-game negative plus the Tomba!2 positive control -> 16/16.
+0-byte / garbage) that must all refuse. The framework-source cases also delete four required crt0
+mechanisms and require a contradiction each time. Current denominator: 25/25 without --cross;
+with --cross, a second game's executable adds three independent cases -> 28/28.
 """
 from __future__ import annotations
 
@@ -782,8 +782,8 @@ FW_MECH = {
     "bias_used":     ("crt0_boot.h", r"bias\s*=\s*cfg->stackBias\.value"),
     "size_absent":   ("crt0_boot.h", r"p\.storeHeapSize\s*=\s*cfg->heapSizePtr\s*!=\s*0u"),
     "base_absent":   ("crt0_boot.h", r"p\.storeHeapBase\s*=\s*cfg->heapBasePtr\s*!=\s*0u"),
-    "size_guarded":  ("crt0_boot.h", r"if\s*\(p\.storeHeapSize\)\s*w\.w32\(p\.heapSizeAddr"),
-    "base_guarded":  ("crt0_boot.h", r"if\s*\(p\.storeHeapBase\)\s*w\.w32\(p\.heapBaseAddr"),
+    "size_guarded":  ("crt0_boot.h", r"if\s*\(\s*p\.storeHeapSize\s*\)\s*(?:\{\s*)?w\.w32\(\s*p\.heapSizeAddr"),
+    "base_guarded":  ("crt0_boot.h", r"if\s*\(\s*p\.storeHeapBase\s*\)\s*(?:\{\s*)?w\.w32\(\s*p\.heapBaseAddr"),
     "a1_set":        ("crt0_boot.h", r"w\.reg\(5,\s*p\.a1\)"),
 }
 
@@ -949,7 +949,6 @@ def report(g: dict, exe_path: str, mech: dict) -> None:
         print("    (none — and the loop's `sw zero` is excluded by construction, it is the bss clear)")
     print(f"  ALL {len(g['abs_loads'])} absolute loads:")
     for (la, tgt, rname, txt) in g["abs_loads"]:
-        inside = g.get("_inside")
         print(f"    0x{la:08X}  {txt:<28} -> 0x{tgt:08X}  (into {rname})")
     print()
     ok, bad = framework_verdict(g, mech)
@@ -1094,33 +1093,36 @@ def selftest(cross: str | None) -> int:
     real = open(sh["path"], encoding="utf-8").read()
     struct_cases = [
         ("a HALF-filled required crt0 group",
-         ".bssZeroLo = kCrt0BssZeroLo, .bssZeroHi = kCrt0BssZeroHi,",
+         r"\.bssZeroLo\s*=\s*kCrt0BssZeroLo\s*,\s*\.bssZeroHi\s*=\s*kCrt0BssZeroHi\s*,",
          ".bssZeroLo = 0, .bssZeroHi = 0,", "PARTIALLY filled"),
         ("an INVENTED heapSizePtr for a global this crt0 does not have",
-         ".heapSizePtr = 0, .heapBasePtr = 0,",
+         r"\.heapSizePtr\s*=\s*0\s*,\s*\.heapBasePtr\s*=\s*0\s*,",
          ".heapSizePtr = kCrt0HeapBase, .heapBasePtr = 0,", "stores heapSizePtr NOWHERE"),
         ("an UNDECLARED stack bias (crt0_plan would refuse the boot)",
-         ".stackBias = {1, kCrt0StackBias},", ".stackBias = {0, kCrt0StackBias},", "declared = 0"),
+         r"\.stackBias\s*=\s*\{\s*1\s*,\s*kCrt0StackBias\s*\}\s*,",
+         ".stackBias = {0, kCrt0StackBias},", "declared = 0"),
         ("a stack bias of -8, the value four other ports measure",
-         "kCrt0StackBias    = 0;", "kCrt0StackBias    = -8;", "measured a stack-top bias of 0"),
+         r"(kCrt0StackBias\s*=\s*)0(\s*;)", r"\g<1>-8\g<2>", "measured a stack-top bias of 0"),
         # A bare literal in the struct is NOT itself a hole — the token is evaluated and diffed against
         # the measurement either way, which this case proves by shipping a bare WRONG one. What IS a
         # hole is deleting the constant: the value then has no citation anchoring it to the
         # disassembly, and that is the case below it.
         ("a bare-literal stack bias with the WRONG value",
-         ".stackBias = {1, kCrt0StackBias},", ".stackBias = {1, -8},",
+         r"\.stackBias\s*=\s*\{\s*1\s*,\s*kCrt0StackBias\s*\}\s*,",
+         ".stackBias = {1, -8},",
          "but this run measured a bias of 0"),
         ("kCrt0StackBias deleted, leaving the bias uncitable",
-         "static constexpr int32_t  kCrt0StackBias    = 0;", "",
+         r"static\s+constexpr\s+int32_t\s+kCrt0StackBias\s*=\s*0\s*;\s*", "",
          "shipped as a bare literal"),
     ]
-    for label, frm, to, expect in struct_cases:
-        if frm not in real:
+    for label, pattern, replacement, expect in struct_cases:
+        if not re.search(pattern, real):
             results.append((f"negative: {label} is caught", False,
-                            f"the text this case edits ({frm!r}) was NOT FOUND in "
+                            f"the text this case edits ({pattern!r}) was NOT FOUND in "
                             f"{os.path.relpath(sh['path'], ROOT)} — case proves NOTHING"))
             continue
-        sfx, _ = check_shipped(g, exe, parse_shipped_src(real.replace(frm, to, 1), sh["path"]))
+        sabotaged = re.sub(pattern, replacement, real, count=1)
+        sfx, _ = check_shipped(g, exe, parse_shipped_src(sabotaged, sh["path"]))
         hit = any(expect in f for f in sfx)
         results.append((f"negative: {label} is caught", hit,
                         (next(f for f in sfx if expect in f)[:200] if hit else
@@ -1144,19 +1146,19 @@ def selftest(cross: str | None) -> int:
     # that text and require the contradictions to come back. Each of the four upstream fixes is deleted
     # in turn, and the case names the mechanism it deleted.
     for key, frm, to, expect in (
-            ("size_guarded", "if (p.storeHeapSize) w.w32(", "if (true) w.w32(",
+            ("size_guarded", r"if\s*\(\s*p\.storeHeapSize\s*\)", "if (true)",
              "heap SIZE through cfg->heapSizePtr UNCONDITIONALLY"),
-            ("base_guarded", "if (p.storeHeapBase) w.w32(", "if (true) w.w32(",
+            ("base_guarded", r"if\s*\(\s*p\.storeHeapBase\s*\)", "if (true)",
              "heap BASE through cfg->heapBasePtr UNCONDITIONALLY"),
-            ("a1_set", "w.reg(5, p.a1)", "w.reg(6, p.a1)", "never assigns r[5]"),
-            ("bias_used", "bias = cfg->stackBias.value", "bias = -8",
+            ("a1_set", r"w\.reg\(5,\s*p\.a1\)", "w.reg(6, p.a1)", "never assigns r[5]"),
+            ("bias_used", r"bias\s*=\s*cfg->stackBias\.value", "bias = -8",
              "no declared stack-top bias")):
         doctored = dict(fwsrc)
-        if frm not in doctored["crt0_boot.h"]:
+        if not re.search(frm, doctored["crt0_boot.h"]):
             results.append((f"negative: deleting the framework's {key} brings the contradiction back",
                             False, f"{frm!r} not found in the pinned crt0_boot.h — case proves NOTHING"))
             continue
-        doctored["crt0_boot.h"] = doctored["crt0_boot.h"].replace(frm, to)
+        doctored["crt0_boot.h"] = re.sub(frm, to, doctored["crt0_boot.h"], count=1)
         _, dbad = framework_verdict(g, framework_mechanisms(doctored))
         hit = any(expect in s for s in dbad)
         results.append((f"negative: deleting the framework's {key} brings the contradiction back", hit,

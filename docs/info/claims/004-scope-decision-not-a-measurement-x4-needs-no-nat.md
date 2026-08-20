@@ -5,8 +5,8 @@ status: holds
 created: 2026-08-12
 tags: scope,enhancements
 depends: docs/plans/enhancements.md
-reconfirmed: 2026-08-20 22:21:54
-verified_at: 2026-08-20 22:21:54
+reconfirmed: 2026-08-21 00:55:36
+verified_at: 2026-08-21 00:55:36
 ---
 
 ## Claim
@@ -24,3 +24,7 @@ the USER changing the scope decision, or a measurement in THIS repo showing X4 d
 ## Re-confirmed 2026-08-20 22:21:54
 
 Re-read the unchanged USER 2026-08-12 verbatim scope decision in docs/plans/enhancements.md while updating only the measured RE-06 input note; it still rules out native producers, interpolation and native depth.
+
+## Re-confirmed 2026-08-21 00:55:36
+
+Re-read the unchanged USER 2026-08-12 scope decision after the RE-06 documentation update; it still excludes native producers, interpolation, and native depth.

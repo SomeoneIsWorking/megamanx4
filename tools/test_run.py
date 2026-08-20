@@ -1,0 +1,162 @@
+#!/usr/bin/env python3
+"""Positive and refusal tests for tools/run.py's shipping launcher path."""
+
+from __future__ import annotations
+
+import io
+import os
+import subprocess
+import tempfile
+import unittest
+from pathlib import Path
+from typing import Sequence
+
+import run
+
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+SCRATCH = REPO_ROOT / "scratch" / "raw"
+
+
+class FakeHost(run.Host):
+    def __init__(
+        self, missing: set[str] | None = None, fail_command: str | None = None
+    ) -> None:
+        self.missing = missing or set()
+        self.fail_command = fail_command
+        self.commands: list[tuple[list[str], dict[str, object]]] = []
+
+    def which(self, name: str) -> str | None:
+        return None if name in self.missing else f"/fake/{name}"
+
+    def run(
+        self, args: Sequence[str], **kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        command = [str(arg) for arg in args]
+        self.commands.append((command, kwargs))
+        executable = Path(command[0]).name
+        returncode = 1 if self.fail_command and self.fail_command in command else 0
+        stdout = ""
+        if command[-1:] == ["--version"]:
+            stdout = "clang version 22.1.8"
+        elif executable == "getconf":
+            stdout = "16"
+        elif "rev-parse" in command:
+            stdout = "abcdef12"
+        return subprocess.CompletedProcess(
+            command, returncode, stdout=stdout, stderr=""
+        )
+
+
+class LauncherTest(unittest.TestCase):
+    def setUp(self) -> None:
+        SCRATCH.mkdir(parents=True, exist_ok=True)
+        self.temp = tempfile.TemporaryDirectory(prefix="run-selftest-", dir=SCRATCH)
+        self.root = Path(self.temp.name)
+        (self.root / "external" / "psxport" / "cmake").mkdir(parents=True)
+        (self.root / "external" / "psxport" / "cmake" / "psxport.cmake").write_text(
+            "# fixture\n"
+        )
+        (self.root / "external" / "psxport" / "scripts").mkdir()
+        (
+            self.root / "external" / "psxport" / "scripts" / "sync-submodules.sh"
+        ).write_text("#!/bin/sh\n")
+        (self.root / "external" / "mmx4" / "config").mkdir(parents=True)
+        (self.root / ".gitmodules").write_text("# fixture\n")
+
+    def tearDown(self) -> None:
+        self.temp.cleanup()
+
+    def invoke(self, host: FakeHost, *argv: str) -> tuple[int, str, str]:
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        code = run.run_launcher(
+            argv,
+            environ={
+                "CC": "clang",
+                "CXX": "clang++",
+                "PATH": os.environ.get("PATH", ""),
+            },
+            host=host,
+            root=self.root,
+            stdout=stdout,
+            stderr=stderr,
+        )
+        return code, stdout.getvalue(), stderr.getvalue()
+
+    def test_positive_path_preserves_disc_and_stops_at_missing_substrate(self) -> None:
+        host = FakeHost()
+        code, stdout, stderr = self.invoke(
+            host, "Mega Man X4.chd", "ignored-like-the-shell-launcher"
+        )
+        commands = [command for command, _ in host.commands]
+
+        self.assertEqual(code, 3)
+        self.assertEqual(stderr, "")
+        self.assertIn("STOPPING HERE, ON PURPOSE", stdout)
+        self.assertTrue(
+            any(
+                command[-2:] == ["tools/extract_exe.py", "Mega Man X4.chd"]
+                for command in commands
+            )
+        )
+        self.assertFalse(
+            any("ignored-like-the-shell-launcher" in command for command in commands)
+        )
+        self.assertTrue(
+            any(command[:3] == ["cmake", "--build", "build"] for command in commands)
+        )
+        self.assertIn(["ctest", "--test-dir", "build", "--output-on-failure"], commands)
+
+    def test_missing_required_tool_refuses_before_mutation(self) -> None:
+        host = FakeHost(missing={"cmake"})
+        code, stdout, stderr = self.invoke(host)
+
+        self.assertEqual(code, 1)
+        self.assertEqual(stdout, "")
+        self.assertIn("cmake not found", stderr)
+        self.assertEqual(host.commands, [])
+
+    def test_empty_environment_values_and_disc_use_shell_defaults(self) -> None:
+        host = FakeHost()
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        code = run.run_launcher(
+            [""],
+            environ={"CC": "", "CXX": "", "PSXPORT_DIR": ""},
+            host=host,
+            root=self.root,
+            stdout=stdout,
+            stderr=stderr,
+        )
+        commands = [command for command, _ in host.commands]
+
+        self.assertEqual(code, 3)
+        self.assertIn(["clang", "--version"], commands)
+        self.assertIn(["clang++", "--version"], commands)
+        self.assertTrue(
+            any(command[-1:] == ["tools/extract_exe.py"] for command in commands)
+        )
+
+    def test_provision_failure_refuses_before_build(self) -> None:
+        host = FakeHost(fail_command="tools/extract_exe.py")
+        code, _, stderr = self.invoke(host)
+        commands = [command for command, _ in host.commands]
+
+        self.assertEqual(code, 1)
+        self.assertIn("executable provisioning failed", stderr)
+        self.assertFalse(
+            any(command[:3] == ["cmake", "--build", "build"] for command in commands)
+        )
+
+    def test_shell_entry_point_is_only_an_exec_wrapper(self) -> None:
+        wrapper = (REPO_ROOT / "run.sh").read_text()
+        self.assertEqual(
+            wrapper, '#!/bin/sh\nexec "$(dirname "$0")/tools/run.py" "$@"\n'
+        )
+        self.assertTrue(os.access(REPO_ROOT / "run.sh", os.X_OK))
+        self.assertTrue(os.access(REPO_ROOT / "tools" / "run.py", os.X_OK))
+
+
+if __name__ == "__main__":
+    unittest.main()

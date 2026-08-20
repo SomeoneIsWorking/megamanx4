@@ -12,14 +12,13 @@ directive that **`./run.sh` is the user's and agents must never invoke it**. The
 `external/psxport/docs/workspace/WORKSPACE.md`; the multi-agent protocol is `…/PROTOCOL.md`; the
 methodology is `…/docs/porting-a-new-psx-game.md`.
 
-## THE STATE OF THIS PORT: two RE steps measured, no substrate. Do not read anything else as progress
+## THE STATE OF THIS PORT: two RE steps verified, no substrate. Do not read anything else as progress
 
 Created 2026-08-12. There is **no recompiled substrate and no port binary.** Two RE steps have landed.
-**RE-01, the crt0 boot group, is MEASURED** (11 values derived from `SLUS_005.61`'s entry
-function, each with its disassembly line, re-derivable by `python3 tools/verify_crt0.py --check`, which DIFFS the constants `game/core/game_config.cpp` ships against those bytes — the tool keeps no second copy). It is
-`re-partial` rather than done because the values still cannot be written into `GameConfig` — psxport's
-`crt0_setup` transcribes Tomba!2's crt0 and two of the fields have no correct value here. That is a
-FRAMEWORK defect (`docs/issues/0005-*`, claims C005/C006), fixed upstream by the operator, not here.
+**RE-01, the crt0 boot group, is verified and wired:** `tools/verify_crt0.py --check` derives the
+group from `SLUS_005.61`, compares 19 shipping facts, and confirms the current framework implements
+all 15 required mechanisms. Its 25-case selftest proves both answers; claim C006 and issue #5 record
+the now-fixed framework defect that originally blocked this step.
 **RE-06 is verified from the retail InitPAD call:** slot 0 is `0x80166D68`, slot 1 is `0x8012F46C`,
 and both capacities are `0x22`; `tools/verify_pad.py --check` scans all 294,400 loaded words and diffs
 the unique call's four arguments against the `GameConfig` that ships. Every other guest-address group
@@ -31,7 +30,15 @@ What DOES build today, and is the gate for a change to the seam:
 python3 tools/psxport_sync.py --auto                                    # resolve external/psxport (symlink to the shared clone, or a private clone at psxport.pin)
 git submodule update --init external/mmx4                              # once (the AGPL reference decomp, not needed to build)
 cmake -S . -B build && cmake --build build --target megamanx4_seam -j$(nproc)
+ctest --test-dir build --output-on-failure
 ```
+
+The normal CTest gate calls psxport's shared C++ policy checker: every tracked first-party C/C++ file
+is checked with this repository's `.clang-format`, the 1,200-line ownership cap is enforced, and
+`.clang-tidy` runs against `build/compile_commands.json`. It excludes `external/` and `generated/`;
+there is no copied checker and no pre-commit hook. CTest also runs `tools/test_run.py`: the shipping
+launcher orchestration lives in executable `tools/run.py`, while `run.sh` is only its stable exec
+wrapper.
 
 **`external/psxport` is NOT a submodule any more (2026-08-16)** — it is a symlink to the workspace's
 shared framework clone when one exists, or a private clone at this repo's `psxport.pin` on a fresh
@@ -43,7 +50,7 @@ once there, never per-port (`--recursive` aborts on beetle-psx's url-less `deps/
 message if they are missing in the shared clone, and `tools/discdump.py` says the same when its build
 fails.
 
-`megamanx4_seam` is an OBJECT library over `game/core/{game_config,game_hooks,enhancements,main}.cpp`:
+`megamanx4_seam` is an OBJECT library over every first-party `game/core/*.cpp` translation unit:
 it compiles but does not link, which is the strongest check possible before a substrate exists — it
 proves this port's `GameConfig`/`GameHooks` still satisfy the pinned framework's seam, and that the
 three enhancement CVars compile against the framework's CVar headers. `megamanx4_port` is not
