@@ -5,8 +5,8 @@ status: holds
 created: 2026-08-12
 tags: boot,crt0,re-01
 depends: game/core/game_config.cpp, tools/verify_crt0.py
-reconfirmed: 2026-08-12 22:58:56
-verified_at: 2026-08-12 22:58:56
+reconfirmed: 2026-08-20 22:21:54
+verified_at: 2026-08-20 22:21:54
 ---
 
 ## Claim
@@ -28,3 +28,7 @@ Re-verified 2026-08-12 by re-running the measurement AND, for the first time, co
 ## Re-confirmed 2026-08-12 22:58:56
 
 Re-verified 2026-08-12 after psxport 726d10c9 and the stackBias declaration changed game_config.cpp. tools/verify_crt0.py --check re-derives the group from SLUS_005.61's bytes and diffs it against the SHIPPING file: PASSED, 19 shipped-vs-measured comparisons agree, req group '0 zero / 10 filled of 10', and heapSizePtr/heapBasePtr correctly read as '0 = ABSENT, as measured' (no store among the 1 absolute store in the prologue). Independently corroborated by psxport tools/crt0_extract, a different tool sharing no code with verify_crt0.py, which resolves 8 of 8 fields with a COMPLETE prologue and agrees on every one.
+
+## Re-confirmed 2026-08-20 22:21:54
+
+Re-run 2026-08-20: python3 tools/verify_crt0.py --check reports 19 shipped-vs-measured comparisons agree and the measured boot-group values remain unchanged after the nearby RE-06 pad constants were added.

@@ -4,7 +4,9 @@ kind: claim
 status: holds
 created: 2026-08-12
 tags: scope,enhancements
-depends: docs/plans/enhancements.md, game/core/enhancements.cpp
+depends: docs/plans/enhancements.md
+reconfirmed: 2026-08-20 22:21:54
+verified_at: 2026-08-20 22:21:54
 ---
 
 ## Claim
@@ -18,3 +20,7 @@ PROVENANCE: USER decision, 2026-08-12, quoted verbatim — 'Mega Man doesn't nee
 ## What would falsify it
 
 the USER changing the scope decision, or a measurement in THIS repo showing X4 does NOT run at 60fps in the modes we care about (which has never been measured here — nobody has run the game)
+
+## Re-confirmed 2026-08-20 22:21:54
+
+Re-read the unchanged USER 2026-08-12 verbatim scope decision in docs/plans/enhancements.md while updating only the measured RE-06 input note; it still rules out native producers, interpolation and native depth.

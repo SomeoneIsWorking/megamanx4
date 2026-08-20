@@ -12,17 +12,18 @@ directive that **`./run.sh` is the user's and agents must never invoke it**. The
 `external/psxport/docs/workspace/WORKSPACE.md`; the multi-agent protocol is `…/PROTOCOL.md`; the
 methodology is `…/docs/porting-a-new-psx-game.md`.
 
-## THE STATE OF THIS PORT: one RE step done, no substrate. Do not read anything else as progress
+## THE STATE OF THIS PORT: two RE steps measured, no substrate. Do not read anything else as progress
 
-Created 2026-08-12. There is **no recompiled substrate and no port binary.** Exactly one RE step has
-landed: **RE-01, the crt0 boot group, is MEASURED** (11 values derived from `SLUS_005.61`'s entry
+Created 2026-08-12. There is **no recompiled substrate and no port binary.** Two RE steps have landed.
+**RE-01, the crt0 boot group, is MEASURED** (11 values derived from `SLUS_005.61`'s entry
 function, each with its disassembly line, re-derivable by `python3 tools/verify_crt0.py --check`, which DIFFS the constants `game/core/game_config.cpp` ships against those bytes — the tool keeps no second copy). It is
 `re-partial` rather than done because the values still cannot be written into `GameConfig` — psxport's
 `crt0_setup` transcribes Tomba!2's crt0 and two of the fields have no correct value here. That is a
 FRAMEWORK defect (`docs/issues/0005-*`, claims C005/C006), fixed upstream by the operator, not here.
-Every other guest address in `game/core/game_config.cpp` is still zero with its open step named in
-`docs/re-frontier.md`. If something looks like it works, check `docs/codemap.md` — the honest inventory
-is provisioning, a compiling seam, the registries, and that one boot measurement.
+**RE-06 is verified from the retail InitPAD call:** slot 0 is `0x80166D68`, slot 1 is `0x8012F46C`,
+and both capacities are `0x22`; `tools/verify_pad.py --check` scans all 294,400 loaded words and diffs
+the unique call's four arguments against the `GameConfig` that ships. Every other guest-address group
+remains zero with its open step named in `docs/re-frontier.md`.
 
 What DOES build today, and is the gate for a change to the seam:
 
@@ -158,10 +159,12 @@ supply of addresses sitting in `external/mmx4`, which is precisely why the rule 
   it can assert "no plain code outside the boot exe", NOT "no code".**
 - **Per-character data is already split per file** (`PL00_U`/`PL01_U`/`PL02_U.ARC`, and `_X`/`_Z` stage
   and collision variants). That is a lead for co-op, not a finding: it was not verified in code.
+- **The two libpad buffers are measured and wired** (RE-06): the retail executable's unique InitPAD
+  call at `0x80012194` passes `0x80166D68, 0x22, 0x8012F46C, 0x22`. This completes only the host's
+  second-controller packet destination; it says nothing about a second player object.
 
-Everything else about this game — crt0 layout, the loader, the player-object system, the projection
-site, the pad buffers, the wait-state timers — is **unknown**. Do not let a plausible-sounding sentence
-in a doc elsewhere stand in for it.
+Everything else about this game — the loader, the player-object system, the projection site and the
+wait-state timers — is **unknown**. Do not let a plausible-sounding sentence elsewhere stand in for it.
 
 ## The rules that bite hardest here
 

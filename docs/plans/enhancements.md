@@ -2,9 +2,9 @@
 
 **MEASURED vs ASSUMED, up front, because at bootstrap time almost everything here is assumed.** What is
 measured about this game is a short list: the executable's identity and PS-EXE header, `SYSTEM.CNF`, the
-disc's file inventory, that there are no code overlays, and that per-character data is split per file.
-Nothing about the player object, the camera, the projection site, the input route or the game's timers
-has been measured. **Every design statement below that is not tagged MEASURED is a design intention, and
+disc's file inventory, that there are no code overlays, the two InitPAD buffers, and that per-character
+data is split per file. Nothing about the player object, the camera, the projection site, the game-side
+input route or the game's timers has been measured. **Every design statement below that is not tagged MEASURED is a design intention, and
 several of them stop mid-sentence on purpose.** A plan that names a fake offset is worse than a plan that
 says "unknown".
 
@@ -111,8 +111,10 @@ port turns on, and it is the most invasive `pc_enh` in the workspace.
 uint32_t bufs[2] = { c->cfg->padSlot0Buf, c->cfg->padSlot1Buf };
 ```
 
-So co-op's **input route exists** as soon as `RE-06` lands and `padSlot1Buf` is known. **Do not read a
-working second pad as co-op being close** — the player-object half is supported by nothing.
+RE-06 has now landed those fixed buffers from the retail InitPAD call: slot 0 `0x80166D68`, slot 1
+`0x8012F46C`, both capacity `0x22`. So co-op's **host input destination exists**. **Do not read a
+working second pad as co-op being close** — the game-side route and player-object half are supported by
+nothing.
 
 **A LEAD, not a finding.** Per-character data is already split per file on the disc: `PL00_U.ARC` /
 `PL01_U.ARC` / `PL02_U.ARC` (796,672 / 741,376 / 796,672 B) for the three playable characters, plus `_X`

@@ -98,12 +98,12 @@ downstream of RE-07 should be attempted before it.
 - notes: If the decision is ever reversed, this is where that work starts.
 
 ### RE-06 — pad driver buffers
-- status: todo
+- status: re-verified
 - deps: RE-01
-- evidence:
-- where: game/core/game_config.cpp (padSlot0Buf, padSlot1Buf, padDriverFn, padSlotPtrTable, padSlotPtrStride)
-- gap: Nothing located. The PSY-Q cohort says libpad rather than a custom SIO driver is the likely shape, which says what to look for, not where.
-- notes: `padSlot1Buf` is drop-in co-op's INPUT half, and the framework already reads two slots — runtime/recomp/pad_input.cpp:550 `uint32_t bufs[2] = { c->cfg->padSlot0Buf, c->cfg->padSlot1Buf };`. Do NOT read a working second pad as co-op being close: the player-object half (RE-07) is supported by nothing.
+- evidence: Retail SLUS_005.61 (SHA-1 213733031136d095ca275d6957695aa25011cfa5): a whole-text scan of 294,400 loaded words finds exactly one jal to the matching-decomp-identified InitPAD target 0x800EE0D0, at 0x80012194; immediate dataflow gives (a0,a1,a2,a3)=(0x80166D68,0x22,0x8012F46C,0x22). tools/verify_pad.py --check compares all four arguments to the shipping GameConfig and --selftest proves both answers, 4/4.
+- where: game/core/game_config.cpp (kPadSlot0Buf/kPadSlot1Buf and fixed-buffer bindings); tools/verify_pad.py
+- gap: The two fixed buffers are complete. Runtime pad injection cannot be observed until RE-02 produces a runnable substrate; that does not weaken the static address result, but it remains a separate integration gate.
+- notes: padDriverFn/padSlotPtrTable/padSlotPtrStride remain zero deliberately: the retail InitPAD call passes the two buffers directly, and psxport falls back to those fixed buffers when no table is declared. This lands drop-in co-op input plumbing only; RE-07 still has no player-object, camera, routing or spawn implementation.
 
 ## enhancements
 

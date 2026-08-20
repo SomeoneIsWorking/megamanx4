@@ -19,7 +19,7 @@ deviation, grouped by affect. `tools/behavior.py` = view · `... <words>` = sear
 - **altered:** a second player joins mid-play and controls the other hunter (P2 spawns as Zero when P1 is X)
 - **guard:** force-suppressed under PSXPORT_ORACLE / PSXPORT_SBS / PSXPORT_SBS_MODE in game/core/enhancements.cpp x4::enh() — the single chokepoint every read passes through
 - **owner:** game/core/enhancements.cpp
-- **notes:** THE MOST INVASIVE pc_enh IN THE WORKSPACE. RE target is the PLAYER-OBJECT SYSTEM (RE-07), not the renderer, and the layout is UNKNOWN — docs/plans/enhancements.md stops there deliberately. Input half is already framework-supported (pad_input.cpp:550 reads both padSlot0Buf/padSlot1Buf) once RE-06 lands; the player-object half is supported by nothing. THE SBS ORACLE IS ONLY MEANINGFUL WITH THIS OFF: a clean compare with co-op ON means the suppression fired, not that co-op is correct. Its own evidence gate is an OPEN QUESTION and has deliberately not been invented.
+- **notes:** THE MOST INVASIVE pc_enh IN THE WORKSPACE. RE target is the PLAYER-OBJECT SYSTEM (RE-07), not the renderer, and the layout is UNKNOWN — docs/plans/enhancements.md stops there deliberately. RE-06 has measured and bound both InitPAD buffers, so the host input destination exists; the game-side route and player-object half are supported by nothing. THE SBS ORACLE IS ONLY MEANINGFUL WITH THIS OFF: a clean compare with co-op ON means the suppression fired, not that co-op is correct. Its own evidence gate is an OPEN QUESTION and has deliberately not been invented.
 
 ## fastwait
 - **class:** pc_enh

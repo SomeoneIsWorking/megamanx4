@@ -3,10 +3,10 @@
 //
 // READ THIS BEFORE FILLING ANYTHING IN.
 //
-// **Every address in this file is ZERO, because none has been reverse-engineered in this repo.** That
-// is the honest value and it is deliberate: psxport fails fast on a zero it needs, whereas a
-// plausible-looking WRONG address does not fail cleanly — it breaks boot or diverges the byte-compare
-// in a way that reads as a framework bug. Each group names the open step in docs/re-frontier.md.
+// An address stays ZERO until it has been reverse-engineered in this repo. That is the honest value:
+// psxport fails fast on a zero it needs, whereas a plausible-looking WRONG address does not fail
+// cleanly — it breaks boot or diverges the byte-compare in a way that reads as a framework bug. Each
+// group names its evidence or the open step in docs/re-frontier.md.
 //
 // An AGPL-3.0 MATCHING decompilation of this exact executable exists (external/mmx4, docs/references.md;
 // its declared byte-exact build target is SHA-1 213733031136d095ca275d6957695aa25011cfa5, which is the
@@ -150,6 +150,31 @@ static_assert(kCrt0BssZeroLo < kPsExeTextAddr + kPsExeTextSize,
               "if .bss no longer starts inside the sector-padded text tail, the note above about the "
               "1000 zero bytes of overlap is stale and must be re-measured");
 
+// RE-06, MEASURED from the retail executable after the matching decomp identified the owner and SDK
+// call to inspect. The executable has exactly one call to InitPAD (symbol address 0x800EE0D0):
+//
+//   0x80012180  lui a0,0x8016 / addiu a0,a0,0x6D68   slot 0 buffer = 0x80166D68
+//   0x80012188  addiu a1,zero,0x22                    slot 0 capacity = 34 bytes
+//   0x8001218C  lui a2,0x8013 / addiu a2,a2,-0xB94   slot 1 buffer = 0x8012F46C
+//   0x80012194  jal 0x800EE0D0
+//   0x80012198  addiu a3,zero,0x22                    slot 1 capacity = 34 bytes
+//
+// Reproduce the whole-text call census and compare these shipping constants against its dataflow:
+//
+//   python3 tools/verify_pad.py --check
+//   python3 tools/verify_pad.py --selftest
+//
+// No `padDriverFn` or pointer table is implied by InitPAD's two direct buffer arguments. The framework
+// supports this exact shape: when padSlotPtrTable is zero, it writes its four-byte packet to these
+// fixed buffers. Leaving the unrelated fields zero is therefore a measured ownership decision, not an
+// unfinished guess.
+static constexpr uint32_t kPadSlot0Buf = 0x80166D68u;
+static constexpr uint32_t kPadSlot1Buf = 0x8012F46Cu;
+static constexpr uint32_t kPadCapacity = 0x22u;
+static_assert(kPadSlot0Buf + kPadCapacity <= kPadSlot1Buf ||
+              kPadSlot1Buf + kPadCapacity <= kPadSlot0Buf,
+              "the two InitPAD buffers must not overlap");
+
 // DESIGNATED initialisers, deliberately. GameConfig is initialised POSITIONALLY by the older
 // consumers in this workspace, and the framework appends fields to it — which means a positional list
 // silently re-binds every value after an inserted field. Binding by name makes an upstream insert a
@@ -258,7 +283,7 @@ static const GameConfig g_x4_cfg = {
     .cdSearchFile = 0,
     .dmaCallbackTable = 0,
 
-    // --- pad driver -------------------------------------------------------------- RE-06, NOT DONE --
+    // --- pad driver -------------------------------------------------------------- RE-06, MEASURED --
     // X4-SPECIFIC NOTE, and it is the one piece of good news co-op has: `padSlot1Buf` is the
     // FRAMEWORK'S EXISTING SECOND-CONTROLLER PATH — runtime/recomp/pad_input.cpp:550 reads
     //     uint32_t bufs[2] = { c->cfg->padSlot0Buf, c->cfg->padSlot1Buf };
@@ -266,7 +291,7 @@ static const GameConfig g_x4_cfg = {
     // supported by anything is the PLAYER-OBJECT half (one player struct, one camera, one input route):
     // that is RE-07, and it is the step this whole port turns on. Do not read a working second pad as
     // co-op being close.
-    .padSlot0Buf = 0, .padSlot1Buf = 0, .padDriverFn = 0,
+    .padSlot0Buf = kPadSlot0Buf, .padSlot1Buf = kPadSlot1Buf, .padDriverFn = 0,
     .padSlotPtrTable = 0,
     .padSlotPtrStride = 0,
 
