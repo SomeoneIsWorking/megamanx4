@@ -5,8 +5,8 @@ status: holds
 created: 2026-08-21
 tags: RE-11,vsync,vblank,irq
 depends: psxport.pin, game/core/vsync_sync.cpp#deliver_field, tools/verify_vsync.py#verify
-reconfirmed: 2026-08-21 14:13:43
-verified_at: 2026-08-21 14:13:43
+reconfirmed: 2026-08-21
+verified_at: 2026-08-21 14:15:00
 ---
 
 ## Claim
@@ -48,3 +48,7 @@ Post-landing ce2c83ad VSync verifier passed six retail groups and 5/5 falsifiers
 ## Re-confirmed 2026-08-21 14:13:43
 
 Exact pin 3418a79b: Clang CTest 4/4, verify_vsync six groups and 5/5 falsifiers, and untraced scratch/logs/re04-3418-frame-commit-runtime.log runs 20 seconds with Fps60::frame_commit on the bounded-timeout stack and no capture overflow or watchdog fault.
+
+## Re-confirmed 2026-08-21
+
+Post-landing Clang verification passed VSync shipping groups and 5/5 falsifiers; the 20-second runtime stayed in frame_commit pacing without overflow against psxport 3418a79b.
