@@ -5,8 +5,8 @@ status: holds
 created: 2026-08-21
 tags: recompiler bootstrap RE-02
 depends: game/recomp_seeds.json, tools/verify_recomp_bootstrap.py, game/core/recomp_register.cpp, game/core/game_config.cpp
-reconfirmed: 2026-08-21 03:00:02
-verified_at: 2026-08-21 03:00:02
+reconfirmed: 2026-08-21 03:15:01
+verified_at: 2026-08-21 03:15:01
 ---
 
 ## Claim
@@ -28,3 +28,7 @@ if verify_recomp_bootstrap refuses the retail image, generated interface/range c
 ## Re-confirmed 2026-08-21 03:00:02
 
 2026-08-21 clean framework 2b5ef7b5: bootstrap selftest 2/2 (6192 -> 7533, crt0/gameMain, zero overlays); Clang megamanx4_port linked; CTest 2/2; software-Vulkan boot reached InitHeap and guest main with no recomp-MISS before the CD/VSync poll; pin check passed
+
+## Re-confirmed 2026-08-21 03:15:01
+
+2026-08-21 post-landing verify_recomp_bootstrap.py --check: 6192 binary roots -> 7533 functions; crt0/gameMain present; zero overlays; recompiler version 2026-08-12.1

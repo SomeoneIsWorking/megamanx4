@@ -5,8 +5,8 @@ status: holds
 created: 2026-08-12
 tags: boot,crt0,re-01
 depends: game/core/game_config.cpp, tools/verify_crt0.py
-reconfirmed: 2026-08-21 03:00:02
-verified_at: 2026-08-21 03:00:02
+reconfirmed: 2026-08-21 03:15:01
+verified_at: 2026-08-21 03:15:01
 ---
 
 ## Claim
@@ -44,3 +44,7 @@ Re-verified 2026-08-21 after making the framework-source recognizer formatting-i
 ## Re-confirmed 2026-08-21 03:00:02
 
 2026-08-21 clean framework 2b5ef7b5: verify_crt0.py --check passed 21 shipping/range comparisons plus shape and located 15/15 mechanisms; software-Vulkan boot logged sp=0x80200000 and InitHeap a0=0x80175F3C a1=0x820C8 before guest-main dispatch
+
+## Re-confirmed 2026-08-21 03:15:01
+
+2026-08-21 post-landing verify_crt0.py --check: 21/21 shipping comparisons and 11/11 framework compatibility checks; resident range 0x00010000..0x0012F800 derived from retail header
