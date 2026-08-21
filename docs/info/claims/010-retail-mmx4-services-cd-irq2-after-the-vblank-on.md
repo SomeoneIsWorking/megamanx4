@@ -5,8 +5,8 @@ status: holds
 created: 2026-08-21
 tags: RE-04,cd,irq,HookEntryInt,recompiler
 depends: psxport.pin, game/recomp_seeds.json, tools/verify_cd_irq.py, cmake/megamanx4_port.cmake
-reconfirmed: 2026-08-21 11:16:05
-verified_at: 2026-08-21 11:16:05
+reconfirmed: 2026-08-21
+verified_at: 2026-08-21 11:19:18
 ---
 
 ## Claim
@@ -28,3 +28,7 @@ groups and 6/6 selftests; bootstrap passed 2/2 with 6,193 seeds to 7,534 functio
 4/4. The runtime reached CD callback `0x800E7944` five times and sync callback status 2/result
 `0x8013BA78` with zero ABI violations, then ran to the external 20-second bound without watchdog or
 capture overflow.
+
+## Re-confirmed 2026-08-21
+
+Post-landing pinned Clang build and CTest 4/4 passed; verify_cd_irq passed six groups and 6/6; runtime reached 0x800E7944 five times with correct sync result and zero ABI violations.
