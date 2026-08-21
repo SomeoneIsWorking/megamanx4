@@ -1,12 +1,13 @@
 ---
 id: C008
 kind: claim
-status: holds
+status: falsified
 created: 2026-08-21
 tags: recompiler bootstrap RE-02
 depends: game/recomp_seeds.json, tools/verify_recomp_bootstrap.py, game/core/recomp_register.cpp, game/core/game_config.cpp
 reconfirmed: 2026-08-21
 verified_at: 2026-08-21 03:45:48
+falsified_on: 2026-08-21
 ---
 
 ## Claim
@@ -36,3 +37,9 @@ if verify_recomp_bootstrap refuses the retail image, generated interface/range c
 ## Re-confirmed 2026-08-21
 
 Post-landing verify_recomp_bootstrap selftest passed 2/2: 6192 roots to 7533 functions and an out-of-text seed refusal.
+
+## FALSIFIED 2026-08-21
+
+Retail/live HookEntryInt evidence proved one required indirect mid-function re-entry at 0x800E5194; the explicit seed list is no longer empty and emission now yields 7,534 functions.
+
+> Anything that cited this claim as proof must be re-checked. Grep the repo for it.

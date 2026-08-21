@@ -65,6 +65,10 @@ if(BUILD_TESTING)
     NAME vsync_evidence
     COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/tools/verify_vsync.py --check --selftest
   )
+  add_test(
+    NAME cd_irq_evidence
+    COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/tools/verify_cd_irq.py --check --selftest
+  )
 endif()
 
 if(NOT PSXPORT_BUILD_PORT)

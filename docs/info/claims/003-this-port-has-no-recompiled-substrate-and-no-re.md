@@ -22,6 +22,6 @@ any non-zero guest address appearing in game/core/game_config.cpp, or generated/
 
 ## FALSIFIED 2026-08-12
 
-ITS OWN FALSIFIER FIRED, exactly as written: 'any non-zero guest address appearing in game/core/game_config.cpp'. RE-01 landed 2026-08-12 and the crt0 boot group became measured. RE-02 subsequently emitted and linked the resident substrate and reached guest main at runtime; C008 is the current substrate claim.
+ITS OWN FALSIFIER FIRED, exactly as written: 'any non-zero guest address appearing in game/core/game_config.cpp'. RE-01 landed 2026-08-12 and the crt0 boot group became measured. RE-02 subsequently emitted and linked the resident substrate and reached guest main at runtime; C010 is the current substrate/interrupt-continuation claim. C008 was later falsified when retail/live HookEntryInt evidence required the first explicit mid-function re-entry seed.
 
 > Anything that cited this claim as proof must be re-checked. Grep the repo for it.

@@ -22,12 +22,14 @@ Statuses: ✅ re-verified · 🟡 re-partial (honest gap) · 🔬 in-progress ·
 ## THE STATE OF THIS PORT: two verified RE facts plus a booting resident substrate
 
 RE-01 owns the measured and wired crt0 group. RE-06 owns the two measured InitPAD buffers. RE-02 now
-owns a measured resident bootstrap: 6,192 binary roots → 7,533 functions, real generated registry,
-resident range, and runtime dispatch through InitHeap into `gameMain`. Explicit indirect seeds remain
-empty because no runtime `recomp-MISS` has justified one. RE-11 now owns a retail-derived VBlank
-producer at libetc's exact counter-wait helper, but the boot path never calls that blocking helper:
-focused CD/IRQ logging proves the former VSync watchdog stack was a hot-loop sample from a
-`VSync(-1)` deadline query. The current stop is RE-04's unclaimed CD IRQ2 contract.
+owns a measured resident bootstrap: 6,193 binary roots → 7,534 functions, real generated registry,
+resident range, and runtime dispatch through InitHeap into `gameMain`. Its one explicit seed is the
+retail/live-proven HookEntryInt continuation at 0x800E5194. RE-11 owns a retail-derived VBlank producer
+at libetc's exact counter-wait helper. RE-04 now owns the separate CD interrupt boundary: the VBlank-only
+SysEnq element correctly declines IRQ2, the shared BIOS restores HookEntryInt, retail trapIntr dispatches
+libcd's slot-2 callback, and boot advances. The current RE-04 gap is the archive loader contract, not
+CdInit and not VBlank waiting. The earlier FPS60 capture overflow in issue #10 does not reproduce
+against pinned framework `9f1bb927`; its cause remains unclassified rather than silently resolved.
 
 **The one thing that IS measured is the SUPPLY, not the port** — see `docs/references.md`. An AGPL-3.0
 matching decompilation (`external/mmx4`) declares a byte-exact build target whose SHA-1 equals the SHA-1
@@ -50,16 +52,16 @@ downstream of RE-07 should be attempted before it.
 - deps:
 - evidence: Retail SLUS_005.61 (SHA-1 213733031136d095ca275d6957695aa25011cfa5): `tools/verify_crt0.py --check` symbolically executes the 43-instruction entry function, compares the shipping group and resident range, and locates 15/15 required mechanisms in psxport; `--selftest` is 26/26 and the Tomba!2 cross-control is 29/29. The group is bss [0x8012F418,0x80175F38), stackTopBase 0x800DAF3C with bias 0, stackTopBase2 0x8011CB74, heapBase 0x80175F38, gp 0x8012F418, libcInit 0x800EDCDC, gameMain 0x80012024, crt0 0x800DAE8C. heapSizePtr/heapBasePtr are measured absent: the function has one absolute store and it saves ra.
 - where: game/core/game_config.cpp (bssZeroLo/Hi, stackTopBase/2, heapBase, heapSizePtr, heapBasePtr, gp, libcInit, gameMain, crt0)
-- gap: The group is runtime-confirmed through InitHeap and guest-main dispatch. Later boot progress is blocked by the unclassified CD IRQ2 callback contract, not by an RE-01 field.
+- gap: The group is runtime-confirmed through InitHeap and guest-main dispatch. CD initialization now advances through its measured IRQ2 callback path; remaining loader work is RE-04, not an RE-01 field.
 - notes: psxport 726d10c9 made the boot mechanism generic; issue #5 and falsified claim C006 preserve the root cause. The cross-control re-derives all 12 independently recorded Tomba!2 values.
 
 ### RE-02 — recompiler seed set for SLUS_005.61
 - status: re-partial
 - deps: RE-01
-- evidence: Retail SLUS_005.61 (SHA-1 213733031136d095ca275d6957695aa25011cfa5) through psxport's real emit.py: 6,192 binary-rooted seeds → 7,533 recompiled functions, including crt0 0x800DAE8C and gameMain 0x80012024; one computed `jr ra` of 5,534 sites; zero overlays; version 2026-08-12.1. `tools/verify_recomp_bootstrap.py --selftest` is 2/2: real positive emission plus emitter refusal of an out-of-text explicit seed. Clang links the generated registry. A software-Vulkan bounded boot runs InitHeap and dispatches guest main with no recomp miss before the stock CD-init IRQ2 retry loop.
-- where: game/recomp_seeds.json; tools/ensure_recomp.py; tools/verify_recomp_bootstrap.py; game/core/recomp_register.cpp; game/core/game_config.cpp (recMainLo/Hi)
-- gap: Runtime-computed targets on paths beyond the current CD IRQ2 stall remain unobserved. Grow the explicit list only from future `[recomp-MISS]` fail-fasts. The first apparent miss at 0x800EDCDC was NOT a missing seed: rec_func_index already contained it; zero recMainLo/Hi made the router bypass main_dispatch. That root cause is now mechanically gated by verify_crt0.py.
-- notes: The overlay half does not exist here (RE-03). Never copy another game's seeds or paste a decomp address without a runtime miss/disassembly rationale; a foreign in-range seed can split a real function while emission still succeeds.
+- evidence: Retail SLUS_005.61 (SHA-1 213733031136d095ca275d6957695aa25011cfa5) through psxport's real emit.py: 6,193 binary-rooted seeds -> 7,534 recompiled functions, including crt0 0x800DAE8C, gameMain 0x80012024, and the measured HookEntryInt continuation 0x800E5194; one computed jr ra of 5,534 sites; zero overlays; version 2026-08-12.1. tools/verify_recomp_bootstrap.py --selftest remains 2/2. tools/verify_cd_irq.py proves from retail bytes that setjmp saves the mid-function continuation and checks it exists exactly once in main_reentry and is not duplicated in main; the shared emitter includes main_reentry in its seed union. Clang links the generated registry. Live FNTRACE reaches 0x800E5194 through shared BIOS delivery and then CD callback 0x800E7944.
+- where: game/recomp_seeds.json; tools/ensure_recomp.py; tools/verify_recomp_bootstrap.py; tools/verify_cd_irq.py; game/core/recomp_register.cpp; game/core/game_config.cpp (recMainLo/Hi)
+- gap: Runtime-computed targets on paths beyond the now-cleared CD initialization boundary remain unobserved. Grow the explicit list only from a runtime miss plus retail control-flow evidence. The low BIOS/ROM address 0x8000E884 is still reported during pad setup but does not stop current execution; classify it before claiming that path fully owned.
+- notes: 0x800E5194 is not a guessed miss: live HookEntryInt recorded it in jmp_buf 0x8011CBCC and retail startIntr proves it is the non-zero setjmp continuation into trapIntr. It belongs in main_reentry only; putting it in main too would duplicate the same fact. The earlier 0x800EDCDC apparent miss was a separate zero-resident-range router defect and remains documented in issue 8.
 
 ## overlays
 
@@ -74,12 +76,12 @@ downstream of RE-07 should be attempted before it.
 ## cd
 
 ### RE-04 — CD load chokepoints and the loader's contract
-- status: todo
+- status: re-partial
 - deps: RE-01
-- evidence: The boot exe holds a 161-entry literal path table at file offset 0xDED4E — 138 `E:\ROCKX4\USA\ARC\*.ARC` + 11 STR + 11 XA + the build's own executable. The 138 ARC names exactly match the disc set. `tools/verify_vsync.py` independently checks the observed retail call edges 0x800E5ACC → 0x800E5C14 → 0x800E74DC → 0x800E6E14 → 0x800E4DB0, including 0x800E74DC's own `CD_init:` literal and the final `VSync(-1)` argument; no matching-decomp label is used as proof. A focused runtime shows the native controller repeatedly accepting commands 0x01/0x0A and raising IRQ2 (`I_STAT=0x004`, `I_MASK=0x00D`), while the one registered BIOS interrupt element reports that it claimed no source.
-- where: game/core/game_config.cpp (cdInit, cdCommand, cdSync, cdReadPrim, cdFileLoad, cdAsyncRead, …); scratch/logs/recomp-range-fixed-lvp.log (untracked runtime evidence)
-- gap: Classify the registered interrupt element at 0x8013BBF8 and the libcd IRQ callback/result-state contract before selecting any ownership boundary. The controller already produces responses, so forcing CdInit success would bypass an active guest path rather than repair the missing delivery. The loader mechanism remains unconfirmed. The measured heap is 532,680 bytes while PL00_U.ARC is 796,672 bytes, so it cannot fit whole in the heap; parsing/streaming is still a hypothesis because the loader could target the reserve or static BSS.
-- notes: This is also the step that separates enhancement job A from job B. psxport converts CD/file I/O to PC-native SYNCHRONOUS under the FAIL-FAST rule, so raw seek/read latency is largely gone BY CONSTRUCTION; what remains is RE-09's scripted waits. Measure them apart before quoting a load-time number.
+- evidence: Retail SLUS_005.61 (SHA-1 213733031136d095ca275d6957695aa25011cfa5): tools/verify_cd_irq.py checks six contract groups. InitPAD builds priority-1 element 0x8013BBF8 with handler 0x800EE274 and verifier 0x800EE2DC; the verifier returns non-zero only for IRQ0. startIntr installs jmp_buf 0x8011CBCC whose live saved RA is 0x800E5194; that continuation calls trapIntr 0x800E5208, whose eleven-slot table starts at 0x8011CB98. CD_init registers 0x800E7944 in slot 2 and that callback drains ready/sync results through 0x8013BA80/0x8013BA78 and updates libcd status. Selftest is 6/6, including refusals for missing and duplicated re-entry ownership. Rebuilt runtime in scratch/logs/re04-pinned-runtime.log against pinned framework `9f1bb927` shows IRQ2 I_STAT=0x004, the VBlank element correctly declines it, and FNTRACE reaches 0x800E7944 from trapIntr slot 2 five times with zero ABI violations; sync callback 0x800E5B5C receives status 2 and result buffer 0x8013BA78. The shared runtime aborts if B0:17 falls through rather than unwinding, while this run reaches the external 20-second bound without a watchdog or capture overflow. No synchronous-success override or polling bypass exists.
+- where: psxport.pin; game/recomp_seeds.json; tools/verify_cd_irq.py; cmake/megamanx4_port.cmake; scratch/logs/re04-pinned-runtime.log (untracked runtime evidence); shared psxport runtime/recomp/bios_interrupt.cpp and hle.cpp
+- gap: The IRQ/callback/result-state boundary is complete. The loader mechanism remains unconfirmed: locate the first actual archive open/read/decode path and derive its destination/streaming contract. The measured heap is 532,680 bytes while PL00_U.ARC is 796,672 bytes, so whole-file heap loading is impossible but reserve/static-BSS destinations or streaming remain open. The pinned 20-second run continues without exposing a new watchdog stop. Issue #10's earlier 65,537-entry capture overflow is now a non-reproducing investigation; do not infer its cause or the loader contract merely from its absence.
+- notes: This separates enhancement job A from job B. Raw CD IRQ delivery is now faithful and shared; do not replace it with synchronous CdInit success. psxport still makes host disc/file reads synchronous, while RE-09 separately owns the game's scripted waits. The pre-fix runtime negative is scratch/logs/re11-final-runtime.log: IRQ2 remained asserted and CdInit retried because HookEntryInt was stored but never entered.
 
 ## frame
 
@@ -96,7 +98,7 @@ downstream of RE-07 should be attempted before it.
 - deps: RE-01
 - evidence: Retail SLUS_005.61 (SHA-1 213733031136d095ca275d6957695aa25011cfa5): a whole-text scan of 294,400 loaded words finds exactly one jal to the matching-decomp-identified InitPAD target 0x800EE0D0, at 0x80012194; immediate dataflow gives (a0,a1,a2,a3)=(0x80166D68,0x22,0x8012F46C,0x22). tools/verify_pad.py --check compares all four arguments to the shipping GameConfig and --selftest proves both answers, 4/4.
 - where: game/core/game_config.cpp (kPadSlot0Buf/kPadSlot1Buf and fixed-buffer bindings); tools/verify_pad.py
-- gap: The two fixed buffers are complete. The substrate now boots, but execution has not passed CD initialization, so runtime injection remains a separate gate.
+- gap: The two fixed buffers are complete and execution now passes CD initialization. Runtime input injection remains a separate gate because the observed boot path has not yet consumed a host-injected pad state.
 - notes: padDriverFn/padSlotPtrTable/padSlotPtrStride remain zero deliberately: the retail InitPAD call passes the two buffers directly, and psxport falls back to those fixed buffers when no table is declared. This lands drop-in co-op input plumbing only; RE-07 still has no player-object, camera, routing or spawn implementation.
 
 ## enhancements

@@ -3,9 +3,9 @@
 
 This is deliberately an integration verifier over psxport's real emitter, not a second function
 finder.  The framework owns binary discovery; this tool supplies the retail executable and this
-repo's seed file, then checks the generated interface that this port consumes.  An empty explicit
-seed list is valid here because emit.py always starts from the PS-X EXE entry point and its binary
-pointer/table scans before following direct ``jal`` edges.
+repo's seed file, then checks the generated interface that this port consumes.  emit.py starts from
+the PS-X EXE entry point and its binary pointer/table scans before following direct ``jal`` edges;
+game-specific indirect and mid-function entries remain explicit measured seeds.
 
 ``--selftest`` proves both answers through the same subprocess path: the shipping configuration must
 emit a resident substrate containing the measured crt0 and game-main functions, while an explicit
