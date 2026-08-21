@@ -24,8 +24,10 @@ Statuses: ✅ re-verified · 🟡 re-partial (honest gap) · 🔬 in-progress ·
 RE-01 owns the measured and wired crt0 group. RE-06 owns the two measured InitPAD buffers. RE-02 now
 owns a measured resident bootstrap: 6,192 binary roots → 7,533 functions, real generated registry,
 resident range, and runtime dispatch through InitHeap into `gameMain`. Explicit indirect seeds remain
-empty because no runtime `recomp-MISS` has justified one. The current stop is CD init's VSync/hardware
-poll, making RE-04/RE-11 the next runtime prerequisites.
+empty because no runtime `recomp-MISS` has justified one. RE-11 now owns a retail-derived VBlank
+producer at libetc's exact counter-wait helper, but the boot path never calls that blocking helper:
+focused CD/IRQ logging proves the former VSync watchdog stack was a hot-loop sample from a
+`VSync(-1)` deadline query. The current stop is RE-04's unclaimed CD IRQ2 contract.
 
 **The one thing that IS measured is the SUPPLY, not the port** — see `docs/references.md`. An AGPL-3.0
 matching decompilation (`external/mmx4`) declares a byte-exact build target whose SHA-1 equals the SHA-1
@@ -48,15 +50,15 @@ downstream of RE-07 should be attempted before it.
 - deps:
 - evidence: Retail SLUS_005.61 (SHA-1 213733031136d095ca275d6957695aa25011cfa5): `tools/verify_crt0.py --check` symbolically executes the 43-instruction entry function, compares the shipping group and resident range, and locates 15/15 required mechanisms in psxport; `--selftest` is 26/26 and the Tomba!2 cross-control is 29/29. The group is bss [0x8012F418,0x80175F38), stackTopBase 0x800DAF3C with bias 0, stackTopBase2 0x8011CB74, heapBase 0x80175F38, gp 0x8012F418, libcInit 0x800EDCDC, gameMain 0x80012024, crt0 0x800DAE8C. heapSizePtr/heapBasePtr are measured absent: the function has one absolute store and it saves ra.
 - where: game/core/game_config.cpp (bssZeroLo/Hi, stackTopBase/2, heapBase, heapSizePtr, heapBasePtr, gp, libcInit, gameMain, crt0)
-- gap: The group is runtime-confirmed through InitHeap and guest-main dispatch. Later boot progress is blocked by the still-unimplemented CD/VSync synchronization path, not by an RE-01 field.
+- gap: The group is runtime-confirmed through InitHeap and guest-main dispatch. Later boot progress is blocked by the unclassified CD IRQ2 callback contract, not by an RE-01 field.
 - notes: psxport 726d10c9 made the boot mechanism generic; issue #5 and falsified claim C006 preserve the root cause. The cross-control re-derives all 12 independently recorded Tomba!2 values.
 
 ### RE-02 — recompiler seed set for SLUS_005.61
 - status: re-partial
 - deps: RE-01
-- evidence: Retail SLUS_005.61 (SHA-1 213733031136d095ca275d6957695aa25011cfa5) through psxport's real emit.py: 6,192 binary-rooted seeds → 7,533 recompiled functions, including crt0 0x800DAE8C and gameMain 0x80012024; one computed `jr ra` of 5,534 sites; zero overlays; version 2026-08-12.1. `tools/verify_recomp_bootstrap.py --selftest` is 2/2: real positive emission plus emitter refusal of an out-of-text explicit seed. Clang links the generated registry. A software-Vulkan bounded boot runs InitHeap and dispatches guest main with no recomp miss before stock CdInit reaches its VSync/hardware wait.
+- evidence: Retail SLUS_005.61 (SHA-1 213733031136d095ca275d6957695aa25011cfa5) through psxport's real emit.py: 6,192 binary-rooted seeds → 7,533 recompiled functions, including crt0 0x800DAE8C and gameMain 0x80012024; one computed `jr ra` of 5,534 sites; zero overlays; version 2026-08-12.1. `tools/verify_recomp_bootstrap.py --selftest` is 2/2: real positive emission plus emitter refusal of an out-of-text explicit seed. Clang links the generated registry. A software-Vulkan bounded boot runs InitHeap and dispatches guest main with no recomp miss before the stock CD-init IRQ2 retry loop.
 - where: game/recomp_seeds.json; tools/ensure_recomp.py; tools/verify_recomp_bootstrap.py; game/core/recomp_register.cpp; game/core/game_config.cpp (recMainLo/Hi)
-- gap: Runtime-computed targets on paths beyond the current CD/VSync stall remain unobserved. Grow the explicit list only from future `[recomp-MISS]` fail-fasts. The first apparent miss at 0x800EDCDC was NOT a missing seed: rec_func_index already contained it; zero recMainLo/Hi made the router bypass main_dispatch. That root cause is now mechanically gated by verify_crt0.py.
+- gap: Runtime-computed targets on paths beyond the current CD IRQ2 stall remain unobserved. Grow the explicit list only from future `[recomp-MISS]` fail-fasts. The first apparent miss at 0x800EDCDC was NOT a missing seed: rec_func_index already contained it; zero recMainLo/Hi made the router bypass main_dispatch. That root cause is now mechanically gated by verify_crt0.py.
 - notes: The overlay half does not exist here (RE-03). Never copy another game's seeds or paste a decomp address without a runtime miss/disassembly rationale; a foreign in-range seed can split a real function while emission still succeeds.
 
 ## overlays
@@ -74,9 +76,9 @@ downstream of RE-07 should be attempted before it.
 ### RE-04 — CD load chokepoints and the loader's contract
 - status: todo
 - deps: RE-01
-- evidence: The boot exe holds a 161-entry literal path table at file offset 0xDED4E — 138 `E:\ROCKX4\USA\ARC\*.ARC` + 11 STR + 11 XA + the build's own executable. The 138 ARC names exactly match the disc set. The first substrate boot now adds a runtime lead: guest main reaches generated 0x800E5ACC → 0x800E5C14 → 0x800E74DC → 0x800E6E14, then stalls in 0x800E4DB0's hardware poll. The matching decomp labels those addresses CdInit, CdReset, CD_init, CD_cw, and VSync respectively; the addresses in the stack are observed, but the symbol names remain reference locators until independently checked against each retail body.
+- evidence: The boot exe holds a 161-entry literal path table at file offset 0xDED4E — 138 `E:\ROCKX4\USA\ARC\*.ARC` + 11 STR + 11 XA + the build's own executable. The 138 ARC names exactly match the disc set. `tools/verify_vsync.py` independently checks the observed retail call edges 0x800E5ACC → 0x800E5C14 → 0x800E74DC → 0x800E6E14 → 0x800E4DB0, including 0x800E74DC's own `CD_init:` literal and the final `VSync(-1)` argument; no matching-decomp label is used as proof. A focused runtime shows the native controller repeatedly accepting commands 0x01/0x0A and raising IRQ2 (`I_STAT=0x004`, `I_MASK=0x00D`), while the one registered BIOS interrupt element reports that it claimed no source.
 - where: game/core/game_config.cpp (cdInit, cdCommand, cdSync, cdReadPrim, cdFileLoad, cdAsyncRead, …); scratch/logs/recomp-range-fixed-lvp.log (untracked runtime evidence)
-- gap: Confirm the five bodies/signatures from the retail bytes, then determine which highest-level CD override preserves the guest-visible contract. The loader mechanism remains unconfirmed. The measured heap is 532,680 bytes while PL00_U.ARC is 796,672 bytes, so it cannot fit whole in the heap; parsing/streaming is still a hypothesis because the loader could target the reserve or static BSS.
+- gap: Classify the registered interrupt element at 0x8013BBF8 and the libcd IRQ callback/result-state contract before selecting any ownership boundary. The controller already produces responses, so forcing CdInit success would bypass an active guest path rather than repair the missing delivery. The loader mechanism remains unconfirmed. The measured heap is 532,680 bytes while PL00_U.ARC is 796,672 bytes, so it cannot fit whole in the heap; parsing/streaming is still a hypothesis because the loader could target the reserve or static BSS.
 - notes: This is also the step that separates enhancement job A from job B. psxport converts CD/file I/O to PC-native SYNCHRONOUS under the FAIL-FAST rule, so raw seek/read latency is largely gone BY CONSTRUCTION; what remains is RE-09's scripted waits. Measure them apart before quoting a load-time number.
 
 ## frame
@@ -94,7 +96,7 @@ downstream of RE-07 should be attempted before it.
 - deps: RE-01
 - evidence: Retail SLUS_005.61 (SHA-1 213733031136d095ca275d6957695aa25011cfa5): a whole-text scan of 294,400 loaded words finds exactly one jal to the matching-decomp-identified InitPAD target 0x800EE0D0, at 0x80012194; immediate dataflow gives (a0,a1,a2,a3)=(0x80166D68,0x22,0x8012F46C,0x22). tools/verify_pad.py --check compares all four arguments to the shipping GameConfig and --selftest proves both answers, 4/4.
 - where: game/core/game_config.cpp (kPadSlot0Buf/kPadSlot1Buf and fixed-buffer bindings); tools/verify_pad.py
-- gap: The two fixed buffers are complete. The substrate now boots, but execution has not reached controller polling before the CD/VSync stall, so runtime injection remains a separate gate.
+- gap: The two fixed buffers are complete. The substrate now boots, but execution has not passed CD initialization, so runtime injection remains a separate gate.
 - notes: padDriverFn/padSlotPtrTable/padSlotPtrStride remain zero deliberately: the retail InitPAD call passes the two buffers directly, and psxport falls back to those fixed buffers when no table is declared. This lands drop-in co-op input plumbing only; RE-07 still has no player-object, camera, routing or spawn implementation.
 
 ## enhancements
@@ -155,9 +157,9 @@ downstream of RE-07 should be attempted before it.
 ## platform synchronization
 
 ### RE-11 — platform-HLE synchronization entry points and executable windows
-- status: todo
+- status: re-partial
 - deps: RE-01
-- evidence: A software-Vulkan bounded substrate boot reached guest main and then stalled in Core::io_read from generated 0x800E4DB0, through the observed chain 0x800E5ACC → 0x800E5C14 → 0x800E74DC → 0x800E6E14. The matching decomp labels 0x800E4DB0 as VSync and the four callers as CdInit/CdReset/CD_init/CD_cw. This is a runtime address/call-chain observation plus a reference name, not yet an independently classified HLE contract.
-- where: game/core/game_config.cpp (hle)
-- gap: Disassemble and classify 0x800E4DB0 from the retail bytes, locate the counter/IRQ contract and a tight executable window, then implement the guest-loop VSync behavior. `vsyncTrap` is not valid here: X4's guest still owns its frame loop, so trapping legitimate VSync would encode the opposite policy. Other HLE entries remain unmeasured and `GameConfig::hle` stays empty until each contract is proven.
-- notes: Static address derivation can precede RE-02, but runtime proof needs the emitted substrate.
+- evidence: `tools/verify_vsync.py` derives six contract groups from retail SLUS_005.61 without consulting matching-decomp labels. VSync 0x800E4DB0 calls helper 0x800E4EF8 twice and retains its own query/hblank/GPU/last-sync logic. The helper occupies exactly [0x800E4EF8,0x800E4F94), spins on counter 0x8011DC50 reaching a0, and carries the retail `VSync: timeout` literal. Init 0x800E56A4 zeroes that counter, clears 8 callbacks at 0x8011DC30, and registers 0x800E56FC for IRQ 0; the handler increments once and walks exactly those 8 callbacks. The shipping route owns only the helper, paces from the guest-programmed display standard, dispatches the retail handler with the interrupted registers preserved, and presents the guest-owned VRAM. Selftest is 4/4 and produces the other answer for a broken call edge, a 7-slot handler, and a collapsed executable window. A real Clang runtime installs the route at the exact window.
+- where: game/core/vsync_sync.{h,cpp}; game/core/game_config.cpp (hle window); tools/verify_vsync.py
+- gap: The observed boot path calls VSync only with mode -1 from the CD command deadline and therefore never reaches the blocking helper; runtime behavior of the helper and registered callbacks remains unverified. The new focused trace moves the live stop to RE-04: CD IRQ2 is raised and unmasked, but the registered BIOS element does not claim it. Every other HLE entry remains zero/unmeasured.
+- notes: `vsyncTrap` remains zero by design: X4's guest owns its frame loop. The former watchdog stack was a sample inside a repeating deadline query, not proof that VBlank waiting caused the loop; issue #9 records the corrected diagnosis.

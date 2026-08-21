@@ -14,7 +14,9 @@ CVars and force-suppressed under the byte-compare oracle. See `docs/plans/enhanc
 
 Created 2026-08-12. The retail executable now emits 6,192 binary-rooted entries and 7,533 recompiled
 functions, builds `megamanx4_port` with Clang, and boots through InitHeap into guest `gameMain`. The
-current stop is the first real CD/VSync hardware wait, not a recompiler seed miss. What exists:
+current stop is the CD-init IRQ2 callback contract, not a recompiler seed miss or a blocking VSync.
+The retail VBlank wait route is measured and installed, but boot only queries `VSync(-1)` before the
+CD loop. What exists:
 
 - disc → executable provisioning from **your own** disc image (nothing game-derived is in this repo),
 - the measured CRT0 and pad groups, resident routing range, generated-substrate registry, and three

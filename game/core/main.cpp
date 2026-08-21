@@ -5,7 +5,8 @@
 // nothing here names anything but framework symbols.
 //
 // RE-01, RE-02's static bootstrap, and RE-06 are measured (docs/re-frontier.md). The sequence below
-// boots the generated resident substrate; the next runtime prerequisite is the CD/VSync hardware wait.
+// boots the generated resident substrate; RE-11 restores the retail IRQ-owned VBlank timebase at the
+// measured libetc wait helper while leaving the guest's VSync body and loop in control.
 #include "cfg.h"
 #include "core.h"
 #include "disc.h"
@@ -81,11 +82,8 @@ int main(int argc, char **argv) {
   game->spu_audio.init();      // SDL audio sink (PSXPORT_NOAUDIO to disable)
   game->gpu.gpu_native_init(); // native GPU renderer over the guest's GP0 stream
   game->cd.overridesInit();    // native CD: drive-ready + by-LBA read
-  // Hardware-sync HLE. initBuiltins() installs the framework's generic handlers at whatever addresses
-  // THIS game declares in GameConfig::hle — which is all zero here (RE-11), so it registers nothing
-  // and says so. A run that needs one will hang in the guest's real spin loop; that is the honest
-  // signal that the RE is outstanding, and it is why no address from the vendored decomp may be
-  // pasted in without being measured against this executable first.
+  // Generic hardware-sync entries remain zero. RE-11's game-specific wait producer is installed from
+  // registerOverrides below, after initBuiltins has exercised and reported the generic table.
   game->platform_hle.initBuiltins();
   game->pad.overridesInit(); // native controller input
   c->r[4] = 1;

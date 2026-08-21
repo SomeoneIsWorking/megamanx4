@@ -33,6 +33,7 @@ set(SEAM_SRC
   game/core/enhancements.cpp
   game/core/main.cpp
   game/core/recomp_register.cpp
+  game/core/vsync_sync.cpp
 )
 add_library(megamanx4_seam OBJECT ${SEAM_SRC})
 # C++20, NOT the 17 the sibling trees' seam targets use. DEVIATION WITH A REASON: enhancements.cpp
@@ -59,6 +60,10 @@ if(BUILD_TESTING)
   add_test(
     NAME launcher_policy
     COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/tools/test_run.py
+  )
+  add_test(
+    NAME vsync_evidence
+    COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/tools/verify_vsync.py --check --selftest
   )
 endif()
 

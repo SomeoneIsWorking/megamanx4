@@ -18,6 +18,7 @@
 // spider1/game/core/game_config.cpp does — that citation is what makes the value reviewable a year from
 // now. (Reading mmx4 also puts you under the AGPL firewall: what you learn stays in THIS repo. CLAUDE.md.)
 #include "game_iface.h"
+#include "vsync_sync.h"
 
 // MEASURED, from the PS-EXE header of the extracted SLUS_005.61 (tools/extract_exe.py prints it) and
 // from the disc's SYSTEM.CNF. Kept as named constants rather than dropped into the struct below,
@@ -320,13 +321,12 @@ static const GameConfig g_x4_cfg = {
     .padSlotPtrTable = 0,
     .padSlotPtrStride = 0,
 
-    // --- platform HLE (the hardware-sync primitives) ----------------------------- RE-11, NOT DONE --
-    // ZERO MEANS "not RE'd, install nothing". initBuiltins() then registers no handler and says so;
-    // a run that needs one hangs in the guest's real spin loop, which is the honest signal that the RE
-    // is outstanding. The windows are zero too, so register_() refuses everything — this game has not
-    // stated its memory map yet, and a window guessed from another game's map is how a handler lands
-    // on an unrelated function.
-    .hle = {},
+    // --- platform HLE (the hardware-sync primitives) ------------------------ RE-11: ONE MEASURED --
+    // The window is deliberately the exact half-open body of libetc's counter-wait helper. It admits
+    // the one project-owned handler installed by vsync_sync.cpp and refuses every adjacent function;
+    // broadening it would weaken the platform/game ownership guard without adding a measured entry.
+    // vsyncTrap remains zero because X4's guest loop legitimately calls VSync.
+    .hle = {.windowLo = {x4::vsync::kWait, 0}, .windowHi = {x4::vsync::kWaitEnd, 0}},
 
     // --- rendering policy ------------------------------------------------- 1 while the guest draws --
     // The renderer clears to black on the principle "show ONLY what a native producer submitted". That

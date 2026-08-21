@@ -17,7 +17,9 @@ methodology is `…/docs/porting-a-new-psx-game.md`.
 Created 2026-08-12. RE-01 and RE-06 are verified; RE-02 is a measured static/runtime bootstrap with an
 honest remaining gap for future indirect-only targets. The retail executable emits 6,192 binary roots
 to 7,533 functions, links `megamanx4_port`, and boots through InitHeap into guest `gameMain`. The first
-current stall is the stock CD-init chain waiting in VSync with no platform-HLE entry installed.
+current stall is the stock CD-init IRQ2 retry path: the controller raises an unmasked IRQ2, but the
+registered BIOS interrupt element does not claim it. RE-11's exact VBlank wait route is installed;
+boot calls only `VSync(-1)` and does not exercise that blocking helper yet.
 **RE-01, the crt0 boot group, is verified and wired:** `tools/verify_crt0.py --check` derives the
 group from `SLUS_005.61`, compares 21 shipping/range facts, and confirms the current framework implements
 all 15 required mechanisms. Its 26-case selftest proves both answers; claim C006 and issue #5 record

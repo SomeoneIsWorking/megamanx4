@@ -23,6 +23,7 @@
 #include "cfg.h"
 #include "core.h"
 #include "game_iface.h"
+#include "vsync_sync.h"
 #include <stdlib.h>
 
 // ── boot
@@ -40,11 +41,10 @@ static void x4_bootInit(Core *c) {
 
 // ── neutral
 // ─────────────────────────────────────────────────────────────────────────────────────
-static void x4_registerOverrides(Game *) {
-  // No native override exists — this port owns no guest function. Nothing to
-  // install is the truthful state, and keeping the hook wired means the wiring
-  // is exercised from the first commit rather than stood up later on top of an
-  // untested seam.
+static void x4_registerOverrides(Game *game) {
+  // RE-11 owns only libetc's measured wait helper. The retail VSync body and IRQ-0 handler remain
+  // recompiled guest code; vsync_sync restores the missing asynchronous producer between them.
+  x4::vsync::install(game);
 }
 
 static void x4_renderFadeState(Core *, FadeState *out) {
