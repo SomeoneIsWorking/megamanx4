@@ -5,8 +5,8 @@ status: holds
 created: 2026-08-20
 tags: pad,coop
 depends: game/core/game_config.cpp, tools/verify_pad.py
-reconfirmed: 2026-08-21 03:15:01
-verified_at: 2026-08-21 03:15:01
+reconfirmed: 2026-08-21
+verified_at: 2026-08-21 03:45:48
 ---
 
 ## Claim
@@ -28,3 +28,7 @@ Falsified if this executable identity changes, a complete instruction scan finds
 ## Re-confirmed 2026-08-21 03:15:01
 
 2026-08-21 post-landing verify_pad.py --check: unique InitPAD call at 0x80012194; 4/4 shipping arguments match fixed buffers 0x80166D68 and 0x8012F46C with size 0x22
+
+## Re-confirmed 2026-08-21
+
+Post-landing verify_pad found the unique retail InitPAD call and matched all four fixed-buffer arguments 4/4.

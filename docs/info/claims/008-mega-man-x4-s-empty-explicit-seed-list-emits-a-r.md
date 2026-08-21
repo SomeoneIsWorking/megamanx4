@@ -5,8 +5,8 @@ status: holds
 created: 2026-08-21
 tags: recompiler bootstrap RE-02
 depends: game/recomp_seeds.json, tools/verify_recomp_bootstrap.py, game/core/recomp_register.cpp, game/core/game_config.cpp
-reconfirmed: 2026-08-21 03:15:01
-verified_at: 2026-08-21 03:15:01
+reconfirmed: 2026-08-21
+verified_at: 2026-08-21 03:45:48
 ---
 
 ## Claim
@@ -32,3 +32,7 @@ if verify_recomp_bootstrap refuses the retail image, generated interface/range c
 ## Re-confirmed 2026-08-21 03:15:01
 
 2026-08-21 post-landing verify_recomp_bootstrap.py --check: 6192 binary roots -> 7533 functions; crt0/gameMain present; zero overlays; recompiler version 2026-08-12.1
+
+## Re-confirmed 2026-08-21
+
+Post-landing verify_recomp_bootstrap selftest passed 2/2: 6192 roots to 7533 functions and an out-of-text seed refusal.

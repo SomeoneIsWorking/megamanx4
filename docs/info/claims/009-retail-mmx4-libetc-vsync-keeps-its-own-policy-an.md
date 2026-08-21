@@ -5,8 +5,8 @@ status: holds
 created: 2026-08-21
 tags: RE-11,vsync,vblank,irq
 depends: game/core/vsync_sync.cpp#deliver_field, game/core/vsync_sync.cpp#wait_for_counter, game/core/vsync_sync.cpp#install, tools/verify_vsync.py#verify, game/core/game_config.cpp#g_x4_cfg
-reconfirmed: 2026-08-21 03:34:25
-verified_at: 2026-08-21 03:34:25
+reconfirmed: 2026-08-21
+verified_at: 2026-08-21 03:45:49
 ---
 
 ## Claim
@@ -28,3 +28,7 @@ Final Clang runtime scratch/logs/re11-final-runtime.log installs 0x800E4EF8 and 
 ## Re-confirmed 2026-08-21 03:34:25
 
 Final tree: verify_vsync check passes six retail contract groups and selftest 4/4; Clang build and full CTest 3/3 pass; scratch/logs/re11-final-runtime.log installs 0x800E4EF8 and reaches guest main, then confirms the declared runtime gap by stopping at unclaimed CD IRQ2 without entering the blocking helper.
+
+## Re-confirmed 2026-08-21
+
+Post-landing verify_vsync passed six retail contract groups and all four positive/opposite-answer selftests; scoped CTest passed 3/3.
