@@ -2,9 +2,9 @@
 # (external/psxport shared checkout or pin-resolved private clone).
 #
 # The framework (PSX-generic static-recomp substrate + runtime + HW backends + SBS harness + SDL_GPU
-# renderer) is the reusable `psxport` library; this repo adds the game (game/**) and — once it exists —
-# the recompiled SLUS_005.61 substrate (generated/**). The crt0 and pad buffers are measured, but no
-# substrate has been emitted yet; see docs/re-frontier.md and cmake/megamanx4_port.cmake.
+# renderer) is the reusable `psxport` library; this repo adds the game (game/**) and its generated
+# SLUS_005.61 substrate (generated/**). The crt0, pad buffers, static bootstrap, registry, and resident
+# routing range are measured; see docs/re-frontier.md.
 #
 # THIS PORT IS AN ENHANCEMENT PORT (CLAUDE.md): the game already runs at 60fps, so there is no native
 # producer, no frame interpolation and no native renderer here. What this repo builds beyond the seam is

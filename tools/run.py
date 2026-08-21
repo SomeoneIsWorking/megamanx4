@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the current Mega Man X4 project target and explain the honest stop."""
+"""Provision, build, verify, and launch the current Mega Man X4 port target."""
 
 from __future__ import annotations
 
@@ -7,31 +7,14 @@ import os
 import shutil
 import subprocess
 import sys
+from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Mapping, Sequence, TextIO
-
+from typing import TextIO
 
 ROOT = Path(__file__).resolve().parents[1]
 CYAN = "\033[1;36m"
 RED = "\033[1;31m"
 RESET = "\033[0m"
-
-STOP_MESSAGE = """
-[run] ------------------------------------------------------------------------------------------
-[run] STOPPING HERE, ON PURPOSE. There is no megamanx4_port binary to launch.
-[run]
-[run] The next step is the static recompilation of SLUS_005.61, and it CANNOT run yet:
-[run]   * RE-01  complete: the crt0/boot group and guest main() are measured and wired
-[run]   * RE-02  game/recomp_seeds.json is empty — seeds are grown from real [recomp-MISS] fail-fasts
-[run]
-[run] RE-03 (overlay load bases) is ➖ skip-by-design: this game has NO code overlays. Measured over
-[run] all 163 disc files, three independent signals, with a control — the boot exe IS the engine.
-[run]
-[run] python3 tools/re_frontier.py next        -- the step that is actually ready to work
-[run] python3 tools/verify_decomp_targets.py   -- does the vendored AGPL decomp target our bytes?
-[run] python3 tools/behavior.py check          -- are the three pc_enh gates still ORACLE/SBS-suppressed?
-[run] ------------------------------------------------------------------------------------------
-"""
 
 
 class LauncherFailure(RuntimeError):
@@ -47,7 +30,8 @@ class Host:
 
     @staticmethod
     def run(args: Sequence[str], **kwargs: object) -> subprocess.CompletedProcess:
-        return subprocess.run(list(args), **kwargs)
+        check = bool(kwargs.pop("check", False))
+        return subprocess.run(list(args), check=check, **kwargs)
 
 
 def say(message: str, stdout: TextIO) -> None:
@@ -235,7 +219,15 @@ def run_launcher(
             env=provision_env,
         )
 
-        say("building the framework library + the seam check…", stdout)
+        run_stage(
+            machine,
+            [sys.executable, "-B", "tools/ensure_recomp.py"],
+            "recompiled substrate generation failed",
+            root=root,
+            env=provision_env,
+        )
+
+        say("building the native port…", stdout)
         run_stage(
             machine,
             [
@@ -256,8 +248,8 @@ def run_launcher(
         )
         run_stage(
             machine,
-            ["cmake", "--build", "build", "-j", jobs, "--target", "megamanx4_seam"],
-            "seam check failed",
+            ["cmake", "--build", "build", "-j", jobs, "--target", "megamanx4_port"],
+            "native port build failed",
             root=root,
             env=environment,
         )
@@ -272,8 +264,20 @@ def run_launcher(
         print(f"{RED}[run] error:{RESET} {exc}", file=stderr)
         return 1
 
-    print(STOP_MESSAGE, end="", file=stdout)
-    return 3
+    launch_env = dict(environment)
+    launch_env["PSXPORT_ASSET_DIR"] = str(psxport_path)
+    say("launching Mega Man X4…", stdout)
+    try:
+        result = machine.run(
+            [str(root / "scratch" / "bin" / "megamanx4_port")],
+            cwd=root,
+            env=launch_env,
+            check=False,
+        )
+    except OSError as exc:
+        print(f"{RED}[run] error:{RESET} launch failed: {exc}", file=stderr)
+        return 1
+    return result.returncode
 
 
 def main(argv: Sequence[str] | None = None) -> int:

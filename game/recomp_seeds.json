@@ -6,7 +6,10 @@
 // about THIS executable and THIS disc, so the framework ships none of them and every game supplies its
 // own file. JSON with `//` comments; every key is optional.
 //
-// IT IS EMPTY BECAUSE NOTHING HAS BEEN REVERSE-ENGINEERED (docs/re-frontier.md RE-01, RE-02).
+// The resident binary bootstraps 6,192 entries from the entry point and binary scans, growing to
+// 7,533 functions through direct-jal discovery. The explicit list is still empty: the first apparent
+// miss, 0x800EDCDC, was already present in rec_func_index. It bypassed main_dispatch because the
+// shipping GameConfig still declared an empty resident range; wiring recMainLo/Hi fixed the router.
 //
 // Two rules, both learned the hard way elsewhere in this workspace:
 //

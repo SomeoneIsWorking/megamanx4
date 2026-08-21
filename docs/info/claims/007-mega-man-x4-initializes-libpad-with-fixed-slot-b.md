@@ -5,6 +5,8 @@ status: holds
 created: 2026-08-20
 tags: pad,coop
 depends: game/core/game_config.cpp, tools/verify_pad.py
+reconfirmed: 2026-08-21 02:50:21
+verified_at: 2026-08-21 02:50:21
 ---
 
 ## Claim
@@ -18,3 +20,7 @@ Retail SLUS_005.61 SHA-1 213733031136d095ca275d6957695aa25011cfa5: tools/verify_
 ## What would falsify it
 
 Falsified if this executable identity changes, a complete instruction scan finds a different InitPAD call count/arguments, runtime observation shows InitPAD receives different buffers, or psxport removes/changes fixed-buffer fallback semantics.
+
+## Re-confirmed 2026-08-21 02:50:21
+
+2026-08-21: verify_pad.py --check scanned 294,400 words, found the unique InitPAD call and matched 4/4 shipping arguments; --selftest 4/4

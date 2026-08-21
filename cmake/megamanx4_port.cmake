@@ -14,10 +14,8 @@
 #                      signature matches — AND that the three pc_enh CVars compile against the
 #                      framework's config_var.h / config_vars.h. That is the gate for this repo today.
 #   megamanx4_port     the game binary. Configured ONLY when generated/rec_sources.cmake exists, i.e.
-#                      once the recompiled substrate has been emitted. It has NOT been: emit.py needs
-#                      this game's seeds (docs/re-frontier.md RE-02). RE-01's boot group is measured
-#                      and wired. A loud STATUS message says so at configure time rather than a cryptic
-#                      missing-file error, and rather than a stub binary that looks like a port.
+#                      once tools/ensure_recomp.py has emitted the substrate. A loud STATUS message
+#                      identifies the missing generated input rather than producing a stub.
 
 option(PSXPORT_BUILD_PORT "Build the Mega Man X4 native port binary (needs generated/)" ON)
 
@@ -71,9 +69,8 @@ endif()
 if(NOT EXISTS ${CMAKE_SOURCE_DIR}/generated/rec_sources.cmake)
   message(STATUS
     "megamanx4_port: NOT configured — generated/rec_sources.cmake is absent, i.e. the recompiled "
-    "substrate has never been emitted for this game. That is the honest state of this port, not a "
-    "build problem: see docs/re-frontier.md (RE-02 seeds). NOTE that RE-01's boot group is verified "
-    "and RE-03 "
+    "substrate is absent. Run `python3 tools/ensure_recomp.py` after provisioning SLUS_005.61; "
+    "RE-02's retail-binary bootstrap is verified. NOTE that RE-01's boot group is verified and RE-03 "
     "(overlay load bases) is ➖ skip-by-design here — this game has NO code overlays, measured; the "
     "boot executable is the whole engine. `--target megamanx4_seam` is the gate that DOES run today.")
   return()
@@ -95,9 +92,7 @@ set_source_files_properties(${GEN_REC_SRCS}
 
 add_executable(megamanx4_port ${SEAM_SRC} ${GEN_REC_SRCS})
 
-# Tripwire, deliberately: recomp_register.cpp #errors under this define until someone writes the real
-# RecompRegistry for the emitted substrate. The alternative — a registry written against guessed
-# generated symbol names — is the kind of thing that reads as a framework bug months later.
+# Select the measured generated-symbol adapter in recomp_register.cpp.
 target_compile_definitions(megamanx4_port PRIVATE MMX4_HAVE_SUBSTRATE=1)
 
 # The framework's SDL_GPU shader header is produced by a psxport custom target; gpu_vk.cpp (inside

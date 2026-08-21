@@ -24,8 +24,9 @@ cross-control.
 psxport `726d10c9` introduced `Crt0Plan`: a declared per-game stack bias, optional heap stores, and
 the correct `a1` assignment. X4 now ships its measured boot group. On 2026-08-21:
 
-- `verify_crt0.py --check` matched 19 shipping facts and located 15/15 framework mechanisms;
-- the local selftest passed 25/25;
-- the Tomba!2 cross-control passed 28/28.
+- `verify_crt0.py --check` matched 21 shipping/range facts and located 15/15 framework mechanisms;
+- the local selftest passed 26/26;
+- the Tomba!2 cross-control passed 29/29.
 
-RE-01 is therefore `re-verified`. Runtime boot remains downstream of the still-empty RE-02 seed set.
+RE-01 is therefore `re-verified`. RE-02 now runtime-confirms the plan through InitHeap and guest-main
+dispatch; the next stop is the separate CD/VSync synchronization frontier.

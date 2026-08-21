@@ -8,10 +8,9 @@ Extracts SLUS_005.61 (the boot target named in SYSTEM.CNF: `BOOT = cdrom:\\SLUS_
 SHA-1 against the value the sozud/mmx4 decompilation states for its own byte-exact build target.
 Nothing extracted is ever committed — scratch/ is gitignored, and the executable is Capcom's.
 
-There is deliberately NO recompilation step here. The substrate cannot be emitted yet: emit.py requires
-this game's own seed file and a boot group, neither of which has been reverse-engineered in this repo.
-See docs/re-frontier.md (RE-01, RE-02). A tool that emitted anyway would produce a substrate nobody can
-gate.
+There is deliberately NO recompilation step here: extraction owns the retail corpus and identity only.
+tools/ensure_recomp.py owns hash-checked static emission, so the launcher has one authoritative path
+instead of duplicating generation policy here. See docs/re-frontier.md (RE-01, RE-02).
 
 WHAT THE HEADER PRINT IS FOR: entry pc0 / t_addr / t_size / initial sp / gp0 are the INPUTS to RE-01 and
 to game/core/game_config.cpp's static_assert. They are printed rather than asserted here because this

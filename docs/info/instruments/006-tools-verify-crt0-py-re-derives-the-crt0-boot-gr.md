@@ -12,8 +12,8 @@ created: 2026-08-12
 
 ## Validated by
 
-2026-08-21: `--check` re-derived the retail group, matched 19/19 shipping facts, and located 15/15
-framework mechanisms. `--selftest` passed 25/25 locally and 28/28 with Tomba!2's independent
+2026-08-21: `--check` re-derived the retail group/range, matched 21/21 shipping facts, and located 15/15
+framework mechanisms. `--selftest` passed 26/26 locally and 29/29 with Tomba!2's independent
 cross-control. Its negatives mutate the executable, the shipping config, four framework mechanisms,
 the entry point, and malformed corpora; each produces the opposite answer or a refusal.
 

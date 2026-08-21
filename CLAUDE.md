@@ -12,24 +12,30 @@ directive that **`./run.sh` is the user's and agents must never invoke it**. The
 `external/psxport/docs/workspace/WORKSPACE.md`; the multi-agent protocol is `…/PROTOCOL.md`; the
 methodology is `…/docs/porting-a-new-psx-game.md`.
 
-## THE STATE OF THIS PORT: two RE steps verified, no substrate. Do not read anything else as progress
+## THE STATE OF THIS PORT: resident substrate boots to the first hardware wait
 
-Created 2026-08-12. There is **no recompiled substrate and no port binary.** Two RE steps have landed.
+Created 2026-08-12. RE-01 and RE-06 are verified; RE-02 is a measured static/runtime bootstrap with an
+honest remaining gap for future indirect-only targets. The retail executable emits 6,192 binary roots
+to 7,533 functions, links `megamanx4_port`, and boots through InitHeap into guest `gameMain`. The first
+current stall is the stock CD-init chain waiting in VSync with no platform-HLE entry installed.
 **RE-01, the crt0 boot group, is verified and wired:** `tools/verify_crt0.py --check` derives the
-group from `SLUS_005.61`, compares 19 shipping facts, and confirms the current framework implements
-all 15 required mechanisms. Its 25-case selftest proves both answers; claim C006 and issue #5 record
+group from `SLUS_005.61`, compares 21 shipping/range facts, and confirms the current framework implements
+all 15 required mechanisms. Its 26-case selftest proves both answers; claim C006 and issue #5 record
 the now-fixed framework defect that originally blocked this step.
 **RE-06 is verified from the retail InitPAD call:** slot 0 is `0x80166D68`, slot 1 is `0x8012F46C`,
 and both capacities are `0x22`; `tools/verify_pad.py --check` scans all 294,400 loaded words and diffs
 the unique call's four arguments against the `GameConfig` that ships. Every other guest-address group
 remains zero with its open step named in `docs/re-frontier.md`.
 
-What DOES build today, and is the gate for a change to the seam:
+The direct development build/gate is:
 
 ```sh
 python3 tools/psxport_sync.py --auto                                    # resolve external/psxport (symlink to the shared clone, or a private clone at psxport.pin)
 git submodule update --init external/mmx4                              # once (the AGPL reference decomp, not needed to build)
-cmake -S . -B build && cmake --build build --target megamanx4_seam -j$(nproc)
+python3 tools/extract_exe.py
+python3 tools/ensure_recomp.py
+cmake -S . -B build -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
+cmake --build build --target megamanx4_port -j$(nproc)
 ctest --test-dir build --output-on-failure
 ```
 
@@ -50,12 +56,9 @@ once there, never per-port (`--recursive` aborts on beetle-psx's url-less `deps/
 message if they are missing in the shared clone, and `tools/discdump.py` says the same when its build
 fails.
 
-`megamanx4_seam` is an OBJECT library over every first-party `game/core/*.cpp` translation unit:
-it compiles but does not link, which is the strongest check possible before a substrate exists — it
-proves this port's `GameConfig`/`GameHooks` still satisfy the pinned framework's seam, and that the
-three enhancement CVars compile against the framework's CVar headers. `megamanx4_port` is not
-configured at all until `generated/rec_sources.cmake` exists, and CMake says so loudly at configure
-time.
+`megamanx4_seam` remains the clean-clone compile database for every first-party `game/core/*.cpp` TU.
+`tools/ensure_recomp.py` hashes the retail executable, game seed file, and real recompiler sources,
+then emits `generated/`; CMake configures `megamanx4_port` only when that manifest exists.
 
 ## Start here, every task
 

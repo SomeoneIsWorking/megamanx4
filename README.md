@@ -10,57 +10,44 @@ build. The three deliverables are widescreen, drop-in co-op (P2 spawns as the ot
 collapsing the game's own scripted wait states — all of them deliberate guest-state changes, gated by
 CVars and force-suppressed under the byte-compare oracle. See `docs/plans/enhancements.md`.
 
-## Status: scaffolding. It does not run
+## Status: first resident substrate boots into the guest
 
-Created 2026-08-12. There is no recompiled substrate, no port binary, and nothing about the game is
-reverse-engineered yet. What exists:
+Created 2026-08-12. The retail executable now emits 6,192 binary-rooted entries and 7,533 recompiled
+functions, builds `megamanx4_port` with Clang, and boots through InitHeap into guest `gameMain`. The
+current stop is the first real CD/VSync hardware wait, not a recompiler seed miss. What exists:
 
 - disc → executable provisioning from **your own** disc image (nothing game-derived is in this repo),
-- the framework seam (`GameConfig` / `GameHooks`) plus the three enhancement CVars, compiling against
-  the pinned framework, with every guest address honestly `0`,
+- the measured CRT0 and pad groups, resident routing range, generated-substrate registry, and three
+  enhancement CVars,
 - the project registries (`docs/re-frontier.md`, `docs/codemap.md`, `docs/behavior-map.md`,
   `docs/config.md`, `docs/info/`, `docs/issues/`),
 - a vendored **AGPL-3.0 matching decompilation** of this exact executable, `external/mmx4`, whose
   declared build target is the same SHA-1 as the image extracted from this disc.
 
-`docs/codemap.md` is the honest inventory; `docs/re-frontier.md` is the ordered RE chain and every
-entry in it is `todo`, `blocked` or `skip-by-design`.
+`docs/codemap.md` is the honest inventory; `docs/re-frontier.md` is the ordered RE chain.
 
 ## Getting started
 
 ```sh
 git clone <this repo> && cd megamanx4
-git submodule update --init external/psxport external/mmx4          # the two direct submodules
-git -C external/psxport submodule update --init vendor/lucent vendor/beetle-psx   # and psxport's own
+python3 tools/psxport_sync.py --auto                # shared workspace checkout or private pin clone
+git submodule update --init external/mmx4           # optional matching-decomp reference
 cp .env.example .env && $EDITOR .env                # point it at your own disc image (.env is gitignored)
-python3 tools/extract_exe.py                        # extract + identity-check SLUS_005.61
-python3 tools/verify_decomp_targets.py              # does the vendored decomp target our bytes?
-cmake -S . -B build && cmake --build build --target megamanx4_seam -j"$(nproc)"
+./run.sh                                             # provision, emit, Clang-build, verify, launch
+python3 tools/verify_recomp_bootstrap.py --selftest # static positive + bad-seed refusal
 python3 tools/re_frontier.py next                   # what to work on
 ```
 
-**The second line is not optional and `--recurse-submodules` does not replace it.** psxport's own
-`vendor/lucent` (the logger) and `vendor/beetle-psx/deps/libchdr` (CHD access) are what `cmake` and the
-provisioning tools need, and initialising `external/psxport` alone leaves them empty:
+`tools/psxport_sync.py` resolves the framework and initializes its required direct vendors without
+recursing into Beetle's URL-less `gnulib` path. Do not recursively initialize `external/mmx4`; its
+nested build-tool submodules are not needed by this port.
 
-- `git clone --recurse-submodules` (of this repo or of psxport) **aborts** with `fatal: No url found for
-  submodule path 'vendor/beetle-psx/deps/lightning/gnulib'` and leaves `vendor/lucent` empty,
-- `external/psxport/scripts/sync-submodules.sh` prints *"all at this repo's recorded gitlinks"* while
-  `vendor/lucent` is still empty — it certifies pins it never reached
-  (`external/psxport/docs/workspace/KNOWN-DEFECT-sync-submodules.md`),
-- so the **per-path, non-recursive** form above is the one that works. It sidesteps the url-less
-  `gnulib` path entirely. `CMakeLists.txt` checks for both vendors and fails with that exact command
-  rather than letting an `add_subdirectory` error surface from inside the framework.
-
-Do **not** use `--recurse-submodules` on `external/mmx4` itself either: it declares three nested
-build-tool submodules we never need.
-
-`run.sh` is the eventual play launcher; today it does every real step and then stops, naming what
-blocks the recompile.
+`run.sh` is the play launcher. Non-trivial policy lives in `tools/run.py` and
+`tools/ensure_recomp.py`; the shell file is only the stable exec wrapper.
 
 ## Requirements
 
-cmake ≥ 3.21, pkg-config, SDL3, zlib, zstd, python3, a C++20 toolchain.
+cmake ≥ 3.21, pkg-config, SDL3, zlib, zstd, python3, Clang/clang-format/clang-tidy.
 
 ## Legal
 

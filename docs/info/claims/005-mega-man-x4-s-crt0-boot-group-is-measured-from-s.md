@@ -5,8 +5,8 @@ status: holds
 created: 2026-08-12
 tags: boot,crt0,re-01
 depends: game/core/game_config.cpp, tools/verify_crt0.py
-reconfirmed: 2026-08-21 00:55:36
-verified_at: 2026-08-21 00:55:36
+reconfirmed: 2026-08-21 03:00:02
+verified_at: 2026-08-21 03:00:02
 ---
 
 ## Claim
@@ -19,7 +19,7 @@ Disassembled + symbolically executed the PS-EXE entry function from pc0=0x800DAE
 
 ## What would falsify it
 
-tools/verify_crt0.py --check exiting non-zero on the extracted SLUS_005.61 (that is the arbiter, and it prints which field moved). Also falsified if a RUNTIME trace shows sp != 0x80200000 or the heap base != 0x80175F3C at the first InitHeap call — this claim is derived from the STATIC image, and it assumes nothing writes 0x800DAF3C or 0x8011CB74 before crt0 runs. Both lie inside .text, so that assumption is strong but was NOT observed on a running system: there is no port binary yet.
+tools/verify_crt0.py --check exiting non-zero on the extracted SLUS_005.61 (that is the arbiter, and it prints which field moved). Also falsified if a runtime trace shows sp != 0x80200000 or the heap base != 0x80175F3C at the first InitHeap call. The 2026-08-21 substrate boot observed those exact values through the InitHeap dispatch.
 
 ## Re-confirmed 2026-08-12 16:10:58
 
@@ -35,4 +35,12 @@ Re-run 2026-08-20: python3 tools/verify_crt0.py --check reports 19 shipped-vs-me
 
 ## Re-confirmed 2026-08-21 00:55:36
 
-Re-verified 2026-08-21 after making the framework-source recognizer formatting-insensitive: verify_crt0.py --check matched 19/19 shipping facts and 15/15 framework mechanisms; --selftest passed 25/25 and the Tomba!2 cross-control passed 28/28.
+Re-verified 2026-08-21 after making the framework-source recognizer formatting-insensitive: verify_crt0.py --check matched the shipping group/range and 15/15 framework mechanisms; --selftest passed 26/26 and the Tomba!2 cross-control passed 29/29. A bounded substrate boot also observed the exact InitHeap inputs before dispatching guest main.
+
+## Re-confirmed 2026-08-21 02:50:21
+
+2026-08-21: verify_crt0.py --check passed 21 shipped/range comparisons + shape, --selftest 26/26; bounded software-Vulkan substrate boot logged sp=0x80200000 and InitHeap a0=0x80175F3C a1=0x820C8 before guest-main dispatch
+
+## Re-confirmed 2026-08-21 03:00:02
+
+2026-08-21 clean framework 2b5ef7b5: verify_crt0.py --check passed 21 shipping/range comparisons plus shape and located 15/15 mechanisms; software-Vulkan boot logged sp=0x80200000 and InitHeap a0=0x80175F3C a1=0x820C8 before guest-main dispatch

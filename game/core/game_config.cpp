@@ -207,13 +207,15 @@ static const GameConfig g_x4_cfg = {
     .gameMain = kCrt0GameMain,
     .crt0 = kCrt0Entry,
 
-    // --- recompiled MAIN .text range (physical) ---------------------------------- RE-02, NOT DONE --
-    // These come from the RECOMPILER's own generated/overlay_table.h (REC_MAIN_LO / REC_MAIN_HI) so
-    // they can never drift from the substrate they describe. There is no substrate yet, so they are
-    // zero and this file does not #include that header — including a generated header that does not
-    // exist would make the tree un-configurable rather than honestly incomplete.
-    .recMainLo = 0,
-    .recMainHi = 0,
+    // --- recompiled MAIN .text range (physical) ------------------------------- RE-02: MEASURED --
+    // emit.py independently wrote these exact bounds as REC_MAIN_LO=0x00010000 and
+    // REC_MAIN_HI=0x0012F800 from the retail PS-X EXE. Derive them from the already-gated header
+    // constants so a clean clone does not need generated/ merely to compile the seam, while
+    // tools/verify_crt0.py checks that both fields still name those measured constants. Leaving this
+    // range at zero caused every resident address — including the generated 0x800EDCDC InitHeap thunk
+    // — to bypass main_dispatch and fail as a misleading recomp-MISS.
+    .recMainLo = kPsExeTextAddr & 0x1FFFFFFFu,
+    .recMainHi = (kPsExeTextAddr + kPsExeTextSize) & 0x1FFFFFFFu,
 
     // --- disc key ----------------------------------------------- this port's own env name, not RE --
     // Not an RE fact but a port fact, and it belongs here because the framework must not know it: the

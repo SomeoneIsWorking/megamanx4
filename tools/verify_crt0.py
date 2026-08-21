@@ -53,13 +53,14 @@ BLIND SPOTS, stated because the tool cannot see past them:
 
 --selftest gates BOTH classes THROUGH THE SHIPPING PATH — every case calls the same check_shipped()
 that --check calls, not a pure helper beside it. The positive: the shipped constants must equal this
-run's measurement (19 comparisons). The negatives sabotage each side of that comparison in turn — a
+run's measurement (21 comparisons). The negatives sabotage each side of that comparison in turn — a
 flipped immediate in the BINARY, a hand-edited constant in a copy of the SHIPPING FILE (three of them,
 including one PS-EXE header fact), a hand-edited CITED SHA1, a HALF-filled GameConfig group, a wrong
-entry PC (main() must be refused, not partially parsed), and three malformed-corpus shapes (missing /
+resident recomp range, a wrong entry PC (main() must be refused, not partially parsed), and three
+malformed-corpus shapes (missing /
 0-byte / garbage) that must all refuse. The framework-source cases also delete four required crt0
-mechanisms and require a contradiction each time. Current denominator: 25/25 without --cross;
-with --cross, a second game's executable adds three independent cases -> 28/28.
+mechanisms and require a contradiction each time. Current denominator: 26/26 without --cross;
+with --cross, a second game's executable adds three independent cases -> 29/29.
 """
 from __future__ import annotations
 
@@ -134,6 +135,14 @@ CFG_OPTIONAL_CONST = {"heapSizePtr": "kCrt0HeapSizePtr", "heapBasePtr": "kCrt0He
 # Every crt0-group field the initialiser must mention EXPLICITLY. A field left to implicit 0 by omission
 # is invisible to review, so omission is red for optional fields too.
 CFG_FIELD_CONST = {**CFG_REQUIRED_CONST, **CFG_OPTIONAL_CONST}
+
+# The recompiler router consumes the executable's PHYSICAL text range. These expressions name the
+# header constants already compared to the retail PS-X EXE, so a clean clone can compile without a
+# generated header while the shipping range remains mechanically tied to the bytes.
+REC_RANGE_EXPR = {
+    "recMainLo": "kPsExeTextAddr & 0x1FFFFFFFu",
+    "recMainHi": "(kPsExeTextAddr + kPsExeTextSize) & 0x1FFFFFFFu",
+}
 
 # The stack-top bias is a GameConfig field now (`.stackBias = {declared, value}`), so it is NOT a
 # shape-only fact any more: it is SHIPPED and must be diffed like every other shipped value. Zero
@@ -276,6 +285,28 @@ def check_shipped(g: dict, exe, sh: dict, exe_path: str | None = None) -> tuple[
                      f"{fmt(want):<12} ({field})")
         if not ok:
             fails.append(f"{name} ships {fmt(got)} but this run measured {field} = {fmt(want)}")
+
+    # A generated resident function is unreachable unless this range encloses it. The first substrate
+    # boot exposed the old zero/zero config as a recomp-MISS for an address rec_func_index already
+    # contained. Require references to the measured header constants, not a second literal copy.
+    range_values = {
+        "recMainLo": exe.load & 0x1FFFFFFF,
+        "recMainHi": (exe.load + len(exe.text)) & 0x1FFFFFFF,
+    }
+    for field, expected_token in REC_RANGE_EXPR.items():
+        token = cfg.get(field)
+        same = token is not None and re.sub(r"\s+", "", token) == re.sub(
+            r"\s+", "", expected_token
+        )
+        lines.append(
+            f"    {'ok ' if same else 'BAD'} {'.' + field:<20} ships "
+            f"{token or '(omitted)'} -> {fmt(range_values[field])}"
+        )
+        if not same:
+            fails.append(
+                f"g_x4_cfg ships .{field} = {token or '(omitted)'}, expected {expected_token} "
+                "so the resident recomp range remains tied to the measured PS-X EXE header"
+            )
 
     # ── THE OPTIONAL PAIR, gated DIRECTIONALLY in both senses ──────────────────────────────────────
     # These two fields are the whole reason this function had to change. crt0_boot.h reads 0 as ABSENT
@@ -1063,6 +1094,30 @@ def selftest(cross: str | None) -> int:
                         f"{len(bfails)} disagreement(s); "
                         + (next(f for f in bfails if cname in f) if hit
                            else "NONE names " + cname + " — the comparison does not cover it")))
+
+    # NEGATIVE 2a — the actual first-substrate failure: a zero resident range makes every generated
+    # main function unreachable even though rec_func_index contains it.
+    real = open(sh["path"], encoding="utf-8").read()
+    bad_range = re.sub(
+        r"(\.recMainLo\s*=\s*)kPsExeTextAddr\s*&\s*0x1FFFFFFFu",
+        r"\g<1>0",
+        real,
+        count=1,
+    )
+    rfails, _ = check_shipped(
+        g, exe, parse_shipped_src(bad_range, sh["path"]), DEFAULT_EXE
+    )
+    hit = any("recMainLo" in failure for failure in rfails)
+    results.append(
+        (
+            "negative: a zero resident recomp range is caught",
+            hit,
+            next(
+                (failure for failure in rfails if "recMainLo" in failure),
+                f"{len(rfails)} disagreement(s), none names recMainLo",
+            ),
+        )
+    )
 
     # NEGATIVE 2b — a hand-edited CITED SHA1: the file's claim about WHICH image these constants were
     # measured from is itself a shipped measurement, so it is gated the same way.

@@ -22,6 +22,6 @@ any non-zero guest address appearing in game/core/game_config.cpp, or generated/
 
 ## FALSIFIED 2026-08-12
 
-ITS OWN FALSIFIER FIRED, exactly as written: 'any non-zero guest address appearing in game/core/game_config.cpp'. RE-01 landed 2026-08-12 and the crt0 boot group is now ten MEASURED addresses (entry 0x800DAE8C, bss [0x8012F418,0x80175F38), stackTopBase 0x800DAF3C, stackTopBase2 0x8011CB74, heapBase 0x80175F38, gp 0x8012F418, libcInit 0x800EDCDC, gameMain 0x80012024, plus stackBias {1,0}), each re-derived from SLUS_005.61's own instruction stream by tools/verify_crt0.py and diffed against the shipping file by --check (PASSED, 19 comparisons). The claim's PURPOSE still stands and is now carried by C005: do not read scaffolding as progress. What has changed is only that ONE group is real. Still true and NOT superseded: generated/ does not exist, there is no megamanx4_port target, and no binary has been built or run in this repo.
+ITS OWN FALSIFIER FIRED, exactly as written: 'any non-zero guest address appearing in game/core/game_config.cpp'. RE-01 landed 2026-08-12 and the crt0 boot group became measured. RE-02 subsequently emitted and linked the resident substrate and reached guest main at runtime; C008 is the current substrate claim.
 
 > Anything that cited this claim as proof must be re-checked. Grep the repo for it.

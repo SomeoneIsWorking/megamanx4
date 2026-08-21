@@ -19,5 +19,5 @@ same exact-whitespace defect after the first format sweep.
 
 The framework patterns now tolerate whitespace and optional braces. The config mutations use regexes
 over semantic field and declaration shapes instead of exact formatting. The real framework passes
-15/15 mechanisms; the local selftest passes 25/25, including deleting each guard and observing the
-contradiction; the formatted shipping source passes the 28/28 Tomba!2 cross-selftest.
+15/15 mechanisms; the local selftest passes 26/26, including deleting each guard and observing the
+contradiction plus the resident-range refusal; the Tomba!2 cross-selftest passes 29/29.

@@ -4,8 +4,8 @@
 // hardware backends, loads the retail executable, and enters the native boot. After the install
 // nothing here names anything but framework symbols.
 //
-// RE-01 and RE-06 are measured (docs/re-frontier.md). The sequence below is the framework's standard
-// bring-up, but there is still no generated substrate to execute — see RE-02.
+// RE-01, RE-02's static bootstrap, and RE-06 are measured (docs/re-frontier.md). The sequence below
+// boots the generated resident substrate; the next runtime prerequisite is the CD/VSync hardware wait.
 #include "cfg.h"
 #include "core.h"
 #include "disc.h"

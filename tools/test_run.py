@@ -8,11 +8,10 @@ import os
 import subprocess
 import tempfile
 import unittest
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Sequence
 
 import run
-
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRATCH = REPO_ROOT / "scratch" / "raw"
@@ -84,16 +83,16 @@ class LauncherTest(unittest.TestCase):
         )
         return code, stdout.getvalue(), stderr.getvalue()
 
-    def test_positive_path_preserves_disc_and_stops_at_missing_substrate(self) -> None:
+    def test_positive_path_provisions_emits_builds_verifies_and_launches(self) -> None:
         host = FakeHost()
         code, stdout, stderr = self.invoke(
             host, "Mega Man X4.chd", "ignored-like-the-shell-launcher"
         )
         commands = [command for command, _ in host.commands]
 
-        self.assertEqual(code, 3)
+        self.assertEqual(code, 0)
         self.assertEqual(stderr, "")
-        self.assertIn("STOPPING HERE, ON PURPOSE", stdout)
+        self.assertIn("launching Mega Man X4", stdout)
         self.assertTrue(
             any(
                 command[-2:] == ["tools/extract_exe.py", "Mega Man X4.chd"]
@@ -104,9 +103,17 @@ class LauncherTest(unittest.TestCase):
             any("ignored-like-the-shell-launcher" in command for command in commands)
         )
         self.assertTrue(
-            any(command[:3] == ["cmake", "--build", "build"] for command in commands)
+            any(command[-1:] == ["tools/ensure_recomp.py"] for command in commands)
+        )
+        self.assertTrue(
+            any(
+                command[:3] == ["cmake", "--build", "build"]
+                and command[-1] == "megamanx4_port"
+                for command in commands
+            )
         )
         self.assertIn(["ctest", "--test-dir", "build", "--output-on-failure"], commands)
+        self.assertTrue(commands[-1][0].endswith("scratch/bin/megamanx4_port"))
 
     def test_missing_required_tool_refuses_before_mutation(self) -> None:
         host = FakeHost(missing={"cmake"})
@@ -131,7 +138,7 @@ class LauncherTest(unittest.TestCase):
         )
         commands = [command for command, _ in host.commands]
 
-        self.assertEqual(code, 3)
+        self.assertEqual(code, 0)
         self.assertIn(["clang", "--version"], commands)
         self.assertIn(["clang++", "--version"], commands)
         self.assertTrue(
@@ -148,6 +155,15 @@ class LauncherTest(unittest.TestCase):
         self.assertFalse(
             any(command[:3] == ["cmake", "--build", "build"] for command in commands)
         )
+
+    def test_recomp_failure_refuses_before_configure(self) -> None:
+        host = FakeHost(fail_command="tools/ensure_recomp.py")
+        code, _, stderr = self.invoke(host)
+        commands = [command for command, _ in host.commands]
+
+        self.assertEqual(code, 1)
+        self.assertIn("recompiled substrate generation failed", stderr)
+        self.assertFalse(any(command[:2] == ["cmake", "-S"] for command in commands))
 
     def test_shell_entry_point_is_only_an_exec_wrapper(self) -> None:
         wrapper = (REPO_ROOT / "run.sh").read_text()
