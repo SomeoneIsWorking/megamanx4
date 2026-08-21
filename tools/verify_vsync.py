@@ -222,6 +222,7 @@ def verify(inputs: Inputs, *, check_digest: bool = True) -> list[str]:
         "c->r[5] <<= 15",
         "c->r[3] = UINT32_MAX",
         "c->r[2] = 0",
+        "c->game->fps60.frame_commit(c, 1)",
         "register_(kWait",
     ):
         if token not in inputs.source:
@@ -238,6 +239,10 @@ def verify(inputs: Inputs, *, check_digest: bool = True) -> list[str]:
     if ".vsyncTrap" in inputs.config:
         raise VerificationError(
             "GameConfig sets vsyncTrap even though the guest owns VSync"
+        )
+    if "gpu_present(c)" in inputs.source or "gpu_pace_frame(c)" in inputs.source:
+        raise VerificationError(
+            "shipping wait helper bypasses or duplicates the authoritative frame_commit fence"
         )
     checks.append(
         "shipping handler and exact PlatformHle window match the measured contract"
@@ -294,6 +299,15 @@ def selftest(inputs: Inputs) -> list[str]:
         inputs.config.replace("kWaitEnd, 0", "kWait, 0", 1),
     )
     results.append(expect_refusal("collapsed executable window", wrong_config))
+    raw_present = Inputs(
+        inputs.exe,
+        inputs.header,
+        inputs.source.replace(
+            "c->game->fps60.frame_commit(c, 1)", "gpu_present(c)", 1
+        ),
+        inputs.config,
+    )
+    results.append(expect_refusal("raw present without frame fence", raw_present))
     return results
 
 

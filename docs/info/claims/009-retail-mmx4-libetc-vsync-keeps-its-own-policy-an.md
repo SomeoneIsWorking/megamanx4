@@ -4,9 +4,9 @@ kind: claim
 status: holds
 created: 2026-08-21
 tags: RE-11,vsync,vblank,irq
-depends: game/core/vsync_sync.cpp#deliver_field, game/core/vsync_sync.cpp#wait_for_counter, game/core/vsync_sync.cpp#install, tools/verify_vsync.py#verify, game/core/game_config.cpp#g_x4_cfg
-reconfirmed: 2026-08-21
-verified_at: 2026-08-21 03:45:49
+depends: psxport.pin, game/core/vsync_sync.cpp#deliver_field, tools/verify_vsync.py#verify
+reconfirmed: 2026-08-21 13:14:32
+verified_at: 2026-08-21 13:14:32
 ---
 
 ## Claim
@@ -15,7 +15,7 @@ Retail MMX4 libetc VSync keeps its own policy and delegates only counter waiting
 
 ## Evidence
 
-tools/verify_vsync.py checks six groups against retail SHA-1 213733031136d095ca275d6957695aa25011cfa5 and selftests 4/4, including broken-edge, seven-slot, and collapsed-window refusals. Clang runtime installs only the exact helper window 0x800E4EF8..0x800E4F94. The boot path does not yet execute the blocking helper, so runtime faithfulness beyond installation remains open.
+tools/verify_vsync.py checks six groups against retail SHA-1 213733031136d095ca275d6957695aa25011cfa5 and selftests 5/5, including broken-edge, seven-slot, collapsed-window, and raw-present-without-frame-fence refusals. Clang runtime installs only the exact helper window 0x800E4EF8..0x800E4F94. scratch/logs/re04-ce2-frame-commit-runtime.log, built against exact framework pin ce2c83ad, exercises blocking VSync for 20 seconds: the retail IRQ-0 handler advances the counter and the authoritative one-field frame commit presents, rotates the capture, and paces without a watchdog or overflow.
 
 ## What would falsify it
 
@@ -32,3 +32,11 @@ Final tree: verify_vsync check passes six retail contract groups and selftest 4/
 ## Re-confirmed 2026-08-21
 
 Post-landing verify_vsync passed six retail contract groups and all four positive/opposite-answer selftests; scoped CTest passed 3/3.
+
+## Re-confirmed 2026-08-21 12:05:51
+
+tools/verify_vsync.py still derives six retail groups and now selftests 5/5, including refusal of a raw gpu_present path with no frame fence. Clang runtime scratch/logs/re04-frame-commit-runtime.log exercises blocking VSync for 20 seconds: retail IRQ-0 handler advances the counter, Fps60::frame_commit remains on the timeout backtrace, and no capture overflow or watchdog fault occurs.
+
+## Re-confirmed 2026-08-21 13:14:32
+
+Exact pin ce2c83ad: Clang CTest 4/4, verify_vsync six groups and 5/5 falsifiers, and untraced scratch/logs/re04-ce2-frame-commit-runtime.log runs 20 seconds with Fps60::frame_commit on the bounded-timeout stack and no capture overflow or watchdog fault.

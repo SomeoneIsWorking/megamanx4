@@ -11,8 +11,8 @@
 //     eight-slot table.
 //
 // A static recomp has no asynchronous IRQ-0 producer, so the unmodified helper can never observe its
-// condition changing. Own ONLY the helper: pace to the next display field, run the retail handler,
-// present the guest-owned frame, and let the original VSync body re-check and finish its own logic.
+// condition changing. Own ONLY the helper: run the retail handler, commit/present and pace the
+// guest-owned field, then let the original VSync body re-check and finish its own logic.
 // This is not vsyncTrap (the guest owns its loop), and it does not invent a host tick or reproduce
 // VSync in C++. tools/verify_vsync.py re-derives every address and edge above from the retail bytes.
 #include "vsync_sync.h"
@@ -32,10 +32,6 @@ constexpr uint32_t kVblankHandler = 0x800E56FCu;
 void deliver_field(Core *c) {
   const uint32_t before = c->mem_r32(kVblankCounter);
 
-  // Waiting for IRQ-0 means waiting for a real display field. The rate comes from GP1(08), through
-  // psxport's single field-rate owner; there is no game-tuned duration here.
-  gpu_pace_frame(c);
-
   // IRQ delivery preserves the interrupted CPU context. Run the retail handler itself, rather than
   // reimplementing its callback walk, then restore the wait helper's live register file.
   const R3000 saved = *static_cast<R3000 *>(c);
@@ -54,9 +50,12 @@ void deliver_field(Core *c) {
     std::abort();
   }
 
-  // The guest owns drawing, so this wait is its frame boundary. Presenting here exposes the VRAM the
-  // guest completed before VSync, while the original VSync body still owns all guest-visible state.
-  gpu_present(c);
+  // The guest owns drawing, so this wait is its frame boundary. A raw gpu_present() would show the
+  // picture but would not rotate Fps60's captured queues: successive DrawOTag submissions would then
+  // accumulate across fields until the 65,536-item fail-fast. frame_commit is the framework's single
+  // authoritative present + capture-rotation + pacing fence. This game's measured loop advances one
+  // display field per blocking VSync, so pass that cadence explicitly.
+  c->game->fps60.frame_commit(c, 1);
   lucent::debug("x4-vsync", "field {} -> {}, target={}", before, after, c->r[4]);
 }
 
