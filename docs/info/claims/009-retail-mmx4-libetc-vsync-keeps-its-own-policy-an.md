@@ -5,8 +5,8 @@ status: holds
 created: 2026-08-21
 tags: RE-11,vsync,vblank,irq
 depends: psxport.pin, game/core/vsync_sync.cpp#deliver_field, tools/verify_vsync.py#verify
-reconfirmed: 2026-08-21 13:14:32
-verified_at: 2026-08-21 13:14:32
+reconfirmed: 2026-08-21
+verified_at: 2026-08-21 13:15:42
 ---
 
 ## Claim
@@ -40,3 +40,7 @@ tools/verify_vsync.py still derives six retail groups and now selftests 5/5, inc
 ## Re-confirmed 2026-08-21 13:14:32
 
 Exact pin ce2c83ad: Clang CTest 4/4, verify_vsync six groups and 5/5 falsifiers, and untraced scratch/logs/re04-ce2-frame-commit-runtime.log runs 20 seconds with Fps60::frame_commit on the bounded-timeout stack and no capture overflow or watchdog fault.
+
+## Re-confirmed 2026-08-21
+
+Post-landing ce2c83ad VSync verifier passed six retail groups and 5/5 falsifiers; the shipping helper uses frame_commit(c,1) and refuses raw present/pacing.

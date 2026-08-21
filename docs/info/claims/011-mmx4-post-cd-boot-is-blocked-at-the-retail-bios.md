@@ -5,8 +5,8 @@ status: holds
 created: 2026-08-21
 tags: RE-04,boot,threads
 depends: psxport.pin
-reconfirmed: 2026-08-21 13:14:32
-verified_at: 2026-08-21 13:14:32
+reconfirmed: 2026-08-21
+verified_at: 2026-08-21 13:15:43
 ---
 
 ## Claim
@@ -24,3 +24,7 @@ Falsified if a rebuilt unforced runtime reaches 0x8001D064 through the retail Ch
 ## Re-confirmed 2026-08-21 13:14:32
 
 Exact pin ce2c83ad focused reach probe scratch/logs/re04-ce2-thread-boundary-trace.log records task entry 0x8001D064 created and 140 ChangeThread calls from RA 0x800126AC, while 0x8001D064 and 0x800128B8 remain never called; the same shared threads.cpp still implements ChangeThread as a no-op.
+
+## Re-confirmed 2026-08-21
+
+Post-landing ce2c83ad focused trace created task entry 0x8001D064 and observed 140 ChangeThread calls while the entry and 0x800128B8 remained unreached.

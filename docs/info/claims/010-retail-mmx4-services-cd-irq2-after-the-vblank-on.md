@@ -5,8 +5,8 @@ status: holds
 created: 2026-08-21
 tags: RE-04,cd,irq,HookEntryInt,recompiler
 depends: psxport.pin, tools/verify_cd_irq.py#verify, game/recomp_seeds.json
-reconfirmed: 2026-08-21 13:14:32
-verified_at: 2026-08-21 13:14:32
+reconfirmed: 2026-08-21
+verified_at: 2026-08-21 13:15:43
 ---
 
 ## Claim
@@ -40,3 +40,7 @@ The callback-focused FNTRACE remains valid only for callback reach/ABI, not as a
 ## Re-confirmed 2026-08-21 13:14:32
 
 Exact pin ce2c83ad: verify_cd_irq passes six groups and 6/6 falsifiers; fresh bootstrap emits 6,193 roots to 7,534 functions and selftests 2/2; untraced scratch/logs/re04-ce2-frame-commit-runtime.log services Getstat, Init, Demute, and Setmode through IRQ2 before paced fields.
+
+## Re-confirmed 2026-08-21
+
+Post-landing ce2c83ad CD IRQ verifier passed six groups and 6/6 falsifiers; untraced runtime serviced Getstat, Init, Demute, and Setmode without overflow or watchdog.
