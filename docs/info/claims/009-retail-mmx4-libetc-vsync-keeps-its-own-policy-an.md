@@ -5,8 +5,8 @@ status: holds
 created: 2026-08-21
 tags: RE-11,vsync,vblank,irq
 depends: psxport.pin, game/core/vsync_sync.cpp#deliver_field, tools/verify_vsync.py#verify
-reconfirmed: 2026-08-21
-verified_at: 2026-08-21 13:15:42
+reconfirmed: 2026-08-21 14:13:43
+verified_at: 2026-08-21 14:13:43
 ---
 
 ## Claim
@@ -15,7 +15,7 @@ Retail MMX4 libetc VSync keeps its own policy and delegates only counter waiting
 
 ## Evidence
 
-tools/verify_vsync.py checks six groups against retail SHA-1 213733031136d095ca275d6957695aa25011cfa5 and selftests 5/5, including broken-edge, seven-slot, collapsed-window, and raw-present-without-frame-fence refusals. Clang runtime installs only the exact helper window 0x800E4EF8..0x800E4F94. scratch/logs/re04-ce2-frame-commit-runtime.log, built against exact framework pin ce2c83ad, exercises blocking VSync for 20 seconds: the retail IRQ-0 handler advances the counter and the authoritative one-field frame commit presents, rotates the capture, and paces without a watchdog or overflow.
+tools/verify_vsync.py checks six groups against retail SHA-1 213733031136d095ca275d6957695aa25011cfa5 and selftests 5/5, including broken-edge, seven-slot, collapsed-window, and raw-present-without-frame-fence refusals. Clang runtime installs only the exact helper window 0x800E4EF8..0x800E4F94. scratch/logs/re04-3418-frame-commit-runtime.log, built against exact framework pin 3418a79b, exercises blocking VSync for 20 seconds: the retail IRQ-0 handler advances the counter and the authoritative one-field frame commit presents, rotates the capture, and paces without a watchdog or overflow.
 
 ## What would falsify it
 
@@ -44,3 +44,7 @@ Exact pin ce2c83ad: Clang CTest 4/4, verify_vsync six groups and 5/5 falsifiers,
 ## Re-confirmed 2026-08-21
 
 Post-landing ce2c83ad VSync verifier passed six retail groups and 5/5 falsifiers; the shipping helper uses frame_commit(c,1) and refuses raw present/pacing.
+
+## Re-confirmed 2026-08-21 14:13:43
+
+Exact pin 3418a79b: Clang CTest 4/4, verify_vsync six groups and 5/5 falsifiers, and untraced scratch/logs/re04-3418-frame-commit-runtime.log runs 20 seconds with Fps60::frame_commit on the bounded-timeout stack and no capture overflow or watchdog fault.

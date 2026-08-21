@@ -5,8 +5,8 @@ status: holds
 created: 2026-08-21
 tags: RE-04,cd,irq,HookEntryInt,recompiler
 depends: psxport.pin, tools/verify_cd_irq.py#verify, game/recomp_seeds.json
-reconfirmed: 2026-08-21
-verified_at: 2026-08-21 13:15:43
+reconfirmed: 2026-08-21 14:13:43
+verified_at: 2026-08-21 14:13:43
 ---
 
 ## Claim
@@ -15,7 +15,7 @@ Retail MMX4 services CD IRQ2 after the VBlank-only SysEnq element declines it by
 
 ## Evidence
 
-tools/verify_cd_irq.py checks six retail/shipping groups and its 6/6 selftest rejects IRQ2 verifier polarity, the trapIntr edge, a missing or duplicated reentry seed, and the wrong callback slot. Retail emission is 6,193 seeds to 7,534 functions. scratch/logs/re04-pinned-runtime.log shows I_STAT 0x004 delivered through the custom exit and FNTRACE 0x800E7944 reached five times from trapIntr slot 2 with zero ABI violations; that callback-focused trace is used only for reach/ABI because it perturbs the later render-overflow symptom. Independent untraced scratch/logs/re04-ce2-frame-commit-runtime.log, built against exact framework pin ce2c83ad, shows Getstat, Init, Demute, and Setmode responses serviced with IRQ2 acknowledged, followed by paced main-loop frames. scratch/logs/re11-final-runtime.log is the pre-fix negative where IRQ2 remained pending and CdInit retried.
+tools/verify_cd_irq.py checks six retail/shipping groups and its 6/6 selftest rejects IRQ2 verifier polarity, the trapIntr edge, a missing or duplicated reentry seed, and the wrong callback slot. Retail emission is 6,193 seeds to 7,534 functions. scratch/logs/re04-pinned-runtime.log shows I_STAT 0x004 delivered through the custom exit and FNTRACE 0x800E7944 reached five times from trapIntr slot 2 with zero ABI violations; that callback-focused trace is used only for reach/ABI because it perturbs the later render-overflow symptom. Independent untraced scratch/logs/re04-3418-frame-commit-runtime.log, built against exact framework pin 3418a79b, shows Getstat, Init, Demute, and Setmode responses serviced with IRQ2 acknowledged, followed by paced main-loop frames. scratch/logs/re11-final-runtime.log is the pre-fix negative where IRQ2 remained pending and CdInit retried.
 
 ## What would falsify it
 
@@ -44,3 +44,7 @@ Exact pin ce2c83ad: verify_cd_irq passes six groups and 6/6 falsifiers; fresh bo
 ## Re-confirmed 2026-08-21
 
 Post-landing ce2c83ad CD IRQ verifier passed six groups and 6/6 falsifiers; untraced runtime serviced Getstat, Init, Demute, and Setmode without overflow or watchdog.
+
+## Re-confirmed 2026-08-21 14:13:43
+
+Exact pin 3418a79b: verify_cd_irq passes six groups and 6/6 falsifiers; fresh bootstrap emits 6,193 roots to 7,534 functions and selftests 2/2; untraced scratch/logs/re04-3418-frame-commit-runtime.log services Getstat, Init, Demute, and Setmode through IRQ2 before paced fields.
