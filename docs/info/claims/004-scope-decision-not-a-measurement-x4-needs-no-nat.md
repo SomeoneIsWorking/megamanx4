@@ -5,8 +5,8 @@ status: holds
 created: 2026-08-12
 tags: scope,enhancements
 depends: docs/plans/enhancements.md
-reconfirmed: 2026-08-22 15:30:12
-verified_at: 2026-08-22 15:30:12
+reconfirmed: 2026-08-22 18:06:01
+verified_at: 2026-08-22 18:06:01
 ---
 
 ## Claim
@@ -32,3 +32,19 @@ Re-read the unchanged USER 2026-08-12 scope decision after the RE-06 documentati
 ## Re-confirmed 2026-08-22 15:30:12
 
 USER clarification 2026-08-22 again identifies X4 (SLUS_005.61) as already 60fps and widescreen-only, explicitly excluding lerp and its prerequisites. X4Runtime now encodes this directly; the full Clang build and 6/6 CTest pass.
+
+## Re-confirmed 2026-08-22 17:48:53
+
+2026-08-22: behavior.py check and cpp_policy pass; widescreen-only scope remains explicit after X4Runtime/thread work.
+
+## Architecture correction 2026-08-22
+
+This claim records the required USER scope; it is not proof that the current framework dependency
+boundary already satisfies it. The shipping VBlank route calls `Fps60::frame_commit` for non-temporal
+capture, real presentation, ledger reset, capture rotation, and pacing. No interpolated pass runs, but
+the operational-independence claim is falsified as C018. Issue #12 owns the neutral frame-service
+extraction. The scope decision itself still holds.
+
+## Re-confirmed 2026-08-22 18:06:01
+
+2026-08-22 architecture audit: the USER no-lerp scope still holds, while C018 is explicitly falsified because the current VBlank frame fence is misplaced inside Fps60; issue #12 owns the neutral framework extraction.

@@ -792,9 +792,9 @@ def extract(exe, entry: int, limit: int = 256) -> dict:
 # the SOURCE TEXT is not running it. This says "the pinned framework has a declared-bias field and
 # guards both heap stores", not "the boot produced sp = 0x80200000".
 FW_FILES = {
-    "crt0_boot.h":         os.path.join("runtime", "recomp", "crt0_boot.h"),
-    "legacy_game_config.h": os.path.join("runtime", "recomp", "legacy_game_config.h"),
-    "native_boot.cpp":     os.path.join("runtime", "recomp", "native_boot.cpp"),
+    "crt0_boot.h": os.path.join("runtime", "recomp", "crt0_boot.h"),
+    "guest_program_image.h": os.path.join("runtime", "recomp", "guest_program_image.h"),
+    "native_boot.cpp": os.path.join("runtime", "recomp", "native_boot.cpp"),
 }
 
 # key -> (file, pattern, what having it licenses). Patterns run over COMMENT-STRIPPED text, because
@@ -802,17 +802,17 @@ FW_FILES = {
 # a comment would let a framework that only DOCUMENTS the mechanism pass as having it.
 FW_MECH = {
     "bss_loop":      ("crt0_boot.h", r"for\s*\(uint32_t\s+a\s*=\s*p\.bssLo;\s*a\s*<\s*p\.bssHi;\s*a\s*\+=\s*4\)"),
-    "stacktop_read": ("native_boot.cpp", r"c->mem_r32\(cfg->stackTopBase\)"),
-    "reserve_read":  ("native_boot.cpp", r"c->mem_r32\(cfg->stackTopBase2\)"),
-    "heap_mask":     ("crt0_boot.h", r"cfg->heapBase\s*&\s*0x1FFFFFFFu"),
+    "stacktop_read": ("native_boot.cpp", r"c->mem_r32\(image->stackTopWordAddress\)"),
+    "reserve_read":  ("native_boot.cpp", r"c->mem_r32\(image->stackReserveWordAddress\)"),
+    "heap_mask":     ("crt0_boot.h", r"image->heapBase\s*&\s*0x1FFFFFFFu"),
     "heap_arith":    ("crt0_boot.h", r"\(v0\s*-\s*stackReserveWord\)\s*-\s*a0m"),
     "gp_sp_fp":      ("crt0_boot.h", r"w\.reg\(29,\s*p\.sp\);\s*w\.reg\(30,\s*p\.sp\)"),
     "a0_plus4":      ("crt0_boot.h", r"\(a0m\s*\|\s*0x80000000u\)\s*\+\s*4u"),
-    "bias_field":    ("legacy_game_config.h", r"struct\s+Crt0StackBias\s*\{[^}]*\bdeclared\b[^}]*\}\s*stackBias"),
-    "bias_required": ("crt0_boot.h", r'\{"stackBias\.declared",\s*cfg->stackBias\.declared\}'),
-    "bias_used":     ("crt0_boot.h", r"bias\s*=\s*cfg->stackBias\.value"),
-    "size_absent":   ("crt0_boot.h", r"p\.storeHeapSize\s*=\s*cfg->heapSizePtr\s*!=\s*0u"),
-    "base_absent":   ("crt0_boot.h", r"p\.storeHeapBase\s*=\s*cfg->heapBasePtr\s*!=\s*0u"),
+    "bias_field":    ("guest_program_image.h", r"struct\s+StackBias\s*\{[^}]*\bdeclared\b[^}]*\}\s*stackBias"),
+    "bias_required": ("crt0_boot.h", r'\{"stackBias\.declared",\s*image->stackBias\.declared\}'),
+    "bias_used":     ("crt0_boot.h", r"bias\s*=\s*image->stackBias\.bytes"),
+    "size_absent":   ("crt0_boot.h", r"p\.storeHeapSize\s*=\s*image->heapSizeStoreAddress\s*!=\s*0u"),
+    "base_absent":   ("crt0_boot.h", r"p\.storeHeapBase\s*=\s*image->heapBaseStoreAddress\s*!=\s*0u"),
     "size_guarded":  ("crt0_boot.h", r"if\s*\(\s*p\.storeHeapSize\s*\)\s*(?:\{\s*)?w\.w32\(\s*p\.heapSizeAddr"),
     "base_guarded":  ("crt0_boot.h", r"if\s*\(\s*p\.storeHeapBase\s*\)\s*(?:\{\s*)?w\.w32\(\s*p\.heapBaseAddr"),
     "a1_set":        ("crt0_boot.h", r"w\.reg\(5,\s*p\.a1\)"),
@@ -868,12 +868,14 @@ def framework_verdict(g: dict, mech: dict) -> tuple[list[str], list[str]]:
          f"bss clear: `for (a=p.bssLo; a<p.bssHi; a+=4) w.w32(a,0)` is EXACTLY this loop's semantics "
          f"([0x{g['bssZeroLo']:08X},0x{g['bssZeroHi']:08X}), store-then-increment, sltu unsigned bound)",
          "no word-stepped .bss clear loop over [bssLo,bssHi) — this crt0's clear loop has no counterpart")
-    need("stacktop_read", "stack top comes from a MEMORY WORD, matching `c->mem_r32(cfg->stackTopBase)`",
-         "the framework does not read the stack-top word from cfg->stackTopBase")
-    need("reserve_read", "the stack reserve is read from cfg->stackTopBase2, as this crt0's second "
+    need("stacktop_read", "stack top comes from a MEMORY WORD, matching "
+                          "`c->mem_r32(image->stackTopWordAddress)`",
+         "the framework does not read the stack-top word from GuestProgramImage")
+    need("reserve_read", "the stack reserve is read from image->stackReserveWordAddress, as this crt0's second "
                         "absolute lw does",
-         "the framework does not read a reserve word from cfg->stackTopBase2")
-    need("heap_mask", "heap base is KSEG0-masked with 0x1FFFFFFF, matching `cfg->heapBase & 0x1FFFFFFFu`",
+         "the framework does not read a reserve word from GuestProgramImage")
+    need("heap_mask", "heap base is KSEG0-masked with 0x1FFFFFFF, matching "
+                      "`image->heapBase & 0x1FFFFFFFu`",
          "the framework does not KSEG0-mask heapBase, so a0 would keep its 0x8 nibble")
     need("heap_arith", "heap size is `(stackTop - mem[stackTopBase2]) - maskedHeapBase`, matching this "
                        f"crt0's two subu at 0x800DAEF8 exactly (0x{g.get('heapSize', 0):X})",
@@ -887,7 +889,7 @@ def framework_verdict(g: dict, mech: dict) -> tuple[list[str], list[str]]:
     # ── the four that USED to be contradictions. Each is now a located mechanism or a real one again ──
     bias = g["stackTopBias"]
     if mech["bias_field"][0] and mech["bias_used"][0] and mech["bias_required"][0]:
-        ok.append(f"[{_cite(mech, 'bias_used')}] the stack-top bias is a DECLARED GameConfig field "
+        ok.append(f"[{_cite(mech, 'bias_used')}] the stack-top bias is a DECLARED GuestProgramImage field "
                   f"(`stackBias.{{declared,value}}`, required by crt0_plan at "
                   f"{_cite(mech, 'bias_required')}), not a hardcoded -8 — so this crt0's measured bias "
                   f"of {bias} is expressible, and 0 does not read as 'unset'")
@@ -907,7 +909,7 @@ def framework_verdict(g: dict, mech: dict) -> tuple[list[str], list[str]]:
         expressible = mech[absent_key][0] and mech[guard_key][0]
         if g[field] is None and not expressible:
             bad.append(f"[{_cite(mech, guard_key)}] the framework stores the heap {what} through "
-                       f"cfg->{field} UNCONDITIONALLY ({absent_key}={mech[absent_key][0]}, "
+                       f"the typed {field} address UNCONDITIONALLY ({absent_key}={mech[absent_key][0]}, "
                        f"{guard_key}={mech[guard_key][0]}), but this crt0 stores it NOWHERE — it passes "
                        f"it in a register. With the field left 0 the framework writes to guest "
                        f"address 0x00000000.")
@@ -1202,11 +1204,11 @@ def selftest(cross: str | None) -> int:
     # in turn, and the case names the mechanism it deleted.
     for key, frm, to, expect in (
             ("size_guarded", r"if\s*\(\s*p\.storeHeapSize\s*\)", "if (true)",
-             "heap SIZE through cfg->heapSizePtr UNCONDITIONALLY"),
+             "heap SIZE through the typed heapSizePtr address UNCONDITIONALLY"),
             ("base_guarded", r"if\s*\(\s*p\.storeHeapBase\s*\)", "if (true)",
-             "heap BASE through cfg->heapBasePtr UNCONDITIONALLY"),
+             "heap BASE through the typed heapBasePtr address UNCONDITIONALLY"),
             ("a1_set", r"w\.reg\(5,\s*p\.a1\)", "w.reg(6, p.a1)", "never assigns r[5]"),
-            ("bias_used", r"bias\s*=\s*cfg->stackBias\.value", "bias = -8",
+            ("bias_used", r"bias\s*=\s*image->stackBias\.bytes", "bias = -8",
              "no declared stack-top bias")):
         doctored = dict(fwsrc)
         if not re.search(frm, doctored["crt0_boot.h"]):

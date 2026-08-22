@@ -15,4 +15,9 @@ scratch/logs/re04-postinit-state-trace.log shows both answers in one bounded run
 
 ## Known failure modes
 
-(none recorded yet)
+Tracing a PlatformHle-owned guest thunk (OpenTh/CloseTh/ChangeTh) installs FNTRACE's raw generated
+wrapper after the HLE and displaces the handler. `scratch/logs/re04-bios-thread-runtime.log` then
+returns the old constant `0xFF000000` and never enters the task. The paired unshadowed trace omits
+those three thunk addresses and reaches `0x8001D064` through handle `0xFF000001`. Therefore FNTRACE is
+trusted for ordinary guest-function reach/ABI only; never include an HLE-owned thunk in a mechanism
+gate. Use the owning subsystem's diagnostic channel for that thunk.

@@ -59,9 +59,15 @@ currently permits wide presentation only on `native`. Retail boot scheduling mus
 wide pixels and crop-edge asset seams can be verified. Do not resolve either gap with a present
 stretch, a forced-native path, or a local renderer exception.
 
-**Not a dependency:** the framework's temporal camera/object capture, interpolated replay, native
-depth, and PC-native producers. None may be added to RE-08 merely because the shared framework offers
-them; X4's widescreen implementation must stand on projection/culling/layout evidence of its own.
+**Required boundary, not yet the operational reality:** temporal camera/object capture, interpolated
+replay, native depth, and PC-native producers are not requirements of X4 widescreen. None may be added
+to RE-08 merely because the shared framework offers them; X4's widescreen implementation must stand on
+projection/culling/layout evidence of its own. Today the shipping VBlank route nevertheless calls
+`Fps60::frame_commit`, because psxport put its non-temporal current-frame capture, real present,
+presentation ledger, capture reset/rotation, and pacing fence inside the interpolation class. With
+`active()==false`, no rate-driven extra frame or lerp runs, but operational independence is still
+false (claim C018, issue #12). The proper fix is a neutral framework frame service with Fps60 as an
+optional temporal decorator—not a game-local copy or a raw-present workaround.
 
 **Suppression.** `x4::enh(x4::cv_widescreen)`; `PSXPORT_X4_WIDESCREEN`.
 

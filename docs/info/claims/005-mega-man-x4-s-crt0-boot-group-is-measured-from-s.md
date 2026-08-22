@@ -5,8 +5,8 @@ status: holds
 created: 2026-08-12
 tags: boot,crt0,re-01
 depends: game/core/game_config.cpp, tools/verify_crt0.py
-reconfirmed: 2026-08-22 15:30:37
-verified_at: 2026-08-22 15:30:37
+reconfirmed: 2026-08-22 18:10:37
+verified_at: 2026-08-22 18:10:37
 ---
 
 ## Claim
@@ -60,3 +60,11 @@ from `game_iface.h` to `legacy_game_config.h` while this verifier still scanned 
 instrument's file map, then ran `tools/verify_crt0.py --check` and `--selftest` separately: 21 shipping
 comparisons agree, all 15 framework mechanisms are located, the compatibility verdict is 11/11, and
 all 26 selftest cases pass. Issue #6 records the false-negative root cause and negative controls.
+
+## Re-confirmed 2026-08-22 17:48:53
+
+2026-08-22: verify_crt0.py --check --selftest passes 26/26 against retail SLUS_005.61 and the typed GuestProgramImage framework path.
+
+## Re-confirmed 2026-08-22 18:10:37
+
+2026-08-22 clean psxport ad5cf802: verify_crt0.py check/selftest passes 26/26, locating 15/15 typed GuestProgramImage mechanisms with zero contradictions.

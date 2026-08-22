@@ -11,6 +11,8 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from config_windows import platform_hle_windows
+
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_EXE = ROOT / "scratch/bin/megamanx4/SLUS_005.61"
 SYNC_HEADER = ROOT / "game/core/vsync_sync.h"
@@ -229,10 +231,11 @@ def verify(inputs: Inputs, *, check_digest: bool = True) -> list[str]:
             raise VerificationError(
                 f"shipping synchronization source is missing {token!r}"
             )
-    config_shape = (
-        ".windowLo = {x4::vsync::kWait, 0}, .windowHi = {x4::vsync::kWaitEnd, 0}"
-    )
-    if config_shape not in inputs.config:
+    try:
+        window_lo, window_hi = platform_hle_windows(inputs.config)
+    except ValueError as exc:
+        raise VerificationError(str(exc)) from exc
+    if window_lo[0] != "x4::vsync::kWait" or window_hi[0] != "x4::vsync::kWaitEnd":
         raise VerificationError(
             "GameConfig does not declare the exact wait-helper executable window"
         )
@@ -296,7 +299,7 @@ def selftest(inputs: Inputs) -> list[str]:
         inputs.exe,
         inputs.header,
         inputs.source,
-        inputs.config.replace("kWaitEnd, 0", "kWait, 0", 1),
+        inputs.config.replace("x4::vsync::kWaitEnd", "x4::vsync::kWait", 1),
     )
     results.append(expect_refusal("collapsed executable window", wrong_config))
     raw_present = Inputs(

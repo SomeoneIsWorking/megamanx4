@@ -1,5 +1,6 @@
 #include "x4_runtime.h"
 
+#include "bios_threads.h"
 #include "cfg.h"
 #include "config_var.h"
 #include "config_vars.h"
@@ -7,6 +8,7 @@
 #include "game.h"
 #include "legacy_game_interface.h"
 #include "vsync_sync.h"
+#include "x4_context.h"
 
 #include <lucent/log.h>
 
@@ -46,10 +48,19 @@ bool X4Runtime::validateRenderEnhancements() const {
   return true;
 }
 
+void *X4Runtime::createContext(Core &core) {
+  return new X4Context(core);
+}
+
+void X4Runtime::destroyContext(void *context) {
+  delete static_cast<X4Context *>(context);
+}
+
 void X4Runtime::registerOverrides(Game &game) {
   // RE-11 owns only libetc's measured wait helper. The retail VSync body and IRQ-0 handler remain
   // recompiled guest code; vsync_sync restores the missing asynchronous producer between them.
   vsync::install(&game);
+  bios_threads::install(game);
 }
 
 void X4Runtime::bootInit(Core &core) {

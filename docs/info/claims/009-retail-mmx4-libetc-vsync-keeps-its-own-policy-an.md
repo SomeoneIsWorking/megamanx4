@@ -5,8 +5,8 @@ status: holds
 created: 2026-08-21
 tags: RE-11,vsync,vblank,irq
 depends: psxport.pin, game/core/vsync_sync.cpp#deliver_field, tools/verify_vsync.py#verify
-reconfirmed: 2026-08-22 15:30:37
-verified_at: 2026-08-22 15:30:37
+reconfirmed: 2026-08-22 18:10:37
+verified_at: 2026-08-22 18:10:37
 ---
 
 ## Claim
@@ -56,3 +56,15 @@ Post-landing Clang verification passed VSync shipping groups and 5/5 falsifiers;
 ## Re-confirmed 2026-08-22 15:30:37
 
 Full Clang CTest after the X4Runtime render-policy change passes verify_vsync's six retail groups and 5/5 falsifiers; the title policy touches no VBlank ownership.
+
+## Architecture audit 2026-08-22
+
+The runtime evidence remains valid, but “authoritative frame commit” describes current ownership, not
+the correct subsystem boundary. With interpolation inactive, `Fps60::frame_commit` still owns the
+current queue capture, real `t=1` present, ledger reconcile/reset, capture rotation, GPU present,
+diagnostic capture hook, and pacing. Issue #12 requires extracting that non-temporal service; C018
+records that operational independence is currently false.
+
+## Re-confirmed 2026-08-22 18:10:37
+
+2026-08-22 clean psxport ad5cf802: VSync evidence/selftest passes 6 groups and 5/5; bounded retail run advances through the helper without overflow. This confirms behavior only; C018 remains falsified and issue #12 remains open for the Fps60-owned non-temporal fence.

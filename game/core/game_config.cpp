@@ -20,6 +20,7 @@
 // the measurement wins. When you fill a field, paste the disassembly line that justifies it, as
 // spider1/game/core/game_config.cpp does — that citation is what makes the value reviewable a year from
 // now. (Reading mmx4 also puts you under the AGPL firewall: what you learn stays in THIS repo. CLAUDE.md.)
+#include "bios_threads.h"
 #include "game_iface.h"
 #include "legacy_game_interface.h"
 #include "vsync_sync.h"
@@ -328,11 +329,12 @@ static const GameConfig g_x4_cfg = {
     .padSlotPtrStride = 0,
 
     // --- platform HLE (the hardware-sync primitives) ------------------------ RE-11: ONE MEASURED --
-    // The window is deliberately the exact half-open body of libetc's counter-wait helper. It admits
-    // the one project-owned handler installed by vsync_sync.cpp and refuses every adjacent function;
-    // broadening it would weaken the platform/game ownership guard without adding a measured entry.
+    // Each window is an exact measured ownership range: libetc's counter-wait helper and the three
+    // contiguous BIOS thread thunks used by X4's retail scheduler. Adjacent engine code remains
+    // refused; tools/verify_{vsync,threads}.py derive both ranges from SLUS_005.61.
     // vsyncTrap remains zero because X4's guest loop legitimately calls VSync.
-    .hle = {.windowLo = {x4::vsync::kWait, 0}, .windowHi = {x4::vsync::kWaitEnd, 0}},
+    .hle = {.windowLo = {x4::vsync::kWait, x4::bios_threads::kOpenThread},
+            .windowHi = {x4::vsync::kWaitEnd, x4::bios_threads::kThreadWindowEnd}},
 
     // --- rendering policy ------------------------------------------------- 1 while the guest draws --
     // The renderer clears to black on the principle "show ONLY what a native producer submitted". That

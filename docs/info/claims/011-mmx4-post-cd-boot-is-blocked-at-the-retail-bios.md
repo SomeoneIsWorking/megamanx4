@@ -1,12 +1,13 @@
 ---
 id: C011
 kind: claim
-status: holds
+status: falsified
 created: 2026-08-21
 tags: RE-04,boot,threads
 depends: psxport.pin
 reconfirmed: 2026-08-21
 verified_at: 2026-08-21 14:15:00
+falsified_on: 2026-08-22
 ---
 
 ## Claim
@@ -36,3 +37,9 @@ Exact pin 3418a79b focused reach probe scratch/logs/re04-3418-thread-boundary-tr
 ## Re-confirmed 2026-08-21
 
 Post-landing focused trace created task 0x8001D064 once and observed 86 ChangeThread calls while task entry and 0x800128B8 remained unreached against psxport 3418a79b.
+
+## FALSIFIED 2026-08-22
+
+Falsifier observed: scratch/logs/re04-bios-thread-runtime-final-ad5cf802.log reaches 0x8001D064 once through untouched func_80012740/func_80012600 and X4Runtime's measured OpenTh handle 0xFF000001; the old no-op boundary no longer holds.
+
+> Anything that cited this claim as proof must be re-checked. Grep the repo for it.

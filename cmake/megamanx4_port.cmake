@@ -28,12 +28,14 @@ include(${PSXPORT_DIR}/cmake/psxport.cmake)
 # body until generated code exists; compiling it here keeps it in the real compile database used by
 # clang-tidy rather than leaving one source outside every gate.
 set(SEAM_SRC
+  game/core/bios_threads.cpp
   game/core/game_config.cpp
   game/core/game_hooks.cpp
   game/core/enhancements.cpp
   game/core/main.cpp
   game/core/recomp_register.cpp
   game/core/vsync_sync.cpp
+  game/core/x4_context.cpp
   game/core/x4_runtime.cpp
 )
 add_library(megamanx4_seam OBJECT ${SEAM_SRC})
@@ -74,11 +76,17 @@ if(BUILD_TESTING)
     NAME projection_evidence
     COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/tools/verify_projection.py --check --selftest
   )
+  add_test(
+    NAME thread_evidence
+    COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/tools/verify_threads.py --check --selftest
+  )
   add_executable(mmx4_runtime_test
+    ${CMAKE_SOURCE_DIR}/game/core/bios_threads.cpp
     ${CMAKE_SOURCE_DIR}/tests/test_x4_runtime.cpp
     ${CMAKE_SOURCE_DIR}/game/core/game_config.cpp
     ${CMAKE_SOURCE_DIR}/game/core/game_hooks.cpp
     ${CMAKE_SOURCE_DIR}/game/core/vsync_sync.cpp
+    ${CMAKE_SOURCE_DIR}/game/core/x4_context.cpp
     ${CMAKE_SOURCE_DIR}/game/core/x4_runtime.cpp
   )
   target_include_directories(mmx4_runtime_test PRIVATE game game/core)

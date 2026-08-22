@@ -1,7 +1,7 @@
 ---
 id: 11
 title: Retail boot thread entry never runs after CD initialization
-status: investigating
+status: resolved
 symptom: MMX4 presents paced black frames after Setmode; no archive/read command occurs and thread entry 0x8001D064 is never called even though ChangeThread runs every frame
 tags: boot,thread,bios,libcd,RE-04,next-boundary,framework
 created: 2026-08-21
@@ -22,3 +22,6 @@ A second diagnostic exposed another failure mode in the in-flight tasks.cpp bypa
 
 ### Note (2026-08-22)
 Audit of the discarded synchronous-CD attempt: filling GameConfig cdInit/cdCommand/cdSync/cdGetSector/callback-state fields would register psxport PlatformHle replacements over X4's already-verified retail controller -> IRQ2 -> libcd callback path. The accompanying shared CdReady body and stock-read loop edits only compensated for activating that wrong path; none implements ChangeThread or schedules task 0x8001D064. The game fields and shared edits were removed. Keep CD HLE zero until loading-removal RE identifies a file-I/O seam downstream of the faithful interrupt path.
+
+### Resolution (2026-08-22)
+Root cause was the missing BIOS TCB execution contract under the untouched retail scheduler, not CD or rendering. X4Runtime now creates a per-Core service: OpenTh allocates one of the three non-main SYSTEM.CNF TCBs and captures entry/SP/GP, ChangeTh strict-ping-pongs main and task fibers while preserving registers/C stacks, and CloseTh releases the handle. A self-closing task defers actual TCB reuse until ChangeTh has regained the main C stack; otherwise OpenTh could destroy the coroutine still executing CloseTh. tools/verify_threads.py passes a real positive plus five mutations; mmx4_runtime_test proves yield/resume, deferred self-close, and refusal controls; the final unshadowed real-disc trace reaches 0x8001D064 through retail func_80012740 -> OpenTh 0xFF000001 -> func_80012600 -> ChangeTh. The next boundary is inside the front-end task before 0x800128B8, not the resolved scheduler handoff.

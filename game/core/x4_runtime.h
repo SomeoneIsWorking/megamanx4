@@ -43,6 +43,8 @@ public:
     return path == RenderPath::Gte || path == RenderPath::Psx;
   }
 
+  void *createContext(Core &core) override;
+  void destroyContext(void *context) override;
   void registerOverrides(Game &game) override;
   void bootInit(Core &core) override;
 };

@@ -1,0 +1,30 @@
+---
+id: C017
+kind: claim
+status: holds
+created: 2026-08-22
+tags: RE-04,boot,threads
+depends: game/core/bios_threads.cpp#Service::change, game/core/x4_runtime.cpp#registerOverrides, tools/verify_threads.py#verify
+reconfirmed: 2026-08-22 18:10:37
+verified_at: 2026-08-22 18:10:37
+---
+
+## Claim
+
+Retail MMX4 now crosses the BIOS-thread handoff faithfully enough to enter task 0x8001D064 through its untouched scheduler
+
+## Evidence
+
+tools/verify_threads.py --check --selftest: 3/3 thunks, 7/7 scheduler/create facts, 3/3 task yields, 5/5 shipping constants plus the exact HLE window, and 6/6 positive/negative controls; mmx4_runtime_test proves distinct TCBs, SP/GP plus register persistence over yield/resume, main preservation, invalid/capacity refusal, deferred self-close while its coroutine is live, and reuse only after the main stack resumes; scratch/logs/re04-bios-thread-runtime-final-ad5cf802.log reaches 0x8001D064 from retail func_80012600 through OpenTh handle 0xFF000001 with zero ABI violations.
+
+## What would falsify it
+
+A rebuilt unforced run with HLE thunk tracing excluded no longer reaches 0x8001D064 through a non-main handle, the verifier fails, or the focused context-switch test loses either preservation/refusal answer.
+
+## Re-confirmed 2026-08-22 17:48:53
+
+2026-08-22: thread evidence check/selftest passes, x4_runtime test passes, and clean-pin real-disc trace re04-bios-thread-runtime-final-ad5cf802.log reaches retail task 0x8001D064 through func_80012600.
+
+## Re-confirmed 2026-08-22 18:10:37
+
+2026-08-22 clean psxport ad5cf802: thread verifier passes 6/6, runtime test passes, and re04-bios-thread-runtime-final-ad5cf802.log reaches 0x8001D064 at frame 5 through OpenTh FF000001 with zero ABI violations.

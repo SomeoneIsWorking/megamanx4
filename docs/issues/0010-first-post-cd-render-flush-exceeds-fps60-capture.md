@@ -14,3 +14,10 @@ Focused OT evidence ruled out the tempting cap increase and malformed-list theor
 
 ### Resolution (2026-08-21)
 Root cause: x4::vsync::deliver_field used raw gpu_present(), which displayed but never called Fps60::frame_commit(), so each valid one-primitive DrawOTag capture accumulated across guest fields until 65,536 + 1 failed. Retail RAM dump proves both 12-link OTs terminate at 0x8011E244=0x04FFFFFF. Replacing the raw present plus separate pacer with the authoritative one-field frame_commit rotates capture state and paces once; the untraced 20-second runtime reaches external timeout with no overflow or watchdog fault.
+
+### Architecture follow-up (2026-08-22)
+
+This resolution fixed the overflow but exposed framework ownership debt: X4 performs no interpolation,
+yet the only complete non-temporal capture/present/ledger/pace fence is a method on `Fps60`. Issue #12
+tracks the proper neutral extraction. Replacing the call locally would reintroduce the second-renderer
+failure this issue ruled out, so #10 remains resolved while #12 stays open.

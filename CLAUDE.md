@@ -12,15 +12,17 @@ directive that **`./run.sh` is the user's and agents must never invoke it**. The
 `external/psxport/docs/workspace/WORKSPACE.md`; the multi-agent protocol is `…/PROTOCOL.md`; the
 methodology is `…/docs/porting-a-new-psx-game.md`.
 
-## THE STATE OF THIS PORT: resident substrate boots to the retail task handoff
+## THE STATE OF THIS PORT: resident substrate boots through the retail task handoff
 
 Created 2026-08-12. RE-01 and RE-06 are verified; RE-02 is a measured static/runtime bootstrap with an
 honest remaining gap for future indirect-only targets. The retail executable emits 6,192 binary roots
 to 7,533 functions, links `megamanx4_port`, and boots through InitHeap into guest `gameMain`. CD IRQ2
-delivery now reaches the measured callback. The current stall is the retail task handoff: task entry
-`0x8001D064` is created but never scheduled because psxport's BIOS `ChangeThread` is a no-op (issue
-#11). The rejected local synchronous-task bypass did not cross that boundary and has been removed;
-the proper fix is shared runtime scheduling. X4 now defaults to the guest `gte` picture path and refuses `native`, because this
+delivery reaches the measured callback, and the retail scheduler now transfers through distinct BIOS
+TCB handles into task entry `0x8001D064`. `X4Runtime` owns a per-Core BIOS-thread service beneath the
+untouched retail scheduler: OpenTh captures entry/SP/GP, ChangeTh preserves both C stacks across
+cooperative yields, and CloseTh releases the TCB. The rejected synchronous-task bypass remains removed.
+The next reach boundary is inside the front-end task before `0x800128B8`; no archive/read command has
+yet been observed. X4 defaults to the guest `gte` picture path and refuses `native`, because this
 enhancement-class port deliberately has no PC-native producers; selecting them produced guaranteed
 black independently of the scheduler.
 **The framework seam is inherited now:** process-lifetime `x4::X4Runtime` owns title render-path
@@ -104,6 +106,13 @@ The consequence, in framework vocabulary:
   already runs at 60. There is no native producer to drive and no native frame loop to stand up;
   the legacy `GameHooks::frameUpdate` is fail-fast and stays that way. Marking these ⬜ would put four steps on
   the roadmap the USER has ruled out.
+
+  **Current framework debt does not satisfy that boundary yet.** X4 schedules no interpolated pass,
+  but `vsync_sync.cpp` still calls `c->game->fps60.frame_commit(c, 1)` because psxport placed the
+  non-temporal queue capture, real-frame present, ledger reset, capture rotation, and pacing fence
+  inside `Fps60`. Claim C018 is the falsified operational-independence claim; open issue #12 specifies
+  the proper neutral frame-service extraction and future negative-dependency gate. Do not copy that
+  fence into this repo or replace it with raw present plus a separate pacer.
 - All three deliverables are the **`pc_enh` behaviour class with `affect: full`** — they deliberately
   change canon guest state. So the RE target of this port is the **PLAYER-OBJECT SYSTEM**, not the
   renderer, and every one of them must be **force-suppressed under `PSXPORT_ORACLE` / `PSXPORT_SBS` /
