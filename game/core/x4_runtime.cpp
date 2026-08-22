@@ -32,6 +32,20 @@ bool X4Runtime::configureRenderPath() {
   return true;
 }
 
+bool X4Runtime::validateRenderEnhancements() const {
+  if (!supportsTemporalInterpolation() && psx::config::cv_fps60.get()) {
+    lucent::error("x4-render",
+                  "PSXPORT_FPS60 requests interpolated frames, but Mega Man X4 ({}) already runs at "
+                  "the target 60 Hz cadence. Clear PSXPORT_FPS60/fps60=1; X4's render enhancement "
+                  "is widescreen only and does not use temporal interpolation, native depth, or "
+                  "PC-native producers (resolved at {} layer).",
+                  executableId(),
+                  psx::config::layer_name(psx::config::cv_fps60.layer()));
+    return false;
+  }
+  return true;
+}
+
 void X4Runtime::registerOverrides(Game &game) {
   // RE-11 owns only libetc's measured wait helper. The retail VSync body and IRQ-0 handler remain
   // recompiled guest code; vsync_sync restores the missing asynchronous producer between them.

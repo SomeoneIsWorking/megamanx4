@@ -3,6 +3,8 @@
 #include "game_iface.h"
 #include "render_mode.h"
 
+#include <string_view>
+
 namespace x4 {
 
 // Process-lifetime owner of Mega Man X4's framework-facing behavior. The legacy base is temporary:
@@ -12,6 +14,26 @@ public:
   X4Runtime();
 
   bool configureRenderPath();
+  bool validateRenderEnhancements() const;
+
+  // X4's retail update/display cadence is already the target cadence. Widescreen therefore owns
+  // only projection/culling/presentation work; it must not pull in the framework's interpolated-frame
+  // pipeline or either of that pipeline's native-render prerequisites.
+  static constexpr std::string_view executableId() {
+    return "SLUS_005.61";
+  }
+  static constexpr bool targetsWidescreen() {
+    return true;
+  }
+  static constexpr bool supportsTemporalInterpolation() {
+    return false;
+  }
+  static constexpr bool requiresNativeDepth() {
+    return false;
+  }
+  static constexpr bool requiresNativeProducers() {
+    return false;
+  }
 
   static constexpr RenderPath requiredRenderPath() {
     return RenderPath::Gte;

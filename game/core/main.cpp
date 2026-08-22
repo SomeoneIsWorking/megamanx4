@@ -59,6 +59,12 @@ int main(int argc, char **argv) {
   const char *path = argc > 1 ? argv[1] : kDefaultExe;
 
   Game *game = new Game();
+  // Game construction loads persisted settings into the CVar ladder. Validate only now so a saved
+  // `fps60=1` cannot silently arm interpolation after the earlier render-path decision. This does not
+  // reject the retail game's own 60 Hz cadence; it rejects only psxport's synthetic in-between tier.
+  if (!runtime.validateRenderEnhancements()) {
+    return 2;
+  }
   Core *c = &game->core;
 
   // Self-provision the executable so the binary is runnable straight from a disc image with no prior

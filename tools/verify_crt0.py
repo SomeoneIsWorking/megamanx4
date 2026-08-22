@@ -792,9 +792,9 @@ def extract(exe, entry: int, limit: int = 256) -> dict:
 # the SOURCE TEXT is not running it. This says "the pinned framework has a declared-bias field and
 # guards both heap stores", not "the boot produced sp = 0x80200000".
 FW_FILES = {
-    "crt0_boot.h":     os.path.join("runtime", "recomp", "crt0_boot.h"),
-    "game_iface.h":    os.path.join("runtime", "recomp", "game_iface.h"),
-    "native_boot.cpp": os.path.join("runtime", "recomp", "native_boot.cpp"),
+    "crt0_boot.h":         os.path.join("runtime", "recomp", "crt0_boot.h"),
+    "legacy_game_config.h": os.path.join("runtime", "recomp", "legacy_game_config.h"),
+    "native_boot.cpp":     os.path.join("runtime", "recomp", "native_boot.cpp"),
 }
 
 # key -> (file, pattern, what having it licenses). Patterns run over COMMENT-STRIPPED text, because
@@ -808,7 +808,7 @@ FW_MECH = {
     "heap_arith":    ("crt0_boot.h", r"\(v0\s*-\s*stackReserveWord\)\s*-\s*a0m"),
     "gp_sp_fp":      ("crt0_boot.h", r"w\.reg\(29,\s*p\.sp\);\s*w\.reg\(30,\s*p\.sp\)"),
     "a0_plus4":      ("crt0_boot.h", r"\(a0m\s*\|\s*0x80000000u\)\s*\+\s*4u"),
-    "bias_field":    ("game_iface.h", r"struct\s+Crt0StackBias\s*\{[^}]*\bdeclared\b[^}]*\}\s*stackBias"),
+    "bias_field":    ("legacy_game_config.h", r"struct\s+Crt0StackBias\s*\{[^}]*\bdeclared\b[^}]*\}\s*stackBias"),
     "bias_required": ("crt0_boot.h", r'\{"stackBias\.declared",\s*cfg->stackBias\.declared\}'),
     "bias_used":     ("crt0_boot.h", r"bias\s*=\s*cfg->stackBias\.value"),
     "size_absent":   ("crt0_boot.h", r"p\.storeHeapSize\s*=\s*cfg->heapSizePtr\s*!=\s*0u"),

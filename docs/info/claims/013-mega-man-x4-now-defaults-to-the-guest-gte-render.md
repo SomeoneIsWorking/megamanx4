@@ -5,7 +5,8 @@ status: holds
 created: 2026-08-22
 tags:
 depends: game/core/x4_runtime.cpp#configureRenderPath
-reconfirmed: 2026-08-22
+reconfirmed: 2026-08-22 15:30:37
+verified_at: 2026-08-22 15:30:37
 ---
 
 ## Claim
@@ -19,3 +20,7 @@ game/core/x4_runtime.cpp sets only PSXPORT_RENDER_PATH Default to gte before fra
 ## What would falsify it
 
 X4Runtime::configureRenderPath, game/core/main.cpp, or framework render-path semantics change; or X4 gains complete native producers.
+
+## Re-confirmed 2026-08-22 15:30:37
+
+mmx4_runtime_test after the render-policy change proves the unchanged gte default, diagnostic psx support, and explicit native refusal; full Clang CTest passes 6/6.

@@ -32,6 +32,22 @@ started in."*
 | `PSXPORT_X4_COOP` | Bool | `false` | yes | `x4::cv_coop` | **`x4::enh(x4::cv_coop)`** |
 | `PSXPORT_X4_FASTWAIT` | Bool | `false` | yes | `x4::cv_fastwait` | **`x4::enh(x4::cv_fastwait)`** |
 
+## Title render policy: `PSXPORT_FPS60` is unsupported
+
+The shared framework declares `PSXPORT_FPS60`, but X4 (`SLUS_005.61`) deliberately does not consume
+its synthetic interpolated-frame tier. The retail title already runs at the target 60 Hz cadence;
+X4's rendering enhancement target is widescreen only, with no temporal capture/replay, native-depth,
+or native-producer prerequisite. `X4Runtime::validateRenderEnhancements()` runs after `Game`
+construction has loaded the persisted settings file and refuses startup when the resolved
+`PSXPORT_FPS60` CVar is true. This covers both a launch override and a saved `fps60=1`, names the
+winning CVar layer, and does not alter the retail game's own cadence.
+
+The no-argument policy is therefore unambiguous: synthetic interpolation is off and cannot be armed
+silently. `PSXPORT_X4_WIDESCREEN` remains `false` while RE-08 has no real pixel-producing consumer;
+"widescreen-only" names the scoped rendering target, not a claim that the still-planned feature already
+works. The widescreen knob becomes the product default only when its guest projection/culling/layout
+path and real-pixel gate land together.
+
 `PSXPORT_X4_DISC` is spelled identically in exactly three places and they must not diverge:
 `.env.example`, `GameConfig::discEnvVar`, and `tools/resolve_disc.py`'s `ENV_KEY`.
 

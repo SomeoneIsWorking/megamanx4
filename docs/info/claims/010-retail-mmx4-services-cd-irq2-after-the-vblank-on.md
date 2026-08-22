@@ -5,8 +5,8 @@ status: holds
 created: 2026-08-21
 tags: RE-04,cd,irq,HookEntryInt,recompiler
 depends: psxport.pin, tools/verify_cd_irq.py#verify, game/recomp_seeds.json
-reconfirmed: 2026-08-21
-verified_at: 2026-08-21 14:15:00
+reconfirmed: 2026-08-22 15:30:37
+verified_at: 2026-08-22 15:30:37
 ---
 
 ## Claim
@@ -52,3 +52,7 @@ Exact pin 3418a79b: verify_cd_irq passes six groups and 6/6 falsifiers; fresh bo
 ## Re-confirmed 2026-08-21
 
 Post-landing Clang verification passed CD IRQ shipping groups and 6/6 falsifiers against psxport 3418a79b.
+
+## Re-confirmed 2026-08-22 15:30:37
+
+Full Clang CTest after the X4Runtime render-policy change passes verify_cd_irq's six retail groups and 6/6 falsifiers; the title policy touches no CD/IRQ ownership.

@@ -5,8 +5,8 @@ status: holds
 created: 2026-08-21
 tags: RE-11,vsync,vblank,irq
 depends: psxport.pin, game/core/vsync_sync.cpp#deliver_field, tools/verify_vsync.py#verify
-reconfirmed: 2026-08-21
-verified_at: 2026-08-21 14:15:00
+reconfirmed: 2026-08-22 15:30:37
+verified_at: 2026-08-22 15:30:37
 ---
 
 ## Claim
@@ -52,3 +52,7 @@ Exact pin 3418a79b: Clang CTest 4/4, verify_vsync six groups and 5/5 falsifiers,
 ## Re-confirmed 2026-08-21
 
 Post-landing Clang verification passed VSync shipping groups and 5/5 falsifiers; the 20-second runtime stayed in frame_commit pacing without overflow against psxport 3418a79b.
+
+## Re-confirmed 2026-08-22 15:30:37
+
+Full Clang CTest after the X4Runtime render-policy change passes verify_vsync's six retail groups and 5/5 falsifiers; the title policy touches no VBlank ownership.

@@ -5,8 +5,8 @@ status: holds
 created: 2026-08-12
 tags: boot,crt0,re-01
 depends: game/core/game_config.cpp, tools/verify_crt0.py
-reconfirmed: 2026-08-21
-verified_at: 2026-08-21 03:45:48
+reconfirmed: 2026-08-22 15:30:37
+verified_at: 2026-08-22 15:30:37
 ---
 
 ## Claim
@@ -52,3 +52,11 @@ Re-verified 2026-08-21 after making the framework-source recognizer formatting-i
 ## Re-confirmed 2026-08-21
 
 Post-landing verify_crt0 passed 21 shipping comparisons, 11/11 framework compatibility checks, and the measured shape facts.
+
+## Re-confirmed 2026-08-22 15:30:37
+
+The first rerun correctly failed because the framework-inheritance commit had moved `Crt0StackBias`
+from `game_iface.h` to `legacy_game_config.h` while this verifier still scanned the old owner. Fixed the
+instrument's file map, then ran `tools/verify_crt0.py --check` and `--selftest` separately: 21 shipping
+comparisons agree, all 15 framework mechanisms are located, the compatibility verdict is 11/11, and
+all 26 selftest cases pass. Issue #6 records the false-negative root cause and negative controls.

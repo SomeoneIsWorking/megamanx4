@@ -5,8 +5,8 @@ status: holds
 created: 2026-08-20
 tags: pad,coop
 depends: game/core/game_config.cpp, tools/verify_pad.py
-reconfirmed: 2026-08-21
-verified_at: 2026-08-21 03:45:48
+reconfirmed: 2026-08-22 15:30:37
+verified_at: 2026-08-22 15:30:37
 ---
 
 ## Claim
@@ -32,3 +32,9 @@ Falsified if this executable identity changes, a complete instruction scan finds
 ## Re-confirmed 2026-08-21
 
 Post-landing verify_pad found the unique retail InitPAD call and matched all four fixed-buffer arguments 4/4.
+
+## Re-confirmed 2026-08-22 15:30:37
+
+Ran `tools/verify_pad.py --check` and `--selftest` separately after the X4Runtime render-policy
+change; the one retail InitPAD call, both fixed buffers/capacities, shipping bindings, and all 4
+positive/negative cases still pass.

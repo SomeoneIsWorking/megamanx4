@@ -14,6 +14,12 @@ USER decision, 2026-08-12, verbatim, which is why this file exists at all:
 > widescreen patches (still hard work) and loading removals (again hard work). And I want to add co-op
 > to it, drop-in, if I'm playing with X for example then second player can spawn as Zero."
 
+USER clarification, 2026-08-22: X4 (`SLUS_005.61`) is one of the already-60fps titles that needs
+widescreen only; it does not need lerp or anything whose only purpose is to support lerp. `X4Runtime`
+now encodes that render policy and refuses `PSXPORT_FPS60`/persisted `fps60=1` instead of silently
+accepting a synthetic interpolation tier. This refusal does not alter or cap the retail game's own
+60 Hz cadence.
+
 All three are the framework's `pc_enh` class with `affect: full` — they deliberately change canon guest
 state — and all three are read through the single chokepoint `x4::enh()`
 (`game/core/enhancements.{h,cpp}`), which force-suppresses them under `PSXPORT_ORACLE`, `PSXPORT_SBS` and
@@ -52,6 +58,10 @@ X4's required faithful picture path is `gte`, because it has no native producers
 currently permits wide presentation only on `native`. Retail boot scheduling must work before real
 wide pixels and crop-edge asset seams can be verified. Do not resolve either gap with a present
 stretch, a forced-native path, or a local renderer exception.
+
+**Not a dependency:** the framework's temporal camera/object capture, interpolated replay, native
+depth, and PC-native producers. None may be added to RE-08 merely because the shared framework offers
+them; X4's widescreen implementation must stand on projection/culling/layout evidence of its own.
 
 **Suppression.** `x4::enh(x4::cv_widescreen)`; `PSXPORT_X4_WIDESCREEN`.
 

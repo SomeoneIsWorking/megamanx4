@@ -5,8 +5,8 @@ status: holds
 created: 2026-08-12
 tags: scope,enhancements
 depends: docs/plans/enhancements.md
-reconfirmed: 2026-08-21 00:55:36
-verified_at: 2026-08-21 00:55:36
+reconfirmed: 2026-08-22 15:30:12
+verified_at: 2026-08-22 15:30:12
 ---
 
 ## Claim
@@ -28,3 +28,7 @@ Re-read the unchanged USER 2026-08-12 verbatim scope decision in docs/plans/enha
 ## Re-confirmed 2026-08-21 00:55:36
 
 Re-read the unchanged USER 2026-08-12 scope decision after the RE-06 documentation update; it still excludes native producers, interpolation, and native depth.
+
+## Re-confirmed 2026-08-22 15:30:12
+
+USER clarification 2026-08-22 again identifies X4 (SLUS_005.61) as already 60fps and widescreen-only, explicitly excluding lerp and its prerequisites. X4Runtime now encodes this directly; the full Clang build and 6/6 CTest pass.
