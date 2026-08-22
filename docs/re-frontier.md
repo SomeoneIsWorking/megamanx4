@@ -113,31 +113,12 @@ downstream of RE-07 should be attempted before it.
 - notes: The most invasive pc_enh in the workspace. Expect single-player assumptions everywhere: one player struct, one camera, one input route.
 
 ### RE-08 — the projection / FOV setup site widescreen must drive from game state
-- status: todo
+- status: re-partial
 - deps: RE-01, RE-02
-- evidence: STATIC REFERENCE LEAD, 2026-08-13: the matching `external/mmx4` decomp's fully written
-  `func_8001213C` (`src/main/2824.c`) calls `SetGeomOffset(0xA0, 0x78)` then
-  `SetGeomScreen(0x200)`. Its caller `func_80012024` is the measured `gameMain` (RE-01), so this is
-  the game's boot-time GTE projection initialisation: OFX=160, OFY=120, H=512. C001 establishes that
-  the decomp's addresses need no region translation for our retail target; nevertheless this is a
-  SOURCE LEAD, not a runtime observation from this port. A source census on 2026-08-13 found no other
-  `SetGeomOffset`, `SetGeomScreen`, inline `gte_SetGeom*`, or source-assembly `ctc2` CR24/25/26 writer
-  in `external/mmx4/src`; this narrows the remaining work to raw COP2 writers in the retail binary and
-  a runtime classification of their use as world projection versus 2D/HUD setup.
-- where: game/ (the widescreen feature will hang off cv_widescreen)
-- gap: The boot setup site is now located, but it does not yet justify a patch: X4 may write a
-  different projection per scene, camera, or 2D pass after boot. Find and classify every subsequent
-  CR24/CR25/CR26 writer before changing the guest state. The structural point that matters more than
-  the address: psxport's own widescreen is `affect: none` — a host-side read-only overlay driven by a
-  native renderer, shifting the projection centre OFX rather than stretching the present. X4 has NO
-  native renderer, so a widescreen change here reaches the GUEST's own projection setup and is
-  therefore `affect: full`. That reclassification is why it is a suppressed `pc_enh` and not a render
-  overlay, and misfiling it as `affect: none` would skip both the suppression requirement and
-  behavior.py check's only real assertion.
-- notes: The target behavior is still a wider FOV, not a stretched display: a 16:9 path must set the
-  appropriate world-projection state through `x4::enh(x4::cv_widescreen)` while leaving it unchanged
-  when disabled or in oracle/SBS runs. Do not attach the CVar until the write census distinguishes
-  world from HUD.
+- evidence: Retail SLUS_005.61 SHA-1 213733031136d095ca275d6957695aa25011cfa5: tools/verify_projection.py --check scans all 294,400 loaded words and finds exactly six CTC2 writes to CR24/25/26, all inside InitGeom/SetGeomOffset/SetGeomScreen; exactly one call to each, all in func_8001213C, with OFX=160, OFY=120, H=512. Its 4/4 selftest rejects a changed OFX, removed call, and extra raw writer. A bounded headless run reaches func_8001213C once. Static completeness is verified; pixels are not.
+- notes: Do not attach a local present stretch or force native: both would fabricate a picture. Once boot scheduling works, implement the guest projection change through x4::enh(x4::cv_widescreen), verify 4:3 unchanged and wide pixels on real scenes, and resolve the framework guest-path enhancement contract explicitly.
+- gap: Static writer/call completeness is closed: there is no later scene/HUD projection writer in the resident executable. Runtime pixel classification and the actual wide guest-projection consumer remain blocked because retail boot task 0x8001D064 is still never scheduled (issue #11). The required faithful picture path is now game-local default gte; native is refused because this title deliberately has no PC-native producers. Framework RenderMode also locks wide presentation out on gte, so a proper X4-wide contract must be resolved upstream rather than bypassed locally.
+- where: tools/verify_projection.py; game/core/x4_runtime.{h,cpp}; the future widescreen consumer remains under game/
 
 ### RE-09 — the game's OWN scripted wait states, fade ramps and frame-count timers
 - status: todo

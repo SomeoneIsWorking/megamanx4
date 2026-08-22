@@ -9,9 +9,9 @@
 #                      -DPSXPORT_BUILD_SMOKE at its OFF default.)
 #   megamanx4_seam     AN OBJECT LIBRARY over every first-party game/core TU. It COMPILES but does not
 #                      link, which is exactly the check that is possible
-#                      before a substrate exists: it proves this port's GameConfig/GameHooks still
-#                      satisfy the pinned framework's seam — every designator binds, every hook
-#                      signature matches — AND that the three pc_enh CVars compile against the
+#                      before a substrate exists: it proves X4Runtime and its bounded legacy facts
+#                      satisfy the pinned framework seam — every designator and virtual binds — AND
+#                      that the three pc_enh CVars compile against the
 #                      framework's config_var.h / config_vars.h. That is the gate for this repo today.
 #   megamanx4_port     the game binary. Configured ONLY when generated/rec_sources.cmake exists, i.e.
 #                      once tools/ensure_recomp.py has emitted the substrate. A loud STATUS message
@@ -34,6 +34,7 @@ set(SEAM_SRC
   game/core/main.cpp
   game/core/recomp_register.cpp
   game/core/vsync_sync.cpp
+  game/core/x4_runtime.cpp
 )
 add_library(megamanx4_seam OBJECT ${SEAM_SRC})
 # C++20, NOT the 17 the sibling trees' seam targets use. DEVIATION WITH A REASON: enhancements.cpp
@@ -69,6 +70,24 @@ if(BUILD_TESTING)
     NAME cd_irq_evidence
     COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/tools/verify_cd_irq.py --check --selftest
   )
+  add_test(
+    NAME projection_evidence
+    COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/tools/verify_projection.py --check --selftest
+  )
+  add_executable(mmx4_runtime_test
+    ${CMAKE_SOURCE_DIR}/tests/test_x4_runtime.cpp
+    ${CMAKE_SOURCE_DIR}/game/core/game_config.cpp
+    ${CMAKE_SOURCE_DIR}/game/core/game_hooks.cpp
+    ${CMAKE_SOURCE_DIR}/game/core/vsync_sync.cpp
+    ${CMAKE_SOURCE_DIR}/game/core/x4_runtime.cpp
+  )
+  target_include_directories(mmx4_runtime_test PRIVATE game game/core)
+  target_link_libraries(mmx4_runtime_test PRIVATE psxport)
+  set_target_properties(mmx4_runtime_test PROPERTIES
+    CXX_STANDARD 20
+    CXX_STANDARD_REQUIRED ON
+  )
+  add_test(NAME x4_runtime COMMAND mmx4_runtime_test)
 endif()
 
 if(NOT PSXPORT_BUILD_PORT)

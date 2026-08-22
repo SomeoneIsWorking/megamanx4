@@ -41,17 +41,17 @@ the **guest's own projection setup**. That makes it `affect: full`, which is why
 `pc_enh` and not a render overlay. Misfiling it as `affect: none` would skip both the suppression
 requirement and `behavior.py check`'s only real assertion.
 
-**What must be RE'd first.** `RE-08` — classify every guest projection/FOV setup write. The matching
-decomp locates the boot-time setup in `func_8001213C`: `SetGeomOffset(160, 120)` and
-`SetGeomScreen(512)`, i.e. GTE OFX/OFY/H = 160/120/512. The matching source has no other direct or
-inline `SetGeom*` call, so the remaining census is specifically raw COP2 CR24/25/26 writers in the
-retail binary plus their runtime role. That is only the initial state; those later world-camera writes
-must be separated from 2D/HUD setup before the widescreen CVar can change anything.
+**Measured projection contract.** `tools/verify_projection.py --check` scans all 294,400 loaded retail
+words and finds exactly six writes to GTE CR24/25/26, all inside `InitGeom`, `SetGeomOffset`, and
+`SetGeomScreen`; those routines are each called exactly once from `func_8001213C`. The final state is
+OFX=160, OFY=120, H=512. There is no later scene, camera, HUD, or inline raw writer in the resident
+executable, so X4 has one global projection setup rather than several pass-specific ones.
 
-**Open, and deliberately not guessed:** whether X4 uses a single GTE projection setup for the whole
-frame or several (HUD, background layers, sprites) that would need different treatment; and whether
-widening reveals seams the artists relied on the 4:3 crop to hide. Both are answerable only once RE-08
-lands, and both are the difference between "widescreen" and "widescreen that looks right".
+**Open, and deliberately not guessed:** the correct host/guest contract for widening that one setup.
+X4's required faithful picture path is `gte`, because it has no native producers, while psxport
+currently permits wide presentation only on `native`. Retail boot scheduling must work before real
+wide pixels and crop-edge asset seams can be verified. Do not resolve either gap with a present
+stretch, a forced-native path, or a local renderer exception.
 
 **Suppression.** `x4::enh(x4::cv_widescreen)`; `PSXPORT_X4_WIDESCREEN`.
 

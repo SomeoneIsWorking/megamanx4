@@ -12,14 +12,22 @@ directive that **`./run.sh` is the user's and agents must never invoke it**. The
 `external/psxport/docs/workspace/WORKSPACE.md`; the multi-agent protocol is `…/PROTOCOL.md`; the
 methodology is `…/docs/porting-a-new-psx-game.md`.
 
-## THE STATE OF THIS PORT: resident substrate boots to the first hardware wait
+## THE STATE OF THIS PORT: resident substrate boots to the retail task handoff
 
 Created 2026-08-12. RE-01 and RE-06 are verified; RE-02 is a measured static/runtime bootstrap with an
 honest remaining gap for future indirect-only targets. The retail executable emits 6,192 binary roots
-to 7,533 functions, links `megamanx4_port`, and boots through InitHeap into guest `gameMain`. The first
-current stall is the stock CD-init IRQ2 retry path: the controller raises an unmasked IRQ2, but the
-registered BIOS interrupt element does not claim it. RE-11's exact VBlank wait route is installed;
-boot calls only `VSync(-1)` and does not exercise that blocking helper yet.
+to 7,533 functions, links `megamanx4_port`, and boots through InitHeap into guest `gameMain`. CD IRQ2
+delivery now reaches the measured callback. The current stall is the retail task handoff: task entry
+`0x8001D064` is created but never scheduled because psxport's BIOS `ChangeThread` is a no-op (issue
+#11). The rejected local synchronous-task bypass did not cross that boundary and has been removed;
+the proper fix is shared runtime scheduling. X4 now defaults to the guest `gte` picture path and refuses `native`, because this
+enhancement-class port deliberately has no PC-native producers; selecting them produced guaranteed
+black independently of the scheduler.
+**The framework seam is inherited now:** process-lifetime `x4::X4Runtime` owns title render-path
+selection, measured boot dispatch, and override registration. It derives
+`LegacyGameRuntimeAdapter` only while generic framework algorithms still consume measured
+`GameConfig` facts; `game/core/legacy_game_interface.h` names that debt, and no new behavior or
+per-field virtual getter belongs there.
 **RE-01, the crt0 boot group, is verified and wired:** `tools/verify_crt0.py --check` derives the
 group from `SLUS_005.61`, compares 21 shipping/range facts, and confirms the current framework implements
 all 15 required mechanisms. Its 26-case selftest proves both answers; claim C006 and issue #5 record
@@ -28,6 +36,10 @@ the now-fixed framework defect that originally blocked this step.
 and both capacities are `0x22`; `tools/verify_pad.py --check` scans all 294,400 loaded words and diffs
 the unique call's four arguments against the `GameConfig` that ships. Every other guest-address group
 remains zero with its open step named in `docs/re-frontier.md`.
+**RE-08 is static-complete but runtime-partial:** `tools/verify_projection.py --check` scans the same
+294,400 words and proves the only OFX/OFY/H writes are the one boot setup chain (160/120/512). A real
+widescreen consumer and pixel gate wait on task scheduling and an explicit framework contract for
+wide presentation on X4's required guest-render path.
 
 The direct development build/gate is:
 
@@ -46,7 +58,8 @@ is checked with this repository's `.clang-format`, the 1,200-line ownership cap 
 `.clang-tidy` runs against `build/compile_commands.json`. It excludes `external/` and `generated/`;
 there is no copied checker and no pre-commit hook. CTest also runs `tools/test_run.py`: the shipping
 launcher orchestration lives in executable `tools/run.py`, while `run.sh` is only its stable exec
-wrapper.
+wrapper. The user launcher opens the window by default; `PSXPORT_NOWINDOW=1` changes only the final
+sink to headless and never enables a diagnostic server implicitly.
 
 **`external/psxport` is NOT a submodule any more (2026-08-16)** — it is a symlink to the workspace's
 shared framework clone when one exists, or a private clone at this repo's `psxport.pin` on a fresh
@@ -89,7 +102,7 @@ The consequence, in framework vocabulary:
   apparatus is **➖ not-applicable** here, not ⬜ todo. psxport's hardest constraint — the picture must
   come from game state, and lerp is native too — exists to serve interpolation of a 30fps guest. X4
   already runs at 60. There is no native producer to drive and no native frame loop to stand up;
-  `GameHooks::frameUpdate` is fail-fast and stays that way. Marking these ⬜ would put four steps on
+  the legacy `GameHooks::frameUpdate` is fail-fast and stays that way. Marking these ⬜ would put four steps on
   the roadmap the USER has ruled out.
 - All three deliverables are the **`pc_enh` behaviour class with `affect: full`** — they deliberately
   change canon guest state. So the RE target of this port is the **PLAYER-OBJECT SYSTEM**, not the
@@ -180,11 +193,17 @@ wait-state timers — is **unknown**. Do not let a plausible-sounding sentence e
 
 ## The rules that bite hardest here
 
-**Never guess a guest address.** An un-RE'd `GameConfig` field stays `0` with a TODO naming the
-frontier step. Zero is honest and psxport fails fast on it; a plausible wrong value breaks boot in a
+**Never guess a guest address.** While the compatibility adapter exists, an un-RE'd `GameConfig`
+field stays `0` with a TODO naming the frontier step. Zero is honest and psxport fails fast on it; a plausible wrong value breaks boot in a
 way that reads as a framework bug. Never copy another game's recompiler seeds — a foreign seed landing
 inside your text SPLITS a real function at an arbitrary offset, the emit SUCCEEDS, and the recomp is
 silently corrupt.
+
+**`X4Runtime` is the title authority.** `main.cpp` constructs and installs one process-lifetime
+instance; runtime behavior moves there through virtual overrides, not new `GameHooks` callbacks.
+`GameConfig`/`GameHooks` remain private measurement compatibility tables referenced only by
+`x4::legacy::{measuredConfig,compatibilityHooks}`. Delete their fields as psxport gains narrow typed fact groups; do not
+replace the bag with one virtual getter per integer.
 
 **Work the step `re_frontier.py next` names, not a downstream one.** The cardinal sin on a port is
 faking a step's output before its RE is done; it makes a broken port look finished.

@@ -114,6 +114,38 @@ class LauncherTest(unittest.TestCase):
         )
         self.assertIn(["ctest", "--test-dir", "build", "--output-on-failure"], commands)
         self.assertTrue(commands[-1][0].endswith("scratch/bin/megamanx4_port"))
+        launch_env = host.commands[-1][1]["env"]
+        self.assertEqual(launch_env["PSXPORT_VK_WINDOW"], "1")
+        self.assertNotIn("PSXPORT_VK_HEADLESS", launch_env)
+        self.assertNotIn("PSXPORT_DEBUG_SERVER", launch_env)
+        self.assertEqual(
+            launch_env["PSXPORT_ASSET_DIR"],
+            str(self.root / "external" / "psxport"),
+        )
+
+    def test_nowindow_maps_to_headless_final_sink(self) -> None:
+        host = FakeHost()
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        code = run.run_launcher(
+            [],
+            environ={
+                "CC": "clang",
+                "CXX": "clang++",
+                "PATH": os.environ.get("PATH", ""),
+                "PSXPORT_NOWINDOW": "1",
+            },
+            host=host,
+            root=self.root,
+            stdout=stdout,
+            stderr=stderr,
+        )
+
+        self.assertEqual(code, 0)
+        self.assertEqual(stderr.getvalue(), "")
+        launch_env = host.commands[-1][1]["env"]
+        self.assertEqual(launch_env["PSXPORT_VK_HEADLESS"], "1")
+        self.assertNotIn("PSXPORT_VK_WINDOW", launch_env)
 
     def test_missing_required_tool_refuses_before_mutation(self) -> None:
         host = FakeHost(missing={"cmake"})

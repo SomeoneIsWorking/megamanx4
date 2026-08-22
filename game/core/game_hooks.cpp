@@ -1,6 +1,4 @@
-// game_hooks.cpp — the Mega Man X4 GameHooks vtable: the behaviour the
-// PSX-generic framework calls into. This port owns NO game behaviour natively,
-// so the table is deliberately tiny.
+// game_hooks.cpp — bounded compatibility callbacks not yet migrated into X4Runtime.
 //
 // There are exactly two kinds of member here, and the distinction is the point
 // (the shape is taken from spider1/game/core/game_hooks.cpp, which learned it
@@ -17,36 +15,14 @@
 //               stub would let a half-wired path look like it worked, which is
 //               the fake-green the porting doc warns about.
 //
-// bootInit is the ONE hook with real work: dispatch the measured guest main().
-// The zero check stays fail-fast so a partially configured clone cannot dispatch
-// address zero; the shipping config is independently gated by verify_crt0.py.
 #include "cfg.h"
 #include "core.h"
 #include "game_iface.h"
-#include "vsync_sync.h"
+#include "legacy_game_interface.h"
 #include <stdlib.h>
-
-// ── boot
-// ────────────────────────────────────────────────────────────────────────────────────────
-static void x4_bootInit(Core *c) {
-  if (!c->cfg->gameMain) {
-    cfg_loge("boot",
-             "GameConfig::gameMain is 0 — the measured RE-01 boot group is not wired into this "
-             "configuration. Refusing to dispatch address 0.");
-    abort();
-  }
-  cfg_logi("boot", "dispatching guest main() 0x%08X on the recompiled substrate", c->cfg->gameMain);
-  rec_dispatch(c, c->cfg->gameMain);
-}
 
 // ── neutral
 // ─────────────────────────────────────────────────────────────────────────────────────
-static void x4_registerOverrides(Game *game) {
-  // RE-11 owns only libetc's measured wait helper. The retail VSync body and IRQ-0 handler remain
-  // recompiled guest code; vsync_sync restores the missing asynchronous producer between them.
-  x4::vsync::install(game);
-}
-
 static void x4_renderFadeState(Core *, FadeState *out) {
   out->mode = 0; // 0 == no fade; the present path leaves pixels untouched
   out->r = out->g = out->b = 0;
@@ -116,10 +92,8 @@ static void x4_devWarp(Core *, int, int) {
 static const GameHooks g_x4_hooks = {
     .frameUpdate = x4_frameUpdate,
     .drawOTag = x4_drawOTag,
-    .bootInit = x4_bootInit,
     .schedFreshEntry = x4_schedFreshEntry,
     .hasNativeHandlerForEntry = x4_hasNativeHandlerForEntry,
-    .registerOverrides = x4_registerOverrides,
     .renderFadeState = x4_renderFadeState,
     .renderBbFrameReset = x4_renderBbFrameReset,
     .devWarp = x4_devWarp,
@@ -129,6 +103,4 @@ static const GameHooks g_x4_hooks = {
     .schedStageBody = x4_schedStageBody,
 };
 
-const GameHooks *x4_game_hooks() {
-  return &g_x4_hooks;
-}
+const GameHooks &x4::legacy::compatibilityHooks = g_x4_hooks;

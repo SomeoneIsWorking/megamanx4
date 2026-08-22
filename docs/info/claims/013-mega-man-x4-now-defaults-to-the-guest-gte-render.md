@@ -1,0 +1,21 @@
+---
+id: C013
+kind: claim
+status: holds
+created: 2026-08-22
+tags:
+depends: game/core/x4_runtime.cpp#configureRenderPath
+reconfirmed: 2026-08-22
+---
+
+## Claim
+
+Mega Man X4 now defaults to the guest GTE render path and refuses the producer-only native path.
+
+## Evidence
+
+game/core/x4_runtime.cpp sets only PSXPORT_RENDER_PATH Default to gte before framework resolution; mmx4_runtime_test passes and proves the same gte/psx/native policy now belongs to the derived runtime. The earlier bounded rebuilt run announced render path = gte, while an explicit native selection exited 2 with the missing-producer reason.
+
+## What would falsify it
+
+X4Runtime::configureRenderPath, game/core/main.cpp, or framework render-path semantics change; or X4 gains complete native producers.

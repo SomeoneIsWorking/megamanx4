@@ -265,7 +265,11 @@ def run_launcher(
         return 1
 
     launch_env = dict(environment)
-    launch_env["PSXPORT_ASSET_DIR"] = str(psxport_path)
+    if launch_env.get("PSXPORT_NOWINDOW"):
+        launch_env["PSXPORT_VK_HEADLESS"] = "1"
+    else:
+        launch_env["PSXPORT_VK_WINDOW"] = "1"
+    launch_env.setdefault("PSXPORT_ASSET_DIR", str(psxport_path))
     say("launching Mega Man X4…", stdout)
     try:
         result = machine.run(

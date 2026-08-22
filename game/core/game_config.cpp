@@ -1,5 +1,8 @@
-// game_config.cpp — the Mega Man X4 (SLUS_005.61, USA) GameConfig: the guest-address literals the
-// PSX-generic framework reads through `c->cfg->field`.
+// game_config.cpp — measured Mega Man X4 (SLUS_005.61, USA) compatibility facts.
+//
+// X4Runtime is the title's ownership seam. This legacy GameConfig remains only because generic
+// psxport algorithms still read `c->cfg->field`; each typed framework extraction must delete its
+// corresponding fields here rather than growing this bag.
 //
 // READ THIS BEFORE FILLING ANYTHING IN.
 //
@@ -18,6 +21,7 @@
 // spider1/game/core/game_config.cpp does — that citation is what makes the value reviewable a year from
 // now. (Reading mmx4 also puts you under the AGPL firewall: what you learn stays in THIS repo. CLAUDE.md.)
 #include "game_iface.h"
+#include "legacy_game_interface.h"
 #include "vsync_sync.h"
 
 // MEASURED, from the PS-EXE header of the extracted SLUS_005.61 (tools/extract_exe.py prints it) and
@@ -282,10 +286,12 @@ static const GameConfig g_x4_cfg = {
     // addresses and every jal target, pointer test and router lookup is then silently wrong.
     .overlaySlots = {{0, nullptr}, {0, nullptr}, {0, nullptr}},
 
-    // --- CD chokepoints ---------------------------------------------------------- RE-04, NOT DONE --
-    // Load-bearing for BOTH enhancement job A (raw I/O latency, which psxport's synchronous FAIL-FAST
-    // CD path largely removes by construction) and for knowing where the game's own wait states are
-    // NOT. Nothing located.
+    // --- CD chokepoints ---------------------------------------------- RE-04, GUEST PATH VERIFIED --
+    // The retail controller/IRQ/callback route is already live and verified through CD callback
+    // 0x800E7944 (claim C010). These fields register synchronous platform-HLE replacements, so they
+    // deliberately remain zero: configuring the retail libcd addresses here would bypass the
+    // measured route rather than optimize it. Loading-removal job A needs its own measured file-I/O
+    // seam; scripted waits are the separate RE-09 job.
     .cdInit = 0,
     .cdCommand = 0,
     .cdSync = 0,
@@ -362,13 +368,4 @@ static const GameConfig g_x4_cfg = {
     .stackBias = {1, kCrt0StackBias},
 };
 
-const GameConfig *x4_game_config() {
-  return &g_x4_cfg;
-}
-
-// Installs BOTH halves of the seam, because a Core's ctor snapshots them together — installing a
-// config without its hooks leaves a Core holding a half-seam.
-void x4_install_game_config() {
-  extern const GameHooks *x4_game_hooks(); // game/core/game_hooks.cpp
-  psxport_install_game(&g_x4_cfg, x4_game_hooks());
-}
+const GameConfig &x4::legacy::measuredConfig = g_x4_cfg;
