@@ -1,15 +1,17 @@
 #pragma once
 
-#include "game_iface.h"
+#include "game_runtime.h"
 #include "render_mode.h"
+#include "widescreen_controller.h"
 
 #include <string_view>
 
 namespace x4 {
 
-// Process-lifetime owner of Mega Man X4's framework-facing behavior. The legacy base is temporary:
-// it keeps measured compatibility facts reachable while shared algorithms migrate off GameConfig.
-class X4Runtime final : public LegacyGameRuntimeAdapter {
+// Process-lifetime owner of Mega Man X4's framework-facing behavior. It derives the narrow runtime
+// seam directly: the legacy GameConfig/GameHooks tables are compatibility views for unmigrated
+// generic algorithms, not a behavior-bearing base class and not a source of temporal policy.
+class X4Runtime final : public GameRuntime {
 public:
   X4Runtime();
 
@@ -47,6 +49,12 @@ public:
   void destroyContext(void *context) override;
   void registerOverrides(Game &game) override;
   void bootInit(Core &core) override;
+  const GuestProgramImage *guestProgramImage() const override;
+  bool guestVramIsPicture(const Game &game) const override;
+  const GuestWidescreenProjection *guestWidescreenProjection() const override;
+
+private:
+  WidescreenPolicy widescreenPolicy_;
 };
 
 } // namespace x4

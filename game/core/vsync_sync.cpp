@@ -20,6 +20,7 @@
 #include "core.h"
 #include "game.h"
 #include "platform_hle.h"
+#include "snapshot.h"
 #include <cstdlib>
 #include <lucent/log.h>
 
@@ -29,13 +30,36 @@ namespace {
 constexpr uint32_t kVblankCounter = 0x8011DC50u;
 constexpr uint32_t kVblankHandler = 0x800E56FCu;
 
+// Retail SetInterrupt table (FUN_800E53F0 measured: it stores its callback at 0x8011CB98 +
+// 4*class and toggles the class's I_MASK enable bit). IRQ class 0 is VBlank. The boot-time
+// registrant is the IRQ-0 handler 0x800E56FC (whose own body walks the eight-slot callback chain
+// at 0x8011DC30), but it is NOT a constant: libsnd's SsStart reads the current class-0 handler
+// (FUN_800E4FC4(0,0) returns it) and REPLACES the slot with its own 0x800DD7FC, which calls the
+// saved previous handler first and THEN runs the SS sequencer tick (SsSetTickMode downgraded to
+// SS_TICKVSYNC = 5 at runtime; tick-rate global 0x80173C88 = 0x3C). Delivering the slot's CURRENT
+// occupant is therefore what makes the whole chain advance — counter, registered VBlank callbacks
+// and music sequencer together — while hardcoding the boot handler silently drops everything that
+// chained after it (measured: 26.4M rendered stereo frames at peak 0 because the tick never ran).
+constexpr uint32_t kSetInterruptTable = 0x8011CB98u;
+constexpr uint32_t kIrqClassVblank = 0u;
+
 void deliver_field(Core *c) {
   const uint32_t before = c->mem_r32(kVblankCounter);
 
-  // IRQ delivery preserves the interrupted CPU context. Run the retail handler itself, rather than
-  // reimplementing its callback walk, then restore the wait helper's live register file.
+  // IRQ delivery preserves the interrupted CPU context. Deliver the class-0 slot's CURRENT
+  // occupant — see the table comment for why it must be read and not hardcoded — then restore the
+  // wait helper's live register file.
+  const uint32_t vblankHandler = c->mem_r32(kSetInterruptTable + 4 * kIrqClassVblank);
+  if (vblankHandler == 0) {
+    lucent::error("x4-vsync",
+                  "no class-0 handler registered at [0x{:08X}]; refusing a field with no "
+                  "interrupt to deliver it (kVblankHandler 0x{:08X} was the boot registrant)",
+                  kSetInterruptTable,
+                  kVblankHandler);
+    std::abort();
+  }
   const R3000 saved = *static_cast<R3000 *>(c);
-  rec_dispatch(c, kVblankHandler);
+  rec_dispatch(c, vblankHandler);
   *static_cast<R3000 *>(c) = saved;
 
   const uint32_t after = c->mem_r32(kVblankCounter);
@@ -43,19 +67,32 @@ void deliver_field(Core *c) {
     lucent::error("x4-vsync",
                   "IRQ-0 handler 0x{:08X} failed to advance [0x{:08X}] ({} -> {}); refusing a "
                   "wait that can never complete",
-                  kVblankHandler,
+                  vblankHandler,
                   kVblankCounter,
                   before,
                   after);
     std::abort();
   }
 
-  // The guest owns drawing, so this wait is its frame boundary. A raw gpu_present() would show the
-  // picture but would not rotate Fps60's captured queues: successive DrawOTag submissions would then
-  // accumulate across fields until the 65,536-item fail-fast. frame_commit is the framework's single
-  // authoritative present + capture-rotation + pacing fence. This game's measured loop advances one
-  // display field per blocking VSync, so pass that cadence explicitly.
-  c->game->fps60.frame_commit(c, 1);
+  // One delivered field = one NTSC VBlank at the retail cadence RE-11 measured, and on hardware a
+  // VBlank drives the per-field peripheral work alongside the IRQ-0 callbacks: libpad's SIO read
+  // fills the InitPAD packet buffers (RE-06 measured them: 0x80166D68 / 0x8012F46C, capacity 0x22),
+  // and the SPU mixes exactly one field of samples in real time. The guest owns its loop here —
+  // there is no PC-driven frame body to host these services the way Tomba!2's frame hook does — so
+  // they run at this seam, after the retail handler and before the commit below. SBS feeds both
+  // cores' masks itself and shares the one output device, so its audio advances logic-only.
+  c->game->pad.serviceFrame();
+  if (c->game->diff_mode) {
+    c->game->spu_audio.frameLogic();
+  } else {
+    c->game->spu_audio.frame();
+  }
+
+  // The guest owns drawing, so this wait is its frame boundary. The neutral presenter owns capture,
+  // present, pacing and ledger rotation without constructing interpolation history. This game's
+  // measured loop advances one display field per blocking VSync, so pass that cadence explicitly.
+  snapshot_tick(c);
+  c->game->presentation.commit(c, 1);
   lucent::debug("x4-vsync", "field {} -> {}, target={}", before, after, c->r[4]);
 }
 

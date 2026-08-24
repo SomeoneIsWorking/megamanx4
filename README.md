@@ -32,24 +32,28 @@ CD loop. What exists:
 
 ```sh
 git clone <this repo> && cd megamanx4
-python3 tools/psxport_sync.py --auto                # shared workspace checkout or private pin clone
 git submodule update --init external/mmx4           # optional matching-decomp reference
 cp .env.example .env && $EDITOR .env                # point it at your own disc image (.env is gitignored)
-./run.sh                                             # provision, emit, Clang-build, verify, launch
-python3 tools/verify_recomp_bootstrap.py --selftest # static positive + bad-seed refusal
-python3 tools/re_frontier.py next                   # what to work on
+./run.sh                                             # provision, emit, build, launch
+./run.sh --prepare-only                              # same cold path, but stop before launch
+uv run --frozen python tools/re_frontier.py next    # what to work on
 ```
 
 `tools/psxport_sync.py` resolves the framework and initializes its required direct vendors without
 recursing into Beetle's URL-less `gnulib` path. Do not recursively initialize `external/mmx4`; its
 nested build-tool submodules are not needed by this port.
 
-`run.sh` is the play launcher. Non-trivial policy lives in `tools/run.py` and
-`tools/ensure_recomp.py`; the shell file is only the stable exec wrapper.
+`run.sh` is the play launcher. It enters the repository's frozen `uv.lock` environment through
+`bootstrap.py`; non-trivial policy lives in `tools/run.py` and `tools/ensure_recomp.py`. This player
+entry point only provisions, builds, and launches the current game target. Maintainer verification
+is a separate Clang workflow.
 
 ## Requirements
 
-cmake ≥ 3.21, pkg-config, SDL3, zlib, zstd, python3, Clang/clang-format/clang-tidy.
+`uv`, cmake ≥ 3.21, pkg-config, SDL3, zlib, zstd, and a C/C++ toolchain CMake can use. Maintainer
+verification separately uses Clang, clang-format, and clang-tidy. Missing packaged tools and SDL3
+are refused with the exact supported platform install command; the launcher does not run privileged
+package managers itself.
 
 ## Legal
 

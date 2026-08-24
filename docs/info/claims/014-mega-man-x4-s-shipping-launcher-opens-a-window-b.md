@@ -4,7 +4,9 @@ kind: claim
 status: holds
 created: 2026-08-22
 tags:
-depends: tools/run.py#run_launcher
+depends: tools/run.py#run_launcher, tools/test_run.py
+reconfirmed: 2026-08-24 23:07:44
+verified_at: 2026-08-24 23:07:44
 ---
 
 ## Claim
@@ -18,3 +20,7 @@ tools/test_run.py executes the shipping run_launcher through an injected host: s
 ## What would falsify it
 
 tools/run.py launch environment changes, tools/test_run.py stops exercising the shipping run_launcher implementation, or a real user launch no longer opens the window by default
+
+## Re-confirmed 2026-08-24 23:07:44
+
+tools/test_run.py executes the shipping run_launcher through an injected host: 13 tests assert default PSXPORT_VK_WINDOW=1, explicit NOWINDOW -> PSXPORT_VK_HEADLESS=1, the frozen interpreter passed through provisioning and CMake, isolated scratch/build/player configuration with BUILD_TESTING=OFF, a megamanx4_port-only build, no CTest command, and actionable dependency/provision/build refusals. The direct frozen bootstrap prepare-only path built the player against clean psxport 9c2e3f1c without launching it.

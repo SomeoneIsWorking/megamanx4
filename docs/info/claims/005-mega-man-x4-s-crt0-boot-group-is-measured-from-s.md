@@ -5,8 +5,8 @@ status: holds
 created: 2026-08-12
 tags: boot,crt0,re-01
 depends: game/core/game_config.cpp, tools/verify_crt0.py
-reconfirmed: 2026-08-22 18:10:37
-verified_at: 2026-08-22 18:10:37
+reconfirmed: 2026-08-22 18:55:26
+verified_at: 2026-08-22 18:55:26
 ---
 
 ## Claim
@@ -68,3 +68,7 @@ all 26 selftest cases pass. Issue #6 records the false-negative root cause and n
 ## Re-confirmed 2026-08-22 18:10:37
 
 2026-08-22 clean psxport ad5cf802: verify_crt0.py check/selftest passes 26/26, locating 15/15 typed GuestProgramImage mechanisms with zero contradictions.
+
+## Re-confirmed 2026-08-22 18:55:26
+
+2026-08-22 candidate framework rerun: verify_crt0 check reports 21 shipping comparisons, 15/15 mechanisms, 11/11 compatibility; selftest passes 26/26, and the real-disc candidate boot logs the exact InitHeap inputs before reaching the front end.

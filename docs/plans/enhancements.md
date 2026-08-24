@@ -53,21 +53,19 @@ words and finds exactly six writes to GTE CR24/25/26, all inside `InitGeom`, `Se
 OFX=160, OFY=120, H=512. There is no later scene, camera, HUD, or inline raw writer in the resident
 executable, so X4 has one global projection setup rather than several pass-specific ones.
 
-**Open, and deliberately not guessed:** the correct host/guest contract for widening that one setup.
-X4's required faithful picture path is `gte`, because it has no native producers, while psxport
-currently permits wide presentation only on `native`. Retail boot scheduling must work before real
-wide pixels and crop-edge asset seams can be verified. Do not resolve either gap with a present
-stretch, a forced-native path, or a local renderer exception.
+**Implemented contract, pending integrated pixels:** X4's required faithful picture path is `gte`.
+The typed framework candidate resolves the explicit 16:9 request from the retail 320x240 geometry to
+width 428, horizontal margin 54 and OFX 214; 4:3 is exact 320/160 identity. The title's per-Core
+`WidescreenController` latches that plan at the measured SetGeomOffset, changes only OFX before the
+untouched retail body, and changes only RECT.w after untouched SetDefDrawEnv. OFY=120 and H=512 remain
+retail-owned. The host consumes the same latched plan for clipping/margin coverage/presentation; Psx,
+ORACLE and SBS resolve 4:3. Do not replace any part with a stretch, forced-native path, or local
+renderer exception.
 
-**Required boundary, not yet the operational reality:** temporal camera/object capture, interpolated
-replay, native depth, and PC-native producers are not requirements of X4 widescreen. None may be added
-to RE-08 merely because the shared framework offers them; X4's widescreen implementation must stand on
-projection/culling/layout evidence of its own. Today the shipping VBlank route nevertheless calls
-`Fps60::frame_commit`, because psxport put its non-temporal current-frame capture, real present,
-presentation ledger, capture reset/rotation, and pacing fence inside the interpolation class. With
-`active()==false`, no rate-driven extra frame or lerp runs, but operational independence is still
-false (claim C018, issue #12). The proper fix is a neutral framework frame service with Fps60 as an
-optional temporal decorator—not a game-local copy or a raw-present workaround.
+Temporal camera/object capture, interpolated replay, native depth, and PC-native producers are not
+requirements of X4 widescreen. X4 creates no temporal decorator and calls the recorded neutral
+presenter; the title dependency gate rejects operational Fps60 regressions. Issue #12 stays
+open only because framework landing/pin/no-temporal-link/real-disc verification remains.
 
 **Suppression.** `x4::enh(x4::cv_widescreen)`; `PSXPORT_X4_WIDESCREEN`.
 
@@ -77,11 +75,15 @@ optional temporal decorator—not a game-local copy or a raw-present workaround.
 
 Conflating these is the failure mode. Do not quote one "load time" number for both.
 
-### Job A — raw I/O latency: ALREADY LARGELY GONE BY CONSTRUCTION
+### Job A — raw I/O latency and the stock-path timing diagnosis
 
-psxport converts CD/file I/O to PC-native **synchronous** access under its FAIL-FAST rule. There is no
-seek, no 2x-speed sector pacing, no async completion to wait on. **There is nothing to build here; there
-is something to measure.** MEASURED support for the *shape* of that measurement: the boot exe holds a
+The retail front-end uses asynchronous ReadN/callback state, not a synchronous file shortcut. The
+recorded framework pin advances CDC deadlines only through sparse executed-instruction ticks, so the
+loader's yielded VSync fields starve time and cause its real 601-poll timeout after LBA224. The shared
+field-aware emulated-time candidate fixes that clock owner and reaches the title screen on the stock
+path. The optional fast-loading enhancement now deliberately takes a different route: it owns the two
+measured title issuers and reads their table-bounded sectors synchronously, bypassing CDC deadlines and
+deliberate I/O latency while retaining the generated title callbacks. The boot exe holds a
 161-entry literal path table (138 ARC + 11 STR + 11 XA + the build's own EXE) at file offset `0xDED4E`,
 and its 138 ARC names match the disc's 138 ARC files exactly in both directions — so the complete asset
 manifest is already in the binary, which is a ready-made index if a prefetch design is ever wanted.
@@ -91,15 +93,19 @@ Caveat, stated because it is arithmetic and not a measurement: `PL00_U.ARC` is 7
 pieces rather than loaded whole. **HYPOTHESIS.** `RE-04` confirms or kills it, and the answer changes what
 "the load is fast" even means.
 
-### Job B — the game's OWN scripted wait states, fade ramps and frame-count timers
+### Job B — remove only waits owned by the measured loading operations
 
-No amount of I/O speed touches these: a fade that takes 30 frames takes 30 frames. Collapsing them is a
-guest-state change — `pc_enh`, `affect: full` — and it needs `RE-09`. Nothing is located.
+RE-09 locates direct/archive issuers 0x80013890/0x80013AD8, their callbacks, wait predicates
+0x80014C70/0x80014A90, loading-presentation wait 0x80013530, and archive consumer 0x80014780. The
+synchronous issuer owner pumps that consumer after every ready callback—the producing handlers reject
+seven outstanding records and retail drains once per main loop—then returns with the load state already
+terminal. The wait predicates execute zero yield/draw iterations and 0x80013530 is omitted. No display
+field is advanced or hidden and there is no presenter dependency.
 
-**Open:** which waits are safe to collapse at all. A wait that exists to mask a load is free to shorten
-once the load is instant; a wait the game's own state machine counts on (an animation whose end triggers
-a transition) is not, and telling them apart is the actual work. This plan does not pretend to know
-which is which.
+This is a `pc_enh`, `affect: full` change, not a byte-exact acceleration. A real-disc run still must
+verify complete destination bytes and the absence of presented loading frames. Other scripted fades
+and frame-count timers remain open: a transition whose end triggers game state is not loading latency,
+and must not be collapsed merely because it looks like a wait.
 
 **Suppression.** `x4::enh(x4::cv_fastwait)`; `PSXPORT_X4_FASTWAIT`.
 
@@ -142,18 +148,32 @@ loads exactly one character's set per session, which the `_X`/`_Z` STAGE variant
 
 ### THE DESIGN STOPS HERE, AND SAYS SO
 
-Everything past this point depends on the player-object layout, which is **unknown**. Not "to be
-confirmed" — unknown. This document does not name a struct, a field offset, a spawn function, an object
-table stride, or a camera-target pointer, because it does not have one and inventing one would make a
-broken plan look finished. The questions `RE-07` must answer, in order, are:
+Everything past this point depends on the player-object layout, which **was unknown when this
+plan was written**. It stopped on purpose rather than inventing an offset. RE-07 has now
+measured it — `docs/re-player-object.md` (2026-08-24) carries the per-item evidence; its
+answers to this plan's questions:
 
-1. Is the player a singleton or an entry in a general object table? If a table, is there a free slot?
-2. Who owns the camera, and does it take a target pointer or hardcode the player?
-3. Where does pad slot 0's state enter the player's update, and is that route parameterised?
-4. What is the spawn path for a player, and can it run mid-stage rather than only at stage load?
-5. Which per-character state is in the struct vs in globals? Globals are where a second player breaks.
+1. Singleton or table? BOTH: the player is a dedicated singleton (`g_Player = 0x801418C8`,
+   0xE4 bytes) OUTSIDE the general main-object pool (48×0x9C @ `0x8013BED0`), with a twin
+   PlayerObj (`g_Entity = 0x80175D58`) used for the enemy/boss side.
+2. Camera owner? Three layer structs @ `0x801419B0` (stride 0x54); layer scroll x/y at
+   +0xA/+0xE; a mode-dispatched follow (table `0x800F3134`, driver `func_80027850`) reads the
+   player's position halves directly — hardcoded target, not a target pointer. A second camera
+   would be a second layer-array consumer, not a free parameter.
+3. Input route? Retail decodes pad 1 AND pad 2 every frame in `func_80012328`
+   (P2 held/prev/edge at `0x80166D50/D52/D54`) but NOTHING consumes the P2 state. The route
+   into gameplay reads pad-1 products only; whether it can be parameterised per player object
+   is exactly the unmeasured part.
+4. Spawn path? `func_80035240` builds the player from the engine character byte
+   (`0x80172203`) + stage scratch at stage load. That it can run MID-STAGE (a drop-in join)
+   is NOT measured — callers attributed so far are stage-load-side only.
+5. Per-character state split? Partially measured: character selects the anim-table pointer at
+   struct+0x30 from one of two tables (X `0x80119DF0` / Zero `0x8011AFF0`); which OTHER state
+   lives in globals vs struct is still open, and remains where a second player breaks first.
 
-Only after those does it become meaningful to design a drop-in flow.
+So the layout half of the design resumes from measurement, while the co-op-specific unknowns —
+mid-stage spawn, second-camera ownership, P2 routing, and what evidence proves co-op correct
+(still ❓ open) — are unchanged by RE-07 and stay gating below.
 
 ### The verification consequence, stated explicitly rather than glossed
 

@@ -21,15 +21,25 @@ delivery reaches the measured callback, and the retail scheduler now transfers t
 TCB handles into task entry `0x8001D064`. `X4Runtime` owns a per-Core BIOS-thread service beneath the
 untouched retail scheduler: OpenTh captures entry/SP/GP, ChangeTh preserves both C stacks across
 cooperative yields, and CloseTh releases the TCB. The rejected synchronous-task bypass remains removed.
-The next reach boundary is inside the front-end task before `0x800128B8`; no archive/read command has
-yet been observed. X4 defaults to the guest `gte` picture path and refuses `native`, because this
+The recorded 9c2e3f1c framework includes 7bd24f2b's field-aware CD time and advances through `0x800128B8`, Capcom-logo
+decode, task `0x8001DAF8`, and a coherent title screen. X4
+defaults to the guest `gte` picture path and refuses `native`, because this
 enhancement-class port deliberately has no PC-native producers; selecting them produced guaranteed
 black independently of the scheduler.
-**The framework seam is inherited now:** process-lifetime `x4::X4Runtime` owns title render-path
-selection, measured boot dispatch, and override registration. It derives
-`LegacyGameRuntimeAdapter` only while generic framework algorithms still consume measured
-`GameConfig` facts; `game/core/legacy_game_interface.h` names that debt, and no new behavior or
-per-field virtual getter belongs there.
+**The field seam is the port's heartbeat.** The guest owns its loop, so EVERY per-field host service
+lives in `x4::vsync::deliver_field` (game/core/vsync_sync.cpp): the retail IRQ-0 delivery (the
+SetInterrupt class-0 slot's CURRENT occupant — after SsStart that chains the VBlank walk AND the
+libsnd sequencer tick, which is why audio works), pad service, SPU advance, snapshot tick, and the
+neutral presentation commit. A per-field service that "has no call site" on this port is missing
+because it belongs THERE — that was the whole root cause of both the silence and the dead input.
+
+**The framework seam is inherited directly now:** process-lifetime `x4::X4Runtime` derives
+`GameRuntime` and owns title render-path selection, a typed `GuestProgramImage`, measured boot
+dispatch, and override registration. It binds the legacy `GameConfig`/`GameHooks` only as
+compatibility views while generic algorithms migrate; they are not a behavior-bearing base class.
+This direct boundary removed the complete `Fps60` implementation from the shipping link. Framework
+the recorded pin also includes 7bd24f2b's split of temporal-only game/GPU helpers from neutral translation units, and the
+shipping binary dependency gate rejects any regression.
 **RE-01, the crt0 boot group, is verified and wired:** `tools/verify_crt0.py --check` derives the
 group from `SLUS_005.61`, compares 21 shipping/range facts, and confirms the current framework implements
 all 15 required mechanisms. Its 26-case selftest proves both answers; claim C006 and issue #5 record
@@ -38,19 +48,23 @@ the now-fixed framework defect that originally blocked this step.
 and both capacities are `0x22`; `tools/verify_pad.py --check` scans all 294,400 loaded words and diffs
 the unique call's four arguments against the `GameConfig` that ships. Every other guest-address group
 remains zero with its open step named in `docs/re-frontier.md`.
-**RE-08 is static-complete but runtime-partial:** `tools/verify_projection.py --check` scans the same
-294,400 words and proves the only OFX/OFY/H writes are the one boot setup chain (160/120/512). A real
-widescreen consumer and pixel gate wait on task scheduling and an explicit framework contract for
-wide presentation on X4's required guest-render path.
+**RE-08 is implemented but runtime-partial:** `tools/verify_projection.py --check` proves the only
+OFX/OFY/H writes are the one boot setup chain (160/120/512). `WidescreenController`, owned by
+`X4Context`, wraps those measured retail publications through the generated super-call seam: it sets
+only OFX before SetGeomOffset and only RECT.w after SetDefDrawEnv. The recorded framework gives 16:9
+OFX/width 214/428 and exact 4:3 identity. Unit/Clang gates passed before the next framework-policy
+migration; old integrated pixels exposed issue #19 instead of completing the step: the all-2D title
+remains authored as a 320-wide composition and becomes left-anchored when the guest clip widens.
+Fresh matched title/gameplay captures remain mandatory.
 
 The direct development build/gate is:
 
 ```sh
-python3 tools/psxport_sync.py --auto                                    # resolve external/psxport (symlink to the shared clone, or a private clone at psxport.pin)
+uv run --frozen python tools/psxport_sync.py --auto                    # resolve external/psxport (symlink to the shared clone, or a private clone at psxport.pin)
 git submodule update --init external/mmx4                              # once (the AGPL reference decomp, not needed to build)
-python3 tools/extract_exe.py
-python3 tools/ensure_recomp.py
-cmake -S . -B build -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
+uv run --frozen python tools/extract_exe.py
+uv run --frozen python tools/ensure_recomp.py
+cmake -S . -B build -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DPython3_EXECUTABLE="$(uv run --frozen which python)"
 cmake --build build --target megamanx4_port -j$(nproc)
 ctest --test-dir build --output-on-failure
 ```
@@ -59,9 +73,11 @@ The normal CTest gate calls psxport's shared C++ policy checker: every tracked f
 is checked with this repository's `.clang-format`, the 1,200-line ownership cap is enforced, and
 `.clang-tidy` runs against `build/compile_commands.json`. It excludes `external/` and `generated/`;
 there is no copied checker and no pre-commit hook. CTest also runs `tools/test_run.py`: the shipping
-launcher orchestration lives in executable `tools/run.py`, while `run.sh` is only its stable exec
-wrapper. The user launcher opens the window by default; `PSXPORT_NOWINDOW=1` changes only the final
-sink to headless and never enables a diagnostic server implicitly.
+launcher enters the frozen `uv.lock` environment through `bootstrap.py`, while `run.sh` is only its
+stable exec wrapper. It performs no compiler-identity filtering; explicit `CC`/`CXX` pass through
+and otherwise CMake owns toolchain discovery. The user launcher opens the window by default;
+`PSXPORT_NOWINDOW=1` changes only the final sink to headless and never enables a diagnostic server
+implicitly.
 
 **`external/psxport` is NOT a submodule any more (2026-08-16)** — it is a symlink to the workspace's
 shared framework clone when one exists, or a private clone at this repo's `psxport.pin` on a fresh
@@ -76,6 +92,10 @@ fails.
 `megamanx4_seam` remains the clean-clone compile database for every first-party `game/core/*.cpp` TU.
 `tools/ensure_recomp.py` hashes the retail executable, game seed file, and real recompiler sources,
 then emits `generated/`; CMake configures `megamanx4_port` only when that manifest exists.
+
+The user play launcher has no CTest path or option. `run.sh` provisions, builds only the product in
+isolated `scratch/build/player` with `BUILD_TESTING=OFF`, and launches it; maintainer verification
+remains the explicit Clang/CTest gate above.
 
 ## Start here, every task
 
@@ -107,12 +127,16 @@ The consequence, in framework vocabulary:
   the legacy `GameHooks::frameUpdate` is fail-fast and stays that way. Marking these ⬜ would put four steps on
   the roadmap the USER has ruled out.
 
-  **Current framework debt does not satisfy that boundary yet.** X4 schedules no interpolated pass,
-  but `vsync_sync.cpp` still calls `c->game->fps60.frame_commit(c, 1)` because psxport placed the
-  non-temporal queue capture, real-frame present, ledger reset, capture rotation, and pacing fence
-  inside `Fps60`. Claim C018 is the falsified operational-independence claim; open issue #12 specifies
-  the proper neutral frame-service extraction and future negative-dependency gate. Do not copy that
-  fence into this repo or replace it with raw present plus a separate pacer.
+  **The neutral presenter, exact field-rate SPU cadence, and field-aware CD time are recorded at
+  the recorded 9c2e3f1c pin (introduced at 7bd24f2b).** X4 schedules no
+  interpolated pass, constructs no temporal decorator, and calls that current-frame presenter.
+  `tools/verify_no_temporal_dependency.py` rejects Fps60 products/includes/calls and temporal hooks
+  from shipping title sources and inspects the linked binary. Claim C018 remains the historical
+  falsifier; issues #12 and #18 record the ownership migration and its opposite-answer gate. The
+  current framework policy API also makes
+  X4's derived runtime explicitly answer `guestVramIsPicture=false`; the legacy GameConfig bit is a
+  false compatibility mirror, not the policy owner. Do not copy
+  the fence into this repo or replace it with raw present plus a separate pacer.
 - All three deliverables are the **`pc_enh` behaviour class with `affect: full`** — they deliberately
   change canon guest state. So the RE target of this port is the **PLAYER-OBJECT SYSTEM**, not the
   renderer, and every one of them must be **force-suppressed under `PSXPORT_ORACLE` / `PSXPORT_SBS` /
@@ -130,11 +154,19 @@ Calling `.get()` at a feature call site is the bug that chokepoint exists to pre
 
 ## Loading removals are TWO different jobs. Do not conflate them, and do not quote one number for both
 
-- **Job A — raw I/O latency: already largely gone BY CONSTRUCTION.** psxport converts CD/file I/O to
-  PC-native SYNCHRONOUS under the FAIL-FAST rule. There is nothing to *build* here; there is something
-  to *measure*.
-- **Job B — the game's OWN scripted wait states, fade ramps and frame-count timers.** No amount of I/O
-  speed touches these. This is a guest-state change (`pc_enh`, `affect: full`) and it needs `RE-09`.
+- **Job A — raw I/O latency:** RESOLVED at the recorded pin (issue #13): the shared emulated-time
+  candidate services the retail asynchronous ReadN/callback route onward from LBA 225 and reaches the
+  title. The raw WALL-CLOCK load-time number is still unmeasured — quote nothing until it is.
+- **Job B — the loading coroutine itself:** LANDED 2026-08-24 per the USER directive. The measured
+  direct/archive issuers (0x80013890/0x80013AD8) now own one synchronous operation
+  (`game/core/fast_wait.cpp`, `PSXPORT_X4_FASTWAIT`, default on): each runs its untouched setup once,
+  feeds table-derived raw sectors through the generated ready callback, drains archive postprocess
+  after every callback, requires terminal state 2, and returns. The unchanged wait bodies therefore
+  run zero yield/draw iterations and loading-presentation wait 0x80013530 is omitted. The discarded
+  presentation-withholding experiment and its equal-field RAM dumps are not evidence for this
+  implementation. The game's OTHER scripted waits/fade ramps (non-load fades, 21/34 call sites) are
+  still unclassified. `pc_enh`, `affect: full`, suppressed under ORACLE/SBS —
+  docs/behavior-map.md `fastwait`.
 
 A single "load time" figure that mixes the two is unusable. Estimate them separately.
 

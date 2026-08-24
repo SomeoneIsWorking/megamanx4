@@ -5,8 +5,8 @@ status: holds
 created: 2026-08-22
 tags: RE-04,boot,threads
 depends: game/core/bios_threads.cpp#Service::change, game/core/x4_runtime.cpp#registerOverrides, tools/verify_threads.py#verify
-reconfirmed: 2026-08-22 18:10:37
-verified_at: 2026-08-22 18:10:37
+reconfirmed: 2026-08-22 18:55:27
+verified_at: 2026-08-22 18:55:27
 ---
 
 ## Claim
@@ -28,3 +28,7 @@ A rebuilt unforced run with HLE thunk tracing excluded no longer reaches 0x8001D
 ## Re-confirmed 2026-08-22 18:10:37
 
 2026-08-22 clean psxport ad5cf802: thread verifier passes 6/6, runtime test passes, and re04-bios-thread-runtime-final-ad5cf802.log reaches 0x8001D064 at frame 5 through OpenTh FF000001 with zero ABI violations.
+
+## Re-confirmed 2026-08-22 18:55:27
+
+2026-08-22 candidate framework rerun: verify_threads passes 6/6, mmx4_runtime_test passes inside full Clang CTest 7/7, and the real-disc trace preserves the retail task path through 0x8001D064 then reaches later task creation 0x800128B8 and entry 0x8001DAF8 with zero ABI violations.

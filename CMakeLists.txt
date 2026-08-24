@@ -24,13 +24,6 @@ endif()
 
 project(megamanx4 CXX C)
 
-if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-  message(FATAL_ERROR
-    "Mega Man X4 requires clang++ for every C++ translation unit; configured compiler is "
-    "${CMAKE_CXX_COMPILER_ID} (${CMAKE_CXX_COMPILER}). Reconfigure a clean build tree with "
-    "-DCMAKE_CXX_COMPILER=clang++.")
-endif()
-
 # PSXPORT_DIR — WHERE THE FRAMEWORK SOURCE COMES FROM. Defaults to external/psxport, which is no
 # longer a git submodule (2026-08-16): tools/psxport_sync.py --auto (called by run.sh) makes it a
 # SYMLINK to the workspace's shared framework clone when one exists, or a private clone at this

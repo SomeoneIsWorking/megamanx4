@@ -2,6 +2,7 @@
 
 struct GameConfig;
 struct GameHooks;
+struct GuestProgramImage;
 
 namespace x4::legacy {
 
@@ -10,5 +11,6 @@ namespace x4::legacy {
 // belong in these tables while the framework migrates them into narrow typed interfaces.
 extern const GameConfig &measuredConfig;
 extern const GameHooks &compatibilityHooks;
+extern const GuestProgramImage &measuredProgramImage;
 
 } // namespace x4::legacy

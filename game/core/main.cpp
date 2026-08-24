@@ -13,6 +13,7 @@
 #include "enhancements.h"
 #include "fs_util.h"
 #include "game.h"
+#include "recomp_register.h"
 #include "x4_runtime.h"
 #include <stdio.h>
 
@@ -26,8 +27,6 @@ void load_exe(const char *path, Core *c); // runtime/recomp/boot.cpp (framework)
 void native_boot_run(Core *c);            // runtime/recomp/native_boot.cpp (framework)
 void gte_init(void);
 int selftest_run(const char *path); // runtime/recomp/selftest.cpp (framework harness)
-
-extern void x4_install_recomp(); // game/core/recomp_register.cpp
 
 // The retail US executable, as it is named on the disc. SYSTEM.CNF boots it directly
 // (`BOOT = cdrom:\SLUS_005.61;1` — measured 2026-08-12), so there is no SCEA boot stub LoadExec'ing a
@@ -50,8 +49,8 @@ int main(int argc, char **argv) {
     return 2;
   }
 
-  // Say out loud which enhancement knobs this run will do NOTHING with. All three features are still
-  // `planned` (docs/re-frontier.md RE-07/08/09), so a user who sets PSXPORT_X4_COOP=1 today would
+  // Say out loud which enhancement knobs this run will do NOTHING with. Co-op and fast-wait remain
+  // `planned` (docs/re-frontier.md RE-07/09), so a user who sets PSXPORT_X4_COOP=1 today would
   // otherwise see a completely clean startup and a clean exit audit — registering them as CVars is
   // exactly what removed the framework's "UNKNOWN knob ... it did NOTHING" warning for them.
   x4::audit_declared_enhancements();

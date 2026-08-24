@@ -4,7 +4,7 @@ Durable ledger of SANCTIONED deviations from the byte-exact reference. Primary a
 deviation, grouped by affect. `tools/behavior.py` = view · `... <words>` = search · `... check` = gate (a canon-affecting change must be SBS-suppressed).
 
 **By affect:** 3 full
-**By status:** 3 planned
+**By status:** 2 implemented · 1 planned
 
 ---
 
@@ -24,21 +24,21 @@ deviation, grouped by affect. `tools/behavior.py` = view · `... <words>` = sear
 ## fastwait
 - **class:** pc_enh
 - **affect:** full
-- **status:** planned
+- **status:** implemented
 - **flag:** PSXPORT_X4_FASTWAIT (read via x4::enh(x4::cv_fastwait) — never .get() at a call site)
-- **original:** the game runs its own scripted wait states, fade ramps and frame-count timers to full length
-- **altered:** those guest timers are collapsed, so transitions complete sooner
+- **original:** direct request issuer 0x80013890 and archive request issuer 0x80013AD8 start asynchronous ReadN transfers; ready callbacks 0x80013A20/0x80013E68 consume one sector at a time, and wait bodies 0x80014C70/0x80014A90 yield between polls while the loading-presentation task 0x80013530 draws
+- **altered:** each measured issuer owns the complete load as one native call: its untouched generated setup runs once, title-owned code reads the request table's LBA/byte count, feeds consecutive raw sectors to the untouched generated callback with the retail FIFO cursor at raw+12, drains archive postprocess 0x80014780 after each callback, and requires terminal state 2 before returning. The retail wait predicates are therefore already terminal and execute zero yield/draw iterations; 0x80013530 is omitted.
 - **guard:** force-suppressed under PSXPORT_ORACLE / PSXPORT_SBS / PSXPORT_SBS_MODE in game/core/enhancements.cpp x4::enh() — the single chokepoint every read passes through
-- **owner:** game/core/enhancements.cpp
-- **notes:** This is loading-removal JOB B ONLY. Job A (raw I/O latency) is already largely gone BY CONSTRUCTION — psxport converts CD/file I/O to PC-native SYNCHRONOUS under the FAIL-FAST rule — and needs measuring, not building. Never quote one load-time number for both. Blocked on RE-09 (and RE-04 in practice: you cannot say what is a wait state until you know where the loads are). Which waits are SAFE to collapse is itself open.
+- **owner:** game/core/fast_wait.{h,cpp} (per-Core synchronous load owner + scoped libcd leaves), game/core/recomp_register.cpp (reversible issuer/leaf registration)
+- **notes:** USER directive 2026-08-24: "remove all loading screens, loading coro must be converted to single sync call". Archive handlers 0x800142BC/0x80014514 reject seven outstanding records; retail main calls consumer 0x80014780 once per loop, so the synchronous owner pumps it after every ready callback and requires processed/enqueued counters to match within the measured 16-slot ring. PsyQ LoadImage reaches set_alarm/get_alarm, whose measured VSync(-1) is a pure counter query; the scoped owner super-calls only that retail query and keeps every unmeasured mode fail-closed. Focused Clang build/lint and production-leaf tests pass. An uninstrumented real-disc run completed requests 64, 65, 113, and 51 (49/6/154/3 sectors) and remained live until timeout; exact destination-byte comparison and a presented-frame capture remain open. C025's equal-delivered-field RAM dumps and the commitUnpresented experiment measured a discarded presentation-withholding implementation and are explicitly not evidence for this one. This enhancement deliberately changes guest timing/state and makes no byte-exact claim.
 
 ## widescreen
 - **class:** pc_enh
 - **affect:** full
-- **status:** planned
+- **status:** implemented
 - **flag:** PSXPORT_X4_WIDESCREEN (read via x4::enh(x4::cv_widescreen) — never .get() at a call site)
 - **original:** the guest sets up a 4:3 projection; recomp_path renders exactly what the retail game renders
-- **altered:** the GUEST projection/FOV setup is widened (more world visible, not a stretched present), driven from game state
+- **altered:** the guest GTE projection and draw environment widen to 16:9 so more world is visible without stretching
 - **guard:** force-suppressed under PSXPORT_ORACLE / PSXPORT_SBS / PSXPORT_SBS_MODE in game/core/enhancements.cpp x4::enh() — the single chokepoint every read passes through
-- **owner:** game/core/enhancements.cpp
-- **notes:** affect=full, NOT none: psxport's widescreen is a host-side read-only overlay driven by a NATIVE renderer, but X4 has no native renderer, so widescreen here must change the guest's projection setup. RE-08's complete retail census found exactly six CR24/25/26 writers, all in the one boot setup chain; OFX/OFY/H are 160/120/512 and no later scene/HUD writer exists. The behavior remains planned because retail task scheduling still blocks pixel verification and the framework currently locks wide presentation out on X4's required `gte` picture path. See docs/plans/enhancements.md.
+- **owner:** game/core/widescreen_controller.cpp
+- **notes:** RE-08 retail census proves one global OFX/OFY/H setup at 160/120/512. The typed title consumer now latches 16:9 as OFX/width 214/428, changes only OFX and RECT.w around untouched retail bodies, and preserves exact 4:3/Oracle/SBS controls. Clang/unit/dependency gates pass against unlanded framework candidates; real pixel verification remains open until combined framework landing/pin and deterministic off/on PRESENT captures verify margins, central scale, culling, and 2D layout.

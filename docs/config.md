@@ -28,9 +28,9 @@ started in."*
 |---|---|---|---|---|---|
 | `PSXPORT_X4_DISC` | path (port fact, not a CVar) | — | — | `GameConfig::discEnvVar` | `tools/resolve_disc.py` host-side; the framework's disc resolver guest-side |
 | `PSXPORT_X4_CARD` | path (port fact, not a CVar) | `scratch/saves/megamanx4.mcr` | — | `GameConfig::cardEnvVar` / `cardDefaultPath` | the framework's memory-card backend |
-| `PSXPORT_X4_WIDESCREEN` | Bool | `false` | yes | `x4::cv_widescreen` | **`x4::enh(x4::cv_widescreen)`** |
-| `PSXPORT_X4_COOP` | Bool | `false` | yes | `x4::cv_coop` | **`x4::enh(x4::cv_coop)`** |
-| `PSXPORT_X4_FASTWAIT` | Bool | `false` | yes | `x4::cv_fastwait` | **`x4::enh(x4::cv_fastwait)`** |
+| `PSXPORT_X4_WIDESCREEN` | Bool | `true` | yes | `x4::cv_widescreen` | **`x4::enh(x4::cv_widescreen)`** |
+| `PSXPORT_X4_COOP` | Bool | `false` | yes | `x4::cv_coop` | **`x4::enh(x4::cv_coop)`** — no consumer yet (RE-07) |
+| `PSXPORT_X4_FASTWAIT` | Bool | `true` | yes | `x4::cv_fastwait` | **`x4::enh(x4::cv_fastwait)`** — consumer: game/core/fast_wait.cpp (loading-coroutine conversion, RE-09 job B) |
 
 ## Title render policy: `PSXPORT_FPS60` is unsupported
 
@@ -43,10 +43,10 @@ construction has loaded the persisted settings file and refuses startup when the
 winning CVar layer, and does not alter the retail game's own cadence.
 
 The no-argument policy is therefore unambiguous: synthetic interpolation is off and cannot be armed
-silently. `PSXPORT_X4_WIDESCREEN` remains `false` while RE-08 has no real pixel-producing consumer;
-"widescreen-only" names the scoped rendering target, not a claim that the still-planned feature already
-works. The widescreen knob becomes the product default only when its guest projection/culling/layout
-path and real-pixel gate land together.
+silently. `PSXPORT_X4_WIDESCREEN` is the product default now that the title has a typed guest
+projection consumer; a persisted or launch/runtime `false` still supplies the exact 4:3 control.
+Default-on is not a pixel-verification claim: the framework candidates must still land and the
+deterministic off/on capture must classify culling and 2D layout before RE-08 is complete.
 
 `PSXPORT_X4_DISC` is spelled identically in exactly three places and they must not diverge:
 `.env.example`, `GameConfig::discEnvVar`, and `tools/resolve_disc.py`'s `ENV_KEY`.
@@ -121,9 +121,9 @@ only.
 Declaring these three as CVars rather than reading them with `cfg_on` is precisely what keeps them out of
 that UNKNOWN list and puts them in the REPL `cvars` dump.
 
-**AND THAT IS A COST, NOT ONLY A WIN — so this port pays it back explicitly.** All three features are
-still `planned` (RE-07/08/09) and `grep -rn 'x4::enh' game/` finds no call site outside
-`enhancements.{h,cpp}`. `UNKNOWN … it did NOTHING in this run` is precisely the signal the framework had
+**AND THAT IS A COST, NOT ONLY A WIN — so this port pays it back explicitly.** Co-op and fast-wait are
+still `planned` (RE-07/09) and have no call site outside `enhancements.{h,cpp}`; widescreen is consumed
+by `WidescreenPolicy`. `UNKNOWN … it did NOTHING in this run` is precisely the signal the framework had
 for "you set a knob and nothing consumed it", and registering a name is what silences it: a registered
 CVar with zero consumers resolves silently to `true`, the exit audit says `0 UNKNOWN`, and a user or a
 future session can read a clean startup as "co-op is on". The suppression path is loud; the

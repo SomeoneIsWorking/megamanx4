@@ -29,12 +29,14 @@ include(${PSXPORT_DIR}/cmake/psxport.cmake)
 # clang-tidy rather than leaving one source outside every gate.
 set(SEAM_SRC
   game/core/bios_threads.cpp
+  game/core/fast_wait.cpp
   game/core/game_config.cpp
   game/core/game_hooks.cpp
   game/core/enhancements.cpp
   game/core/main.cpp
   game/core/recomp_register.cpp
   game/core/vsync_sync.cpp
+  game/core/widescreen_controller.cpp
   game/core/x4_context.cpp
   game/core/x4_runtime.cpp
 )
@@ -77,15 +79,28 @@ if(BUILD_TESTING)
     COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/tools/verify_projection.py --check --selftest
   )
   add_test(
+    NAME title_composition_evidence
+    COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/tools/verify_title_composition.py --check --selftest
+  )
+  add_test(
+    NAME no_temporal_source_dependency
+    COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/tools/verify_no_temporal_dependency.py
+            --check --selftest
+  )
+  add_test(
     NAME thread_evidence
     COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/tools/verify_threads.py --check --selftest
   )
   add_executable(mmx4_runtime_test
     ${CMAKE_SOURCE_DIR}/game/core/bios_threads.cpp
+    ${CMAKE_SOURCE_DIR}/game/core/fast_wait.cpp
     ${CMAKE_SOURCE_DIR}/tests/test_x4_runtime.cpp
+    ${CMAKE_SOURCE_DIR}/game/core/enhancements.cpp
     ${CMAKE_SOURCE_DIR}/game/core/game_config.cpp
     ${CMAKE_SOURCE_DIR}/game/core/game_hooks.cpp
+    ${CMAKE_SOURCE_DIR}/game/core/recomp_register.cpp
     ${CMAKE_SOURCE_DIR}/game/core/vsync_sync.cpp
+    ${CMAKE_SOURCE_DIR}/game/core/widescreen_controller.cpp
     ${CMAKE_SOURCE_DIR}/game/core/x4_context.cpp
     ${CMAKE_SOURCE_DIR}/game/core/x4_runtime.cpp
   )
@@ -96,6 +111,16 @@ if(BUILD_TESTING)
     CXX_STANDARD_REQUIRED ON
   )
   add_test(NAME x4_runtime COMMAND mmx4_runtime_test)
+  add_executable(mmx4_player_object_test
+    ${CMAKE_SOURCE_DIR}/tests/test_x4_player_object.cpp
+  )
+  target_include_directories(mmx4_player_object_test PRIVATE game game/core)
+  target_link_libraries(mmx4_player_object_test PRIVATE psxport)
+  set_target_properties(mmx4_player_object_test PROPERTIES
+    CXX_STANDARD 20
+    CXX_STANDARD_REQUIRED ON
+  )
+  add_test(NAME x4_player_object COMMAND mmx4_player_object_test)
 endif()
 
 if(NOT PSXPORT_BUILD_PORT)
@@ -148,3 +173,15 @@ target_compile_options(megamanx4_port PRIVATE -w -O2 -g
   ${SDL3_CFLAGS_OTHER} ${FREETYPE_CFLAGS_OTHER})
 
 target_link_libraries(megamanx4_port PRIVATE psxport)
+
+if(BUILD_TESTING)
+  # The linked-product closure can only be checked when the generated substrate exists and therefore
+  # the shipping target exists. Keep this registration below add_executable(): a clean clone without
+  # generated/ must still configure and run its seam/source gates instead of failing on a generator
+  # expression that names a target the build deliberately did not create.
+  add_test(
+    NAME no_temporal_binary_dependency
+    COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/tools/verify_no_temporal_dependency.py
+            --binary $<TARGET_FILE:megamanx4_port>
+  )
+endif()

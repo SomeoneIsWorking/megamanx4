@@ -221,10 +221,16 @@ def verify(inputs: Inputs, *, check_digest: bool = True) -> list[str]:
     for token in (
         "kVblankCounter = 0x8011DC50u",
         "kVblankHandler = 0x800E56FCu",
+        "kSetInterruptTable = 0x8011CB98u",
+        "const uint32_t vblankHandler = c->mem_r32",
+        "rec_dispatch(c, vblankHandler)",
+        "c->game->pad.serviceFrame()",
+        "c->game->spu_audio.frameLogic()",
+        "c->game->spu_audio.frame()",
         "c->r[5] <<= 15",
         "c->r[3] = UINT32_MAX",
         "c->r[2] = 0",
-        "c->game->fps60.frame_commit(c, 1)",
+        "c->game->presentation.commit(c, 1)",
         "register_(kWait",
     ):
         if token not in inputs.source:
@@ -245,7 +251,7 @@ def verify(inputs: Inputs, *, check_digest: bool = True) -> list[str]:
         )
     if "gpu_present(c)" in inputs.source or "gpu_pace_frame(c)" in inputs.source:
         raise VerificationError(
-            "shipping wait helper bypasses or duplicates the authoritative frame_commit fence"
+            "shipping wait helper bypasses or duplicates the authoritative presentation fence"
         )
     checks.append(
         "shipping handler and exact PlatformHle window match the measured contract"
@@ -306,11 +312,36 @@ def selftest(inputs: Inputs) -> list[str]:
         inputs.exe,
         inputs.header,
         inputs.source.replace(
-            "c->game->fps60.frame_commit(c, 1)", "gpu_present(c)", 1
+            "c->game->presentation.commit(c, 1)", "gpu_present(c)", 1
         ),
         inputs.config,
     )
     results.append(expect_refusal("raw present without frame fence", raw_present))
+    hardcoded_boot_handler = Inputs(
+        inputs.exe,
+        inputs.header,
+        inputs.source.replace(
+            "rec_dispatch(c, vblankHandler)", "rec_dispatch(c, kVblankHandler)", 1
+        ),
+        inputs.config,
+    )
+    results.append(
+        expect_refusal("hardcoded boot handler drops live IRQ chain", hardcoded_boot_handler)
+    )
+    no_pad_service = Inputs(
+        inputs.exe,
+        inputs.header,
+        inputs.source.replace("c->game->pad.serviceFrame()", "", 1),
+        inputs.config,
+    )
+    results.append(expect_refusal("missing pad field service", no_pad_service))
+    no_spu_service = Inputs(
+        inputs.exe,
+        inputs.header,
+        inputs.source.replace("c->game->spu_audio.frame()", "", 1),
+        inputs.config,
+    )
+    results.append(expect_refusal("missing SPU field service", no_spu_service))
     return results
 
 

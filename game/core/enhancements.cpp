@@ -24,7 +24,7 @@ namespace x4 {
 // not a detail — expect to be the one who discovers what this class needs.
 psx::config::BoolVar
     cv_widescreen("PSXPORT_X4_WIDESCREEN",
-                  false,
+                  true,
                   "pc_enh: wider-than-4:3 FOV driven from game state (affect=full; suppressed under ORACLE/SBS)",
                   /*persistable=*/true);
 
@@ -35,20 +35,21 @@ psx::config::BoolVar
             "ORACLE/SBS)",
             /*persistable=*/true);
 
-psx::config::BoolVar
-    cv_fastwait("PSXPORT_X4_FASTWAIT",
-                false,
-                "pc_enh: collapse the game's OWN scripted wait/fade ramps (affect=full; suppressed under "
-                "ORACLE/SBS)",
-                /*persistable=*/true);
+psx::config::BoolVar cv_fastwait("PSXPORT_X4_FASTWAIT",
+                                 true,
+                                 "pc_enh: convert the retail loading coroutine into one synchronous call — the wait "
+                                 "bodies still run byte-exactly, but no loading frame is ever presented (affect=full; "
+                                 "suppressed under ORACLE/SBS)",
+                                 /*persistable=*/true);
 
 // ── NO CONSUMER YET IS A THING THE RUN MUST SAY ─────────────────────────────────────────────────
 // Declaring these as CVars buys the ladder, the settings file and the REPL dump — and it COSTS the one
 // runtime signal the framework had for "you set a knob and nothing happened": an unrecognised
 // PSXPORT_* name gets `[cfg:warn] UNKNOWN knob ... it did NOTHING in this run` plus an UNKNOWN count in
 // the exit audit, while a registered knob with zero call sites resolves silently to `true` and looks
-// like a working feature. All three features are `status: planned` (docs/re-frontier.md RE-07/08/09) and
-// `grep -rn 'x4::enh' game/` finds no call site outside this file, so today ALL THREE are in this list.
+// like a working feature. Co-op remains `status: planned` (docs/re-frontier.md RE-07) and has no call
+// site outside this file, so it remains in this list. Widescreen left the list with its first real
+// consumer; fast-wait left it when the loading-coroutine conversion landed (game/core/fast_wait.cpp).
 //
 // DELETING AN ENTRY IS PART OF THE COMMIT THAT ADDS THE FIRST REAL CALL SITE — that is the whole
 // protocol. An entry left here after the feature lands turns a real enhancement into a nag; an entry
@@ -58,9 +59,7 @@ struct Unimplemented {
   const char *step; // the frontier step that will give it a consumer
 };
 static const Unimplemented kUnimplemented[] = {
-    {&cv_widescreen, "RE-08"},
     {&cv_coop, "RE-07"},
-    {&cv_fastwait, "RE-09"},
 };
 
 static const char *unimplemented_step(const psx::config::BoolVar &v) {

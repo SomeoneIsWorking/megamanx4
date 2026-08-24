@@ -21,7 +21,8 @@
 // spider1/game/core/game_config.cpp does — that citation is what makes the value reviewable a year from
 // now. (Reading mmx4 also puts you under the AGPL firewall: what you learn stays in THIS repo. CLAUDE.md.)
 #include "bios_threads.h"
-#include "game_iface.h"
+#include "guest_program_image.h"
+#include "legacy_game_config.h"
 #include "legacy_game_interface.h"
 #include "vsync_sync.h"
 
@@ -178,6 +179,26 @@ static constexpr uint32_t kPadSlot1Buf = 0x8012F46Cu;
 static constexpr uint32_t kPadCapacity = 0x22u;
 static_assert(kPadSlot0Buf + kPadCapacity <= kPadSlot1Buf || kPadSlot1Buf + kPadCapacity <= kPadSlot0Buf,
               "the two InitPAD buffers must not overlap");
+
+// Direct X4Runtime ownership consumes this narrow immutable image instead of reading boot/routing
+// facts out of GameConfig. The compatibility table below names the same measured constants for
+// framework algorithms that have not migrated yet; tools/verify_crt0.py compares both against the
+// retail executable so neither representation can drift silently.
+static const GuestProgramImage g_x4_program_image = {
+    .bss = {kCrt0BssZeroLo, kCrt0BssZeroHi},
+    .stackTopWordAddress = kCrt0StackTopBase,
+    .stackReserveWordAddress = kCrt0StackTopBas2,
+    .heapBase = kCrt0HeapBase,
+    .heapSizeStoreAddress = 0,
+    .heapBaseStoreAddress = 0,
+    .globalPointer = kCrt0Gp,
+    .libcInitEntry = kCrt0LibcInit,
+    .gameMainEntry = kCrt0GameMain,
+    .crt0Entry = kCrt0Entry,
+    .residentText = {kPsExeTextAddr & 0x1FFFFFFFu, (kPsExeTextAddr + kPsExeTextSize) & 0x1FFFFFFFu},
+    .backtraceText = {},
+    .stackBias = {true, kCrt0StackBias},
+};
 
 // DESIGNATED initialisers, deliberately. GameConfig is initialised POSITIONALLY by the older
 // consumers in this workspace, and the framework appends fields to it — which means a positional list
@@ -336,14 +357,13 @@ static const GameConfig g_x4_cfg = {
     .hle = {.windowLo = {x4::vsync::kWait, x4::bios_threads::kOpenThread},
             .windowHi = {x4::vsync::kWaitEnd, x4::bios_threads::kThreadWindowEnd}},
 
-    // --- rendering policy ------------------------------------------------- 1 while the guest draws --
-    // The renderer clears to black on the principle "show ONLY what a native producer submitted". That
-    // is right for a port whose native renderer owns the frame and WRONG for one still running the
-    // guest's drawing code, where an upload into the display area IS visible on real hardware: logo
-    // screens, FMV stills and menus that are uploads with no primitives render black. This port owns no
-    // drawing at all AND never will (no native renderer — see the scope decision), so the guest's
-    // uploads must survive. 1 is this port's permanent value, not a bootstrap placeholder.
-    .preserveVramBackdrop = 1,
+    // --- retired rendering-policy mirror -------------------------------- compatibility only, false --
+    // Shipping ownership lives in X4Runtime::guestVramIsPicture(), where it can follow actual title
+    // state if a measured transition is found. X4 currently claims only its GTE primitive stream as
+    // picture content; it does not claim persistent guest-VRAM uploads as a second picture owner.
+    // Keep this legacy mirror false so an accidental adapter regression cannot resurrect the retired
+    // static policy while generic consumers finish migrating away from GameConfig.
+    .preserveVramBackdrop = 0,
 
     // --- memory card ------------------------------------------------------ this port's own key/path --
     .cardEnvVar = "PSXPORT_X4_CARD",
@@ -371,3 +391,4 @@ static const GameConfig g_x4_cfg = {
 };
 
 const GameConfig &x4::legacy::measuredConfig = g_x4_cfg;
+const GuestProgramImage &x4::legacy::measuredProgramImage = g_x4_program_image;

@@ -5,8 +5,8 @@ status: holds
 created: 2026-08-21
 tags: RE-11,vsync,vblank,irq
 depends: psxport.pin, game/core/vsync_sync.cpp#deliver_field, tools/verify_vsync.py#verify
-reconfirmed: 2026-08-22 18:10:37
-verified_at: 2026-08-22 18:10:37
+reconfirmed: 2026-08-22 18:55:26
+verified_at: 2026-08-22 18:55:26
 ---
 
 ## Claim
@@ -15,7 +15,7 @@ Retail MMX4 libetc VSync keeps its own policy and delegates only counter waiting
 
 ## Evidence
 
-tools/verify_vsync.py checks six groups against retail SHA-1 213733031136d095ca275d6957695aa25011cfa5 and selftests 5/5, including broken-edge, seven-slot, collapsed-window, and raw-present-without-frame-fence refusals. Clang runtime installs only the exact helper window 0x800E4EF8..0x800E4F94. scratch/logs/re04-3418-frame-commit-runtime.log, built against exact framework pin 3418a79b, exercises blocking VSync for 20 seconds: the retail IRQ-0 handler advances the counter and the authoritative one-field frame commit presents, rotates the capture, and paces without a watchdog or overflow.
+tools/verify_vsync.py checks six groups against retail SHA-1 213733031136d095ca275d6957695aa25011cfa5 and selftests 8/8, including broken-edge, seven-slot, collapsed-window, raw-present, hardcoded-handler, missing-pad-service, and missing-SPU-service refusals. Clang runtime installs only the exact helper window 0x800E4EF8..0x800E4F94. scratch/logs/re04-3418-frame-commit-runtime.log, built against exact framework pin 3418a79b, exercises blocking VSync for 20 seconds: the retail IRQ-0 handler advances the counter and the authoritative one-field frame commit presents, rotates the capture, and paces without a watchdog or overflow.
 
 ## What would falsify it
 
@@ -68,3 +68,7 @@ records that operational independence is currently false.
 ## Re-confirmed 2026-08-22 18:10:37
 
 2026-08-22 clean psxport ad5cf802: VSync evidence/selftest passes 6 groups and 5/5; bounded retail run advances through the helper without overflow. This confirms behavior only; C018 remains falsified and issue #12 remains open for the Fps60-owned non-temporal fence.
+
+## Re-confirmed 2026-08-22 18:55:26
+
+2026-08-22 candidate framework rerun: verify_vsync passes all six retail groups and 5/5 controls; full Clang CTest passes 7/7, and the real-disc candidate advances the exact helper through the retail IRQ-0 handler. Issue #12 remains open; this confirms retail behavior, not correct Fps60 ownership.

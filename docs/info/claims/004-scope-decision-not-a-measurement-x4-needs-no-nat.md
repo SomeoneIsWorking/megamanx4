@@ -5,8 +5,8 @@ status: holds
 created: 2026-08-12
 tags: scope,enhancements
 depends: docs/plans/enhancements.md
-reconfirmed: 2026-08-22 18:06:01
-verified_at: 2026-08-22 18:06:01
+reconfirmed: 2026-08-22 18:55:26
+verified_at: 2026-08-22 18:55:26
 ---
 
 ## Claim
@@ -48,3 +48,7 @@ extraction. The scope decision itself still holds.
 ## Re-confirmed 2026-08-22 18:06:01
 
 2026-08-22 architecture audit: the USER no-lerp scope still holds, while C018 is explicitly falsified because the current VBlank frame fence is misplaced inside Fps60; issue #12 owns the neutral framework extraction.
+
+## Re-confirmed 2026-08-22 18:55:26
+
+2026-08-22 candidate integration audit: USER scope remains widescreen-only for already-60fps X4; cpp_policy and x4_runtime pass, while issue #12 still truthfully records the misplaced non-temporal Fps60 fence rather than claiming interpolation independence.
