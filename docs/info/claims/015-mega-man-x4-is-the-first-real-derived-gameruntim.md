@@ -5,8 +5,8 @@ status: holds
 created: 2026-08-22
 tags: architecture,game-runtime
 depends: game/core/x4_runtime.cpp#bootInit
-reconfirmed: 2026-08-22 18:10:37
-verified_at: 2026-08-22 18:10:37
+reconfirmed: 2026-08-24 23:09:49
+verified_at: 2026-08-24 23:09:49
 ---
 
 ## Claim
@@ -24,3 +24,7 @@ main installs the legacy pair directly, boot or override callbacks return to Gam
 ## Re-confirmed 2026-08-22 18:10:37
 
 2026-08-22 clean psxport ad5cf802: Clang rebuilt megamanx4_port/mmx4_runtime_test; full CTest passes 7/7 and the derived X4Runtime dispatch reaches retail task entry through its owned BIOS service.
+
+## Re-confirmed 2026-08-24 23:09:49
+
+On commit a53c255, the full Clang build and CTest passed 11/11, including mmx4_runtime_test coverage of direct X4Runtime ownership, compatibility views, render policy, override installation, and measured boot dispatch. The clean-pin bounded runtime entered native crt0 and dispatched guest main 0x80012024 through X4Runtime.

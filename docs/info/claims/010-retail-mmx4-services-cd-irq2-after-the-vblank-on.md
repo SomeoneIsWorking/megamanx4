@@ -5,8 +5,8 @@ status: holds
 created: 2026-08-21
 tags: RE-04,cd,irq,HookEntryInt,recompiler
 depends: psxport.pin, tools/verify_cd_irq.py#verify, game/recomp_seeds.json
-reconfirmed: 2026-08-22 18:55:27
-verified_at: 2026-08-22 18:55:27
+reconfirmed: 2026-08-24 23:09:46
+verified_at: 2026-08-24 23:09:46
 ---
 
 ## Claim
@@ -60,3 +60,7 @@ Full Clang CTest after the X4Runtime render-policy change passes verify_cd_irq's
 ## Re-confirmed 2026-08-22 18:55:27
 
 2026-08-22 candidate framework rerun: verify_cd_irq passes all six retail groups and 6/6 controls; full Clang CTest passes 7/7 and the real-disc run crosses request 0x40 through the unchanged IRQ/callback path into 0x8001512C.
+
+## Re-confirmed 2026-08-24 23:09:46
+
+On commit a53c255 against clean psxport 9c2e3f1c, verify_cd_irq.py passed six retail/shipping groups and 6/6 opposite-answer cases. The bounded real-disc runtime progressed beyond CD initialization and completed five direct/archive requests before the deliberate timeout; the reentry seed and IRQ2 ownership remain unchanged.

@@ -5,8 +5,8 @@ status: holds
 created: 2026-08-21
 tags: RE-11,vsync,vblank,irq
 depends: psxport.pin, game/core/vsync_sync.cpp#deliver_field, tools/verify_vsync.py#verify
-reconfirmed: 2026-08-22 18:55:26
-verified_at: 2026-08-22 18:55:26
+reconfirmed: 2026-08-24 23:09:45
+verified_at: 2026-08-24 23:09:45
 ---
 
 ## Claim
@@ -72,3 +72,7 @@ records that operational independence is currently false.
 ## Re-confirmed 2026-08-22 18:55:26
 
 2026-08-22 candidate framework rerun: verify_vsync passes all six retail groups and 5/5 controls; full Clang CTest passes 7/7, and the real-disc candidate advances the exact helper through the retail IRQ-0 handler. Issue #12 remains open; this confirms retail behavior, not correct Fps60 ownership.
+
+## Re-confirmed 2026-08-24 23:09:45
+
+On commit a53c255 against clean psxport 9c2e3f1c, verify_vsync.py passed six retail contract groups plus all 8/8 opposite-answer cases. Full Clang CTest passed 11/11, and the bounded real-disc runtime delivered fields through the live class-0 handler chain while completing five synchronous disc requests and remaining live until timeout.

@@ -5,8 +5,8 @@ status: holds
 created: 2026-08-12
 tags: scope,enhancements
 depends: docs/plans/enhancements.md
-reconfirmed: 2026-08-22 18:55:26
-verified_at: 2026-08-22 18:55:26
+reconfirmed: 2026-08-24 23:09:41
+verified_at: 2026-08-24 23:09:41
 ---
 
 ## Claim
@@ -19,7 +19,7 @@ PROVENANCE: USER decision, 2026-08-12, quoted verbatim — 'Mega Man doesn't nee
 
 ## What would falsify it
 
-the USER changing the scope decision, or a measurement in THIS repo showing X4 does NOT run at 60fps in the modes we care about (which has never been measured here — nobody has run the game)
+the USER changing the scope decision, or a complete cadence measurement in THIS repo showing X4 does NOT run at 60fps in the modes we care about (bounded front-end diagnostics have run, but no full-game cadence study has established or contradicted that premise)
 
 ## Re-confirmed 2026-08-20 22:21:54
 
@@ -52,3 +52,7 @@ extraction. The scope decision itself still holds.
 ## Re-confirmed 2026-08-22 18:55:26
 
 2026-08-22 candidate integration audit: USER scope remains widescreen-only for already-60fps X4; cpp_policy and x4_runtime pass, while issue #12 still truthfully records the misplaced non-temporal Fps60 fence rather than claiming interpolation independence.
+
+## Re-confirmed 2026-08-24 23:09:41
+
+The user scope decision remains unchanged. docs/plans/enhancements.md and the current X4Runtime continue to exclude native producers, interpolation, and native depth while retaining widescreen, synchronous loading, and co-op as the enhancement targets. This is scope provenance, not a measured cadence claim.

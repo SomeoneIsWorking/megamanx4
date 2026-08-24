@@ -5,8 +5,8 @@ status: holds
 created: 2026-08-20
 tags: pad,coop
 depends: game/core/game_config.cpp, tools/verify_pad.py
-reconfirmed: 2026-08-22 18:55:26
-verified_at: 2026-08-22 18:55:26
+reconfirmed: 2026-08-24 23:09:44
+verified_at: 2026-08-24 23:09:44
 ---
 
 ## Claim
@@ -42,3 +42,7 @@ positive/negative cases still pass.
 ## Re-confirmed 2026-08-22 18:55:26
 
 2026-08-22 candidate framework rerun: verify_pad scans 294,400 retail words, finds the unique InitPAD call, matches 4/4 fixed-buffer arguments, and passes 4/4 positive/negative controls.
+
+## Re-confirmed 2026-08-24 23:09:44
+
+On commit a53c255, verify_pad.py --check scanned all 294,400 loaded words, found exactly one InitPAD call, and matched the four shipping arguments 0x80166D68/0x22/0x8012F46C/0x22. Its independent selftest passed 4/4 including changed immediate, unwired config, and removed-call negatives.

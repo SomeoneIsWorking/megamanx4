@@ -5,8 +5,8 @@ status: holds
 created: 2026-08-12
 tags: boot,crt0,re-01
 depends: game/core/game_config.cpp, tools/verify_crt0.py
-reconfirmed: 2026-08-22 18:55:26
-verified_at: 2026-08-22 18:55:26
+reconfirmed: 2026-08-24 23:09:42
+verified_at: 2026-08-24 23:09:42
 ---
 
 ## Claim
@@ -72,3 +72,7 @@ all 26 selftest cases pass. Issue #6 records the false-negative root cause and n
 ## Re-confirmed 2026-08-22 18:55:26
 
 2026-08-22 candidate framework rerun: verify_crt0 check reports 21 shipping comparisons, 15/15 mechanisms, 11/11 compatibility; selftest passes 26/26, and the real-disc candidate boot logs the exact InitHeap inputs before reaching the front end.
+
+## Re-confirmed 2026-08-24 23:09:42
+
+On commit a53c255, verify_crt0.py --check --selftest re-derived 21 shipped constants with 0 disagreements, located 15/15 pinned-framework mechanisms with 11 matches and 0 contradictions, and passed all 26 positive/negative cases. The direct clean-pin runtime also logged bss, sp, gp, heap, libcInit, and gameMain values matching this claim.

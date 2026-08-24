@@ -5,8 +5,8 @@ status: holds
 created: 2026-08-24
 tags: RE-09,fastwait,runtime
 depends: game/core/fast_wait.cpp#vsync
-reconfirmed: 2026-08-24 23:06:36
-verified_at: 2026-08-24 23:06:36
+reconfirmed: 2026-08-24 23:09:53
+verified_at: 2026-08-24 23:09:53
 ---
 
 ## Claim
@@ -24,3 +24,7 @@ Falsified if any non-query VSync is admitted in Delivering, VSync(-1) returns a 
 ## Re-confirmed 2026-08-24 23:06:36
 
 Retail/generated chain 0x80014780 -> 0x800147AC -> LoadImage 0x800148EC -> PsyQ set_alarm 0x800ECB38 calls VSync(-1); generated VSync returns 0x8011DC50 on the negative-query branch without entering the wait helper. The focused production-leaf test plants counter 317 and proves the scoped super-call returns 317 without mutating counter or phase. Full Clang CTest passes 11/11. A bounded 20-second uninstrumented real-disc run on clean psxport 9c2e3f1c completed archive requests 64/113/51 as 49/154/3 sectors and direct requests 65/80 as 6/4 sectors, and remained live until the deliberate timeout.
+
+## Re-confirmed 2026-08-24 23:09:53
+
+On commit a53c255 against clean psxport 9c2e3f1c, full Clang CTest passed 11/11 including the counter-317 VSync(-1) focused control. A bounded 20-second uninstrumented real-disc run completed archive requests 64/113/51 as 49/154/3 sectors and direct requests 65/80 as 6/4 sectors, then remained live until deliberate timeout with no loader presentation or state fault.
