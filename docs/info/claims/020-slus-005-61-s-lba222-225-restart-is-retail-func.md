@@ -5,8 +5,8 @@ status: holds
 created: 2026-08-22
 tags: boot,cdrom,timing
 depends: game/core/vsync_sync.cpp#deliver_field, psxport.pin
-reconfirmed: 2026-08-24 23:09:51
-verified_at: 2026-08-24 23:09:51
+reconfirmed: 2026-08-25 00:56:31
+verified_at: 2026-08-25 00:56:31
 ---
 
 ## Claim
@@ -32,3 +32,7 @@ The tracked X4 wait seam and recorded psxport pin are the A/B consumer/configura
 ## Re-confirmed 2026-08-24 23:09:51
 
 On commit a53c255 against clean psxport 9c2e3f1c, the original field-aware shared clock remains pinned and the new synchronous owner completes the same front-end data path without a 0xC0 restart: archive requests 64/113/51 and direct requests 65/80 completed before the deliberate timeout. verify_vsync.py still passes six retail groups and 8/8 controls. This reconfirms the old timeout attribution; the shipping fast path now removes the wait entirely.
+
+## Re-confirmed 2026-08-25 00:56:31
+
+The original retained baseline/candidate A/B and 2,048-byte payload comparison remain the causal evidence. For the current exact pin 75456947, both build records name that SHA; the full 9c2e3f1c..75456947 delta changes only Gte presentation policy/docs/tests (no controller clock, VSync, CD, DMA, or X4 loader code), verify_vsync.py still passes 6 retail groups and 8/8 controls, and the retained exact-pin frame-180 logo capture (29,921/691,200 non-black) proves forward progress past the old LBA222..225 restart boundary.

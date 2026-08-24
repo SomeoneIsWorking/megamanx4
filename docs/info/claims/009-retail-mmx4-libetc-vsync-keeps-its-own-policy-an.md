@@ -5,8 +5,8 @@ status: holds
 created: 2026-08-21
 tags: RE-11,vsync,vblank,irq
 depends: psxport.pin, game/core/vsync_sync.cpp#deliver_field, tools/verify_vsync.py#verify
-reconfirmed: 2026-08-24 23:09:45
-verified_at: 2026-08-24 23:09:45
+reconfirmed: 2026-08-25 00:56:30
+verified_at: 2026-08-25 00:56:30
 ---
 
 ## Claim
@@ -76,3 +76,7 @@ records that operational independence is currently false.
 ## Re-confirmed 2026-08-24 23:09:45
 
 On commit a53c255 against clean psxport 9c2e3f1c, verify_vsync.py passed six retail contract groups plus all 8/8 opposite-answer cases. Full Clang CTest passed 11/11, and the bounded real-disc runtime delivered fields through the live class-0 handler chain while completing five synchronous disc requests and remaining live until timeout.
+
+## Re-confirmed 2026-08-25 00:56:30
+
+At the exact recorded framework pin 75456947 (named by both build/psxport_resolved.txt and scratch/build/player/psxport_resolved.txt), verify_vsync.py passed all 6 retail groups and 8/8 opposite-answer controls. The complete 9c2e3f1c..75456947 framework delta changes only Gte presentation policy/docs/tests, not VSync, IRQ, timing, or the X4 seam; the retained exact-pin frame-180 capture has 29,921/691,200 non-black pixels, so blocking field delivery/presentation advanced on this pin.

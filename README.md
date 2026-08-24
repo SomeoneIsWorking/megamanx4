@@ -1,4 +1,4 @@
-# Mega Man X4 — a PC-native enhancement port (bootstrap stage)
+# Mega Man X4 — a PC-native enhancement port
 
 A PC-native port of **Mega Man X4** (PS1, USA, `SLUS_005.61`) built on the
 [psxport](https://github.com/SomeoneIsWorking/psxport) static-recompilation framework, vendored here as
@@ -10,17 +10,22 @@ build. The three deliverables are widescreen, drop-in co-op (P2 spawns as the ot
 collapsing the game's own scripted wait states — all of them deliberate guest-state changes, gated by
 CVars and force-suppressed under the byte-compare oracle. See `docs/plans/enhancements.md`.
 
-## Status: first resident substrate boots into the guest
+## Status: guest runtime reaches the front end; playability is not yet verified
 
-Created 2026-08-12. The retail executable now emits 6,192 binary-rooted entries and 7,533 recompiled
-functions, builds `megamanx4_port` with Clang, and boots through InitHeap into guest `gameMain`. The
-current stop is the CD-init IRQ2 callback contract, not a recompiler seed miss or a blocking VSync.
-The retail VBlank wait route is measured and installed, but boot only queries `VSync(-1)` before the
-CD loop. What exists:
+Created 2026-08-12. The retail executable emits a native `megamanx4_port` substrate and boots through
+InitHeap into guest `gameMain`, the retail task handoff, and the front-end archive path. The recorded
+framework pin preserves X4's alternating framebuffer pages: a real GTE capture renders the Mega Man X
+logo instead of the prior all-black frame. Forced START reaches the game's held/previous/edge globals,
+and headless WAV capture contains non-zero samples after restoring the live libsnd VBlank tick chain.
+These are measured runtime boundaries, not a claim that gameplay, audible device playback, widescreen,
+or co-op is complete. What exists:
 
 - disc → executable provisioning from **your own** disc image (nothing game-derived is in this repo),
 - the measured CRT0 and pad groups, resident routing range, generated-substrate registry, and three
   enhancement CVars,
+- a default-on synchronous direct/archive load owner whose measured requests finish in one issuer
+  call, plus removal of the measured loading-presentation task; exact destination-byte comparison and
+  a capture proving no loading frame reaches presentation remain open,
 - the project registries (`docs/re-frontier.md`, `docs/codemap.md`, `docs/behavior-map.md`,
   `docs/config.md`, `docs/info/`, `docs/issues/`),
 - a vendored **AGPL-3.0 matching decompilation** of this exact executable, `external/mmx4`, whose
