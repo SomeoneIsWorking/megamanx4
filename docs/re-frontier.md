@@ -45,11 +45,19 @@ REFERENCE until this repo measures it against this executable. Its own matched-c
 bound, on the `objdiff` object-identity axis) is a fact about the supply and must never be quoted as this
 port's progress — this port's axis is SBS byte-exact RAM parity, and neither implies the other.
 
-**THE FRONTIER'S NEXT REAL TARGET IS `RE-07`, THE PLAYER-OBJECT SYSTEM** — not the renderer. This is an
-enhancement port (USER decision, `CLAUDE.md`), so the whole native-producer / interpolation /
-native-depth apparatus is `➖ skip-by-design` below and the deliverables are three `pc_enh` guest-state
-changes. RE-01/RE-02 are the mechanical prerequisites that give RE-07 something to work on; nothing
-downstream of RE-07 should be attempted before it.
+**THE CURRENT OWNERSHIP FRONTIER IS `RE-10`'S FIRST SELECTED BODY.** The title state-0 white-logo quad
+initializer at `0x800D6F94` is measured, imported readably, retained-super wired, and hermetically
+gated. An exact-pin serialized real-disc run proves live reach and equality, but its sampled presents
+were a stable dark title field and therefore do not prove visible composition. It remains
+`in-progress` until a deliberate native perturbation proves the live gate can report the other
+answer. RE-07/08/09 remain
+the three enhancement fronts. The native-producer / interpolation / native-depth apparatus stays
+`➖ skip-by-design`; this title-object ownership does not create or imply any of it.
+
+RE-08 now also owns the first exact title-layout prerequisite without taking more native ownership:
+retail mode 0 publishes a 320x240 edge quad through title-only variant `0x0A`, while mode 12 publishes
+nine measured menu/logo positions through a separate title-only table. The runtime is unchanged; this
+narrows issue #19's future widescreen correction to the real coordinate sources.
 
 ## boot
 
@@ -120,10 +128,10 @@ downstream of RE-07 should be attempted before it.
 ### RE-08 — the projection / FOV setup site widescreen must drive from game state
 - status: re-partial
 - deps: RE-01, RE-02
-- evidence: Retail SLUS_005.61 SHA-1 213733031136d095ca275d6957695aa25011cfa5: tools/verify_projection.py --check scans all 294,400 loaded words and finds exactly six CTC2 writes to CR24/25/26, all inside InitGeom/SetGeomOffset/SetGeomScreen; exactly one call to each, all in func_8001213C, with OFX=160, OFY=120, H=512. Its 4/4 selftest rejects a changed OFX, removed call, and extra raw writer. The title now wraps the untouched SetGeomOffset `0x800E90C8` and SetDefDrawEnv `0x800E9354` bodies through the reversible generated seam. `mmx4_runtime_test` drives those production transformations with an injected framework plan and proves exact 4:3 identity, 16:9 OFX/width 214/428, and unchanged OFY/H/x/y/h/UV/color/order; Clang links the full substrate against the unlanded typed framework candidate. Real-disc startup A/B reaches that retail wrapper and logs 320x240 -> 428x240, OFX 214, draw width 428 with the knob on (`scratch/logs/re08-typed-wide-boot.log`) and exact 320/160 identity off (`re08-typed-4x3-boot.log`). Against the separate shared-time candidate, normally paced PRESENT captures at frames 800/1000 prove a coherent 4:3 title-screen control. Wide pixels are not yet verified.
+- evidence: Retail SLUS_005.61 SHA-1 213733031136d095ca275d6957695aa25011cfa5: tools/verify_projection.py --check scans all 294,400 loaded words and finds exactly six CTC2 writes to CR24/25/26, all inside InitGeom/SetGeomOffset/SetGeomScreen; exactly one call to each, all in func_8001213C, with OFX=160, OFY=120, H=512. Its 4/4 selftest rejects a changed OFX, removed call, and extra raw writer. The title now wraps the untouched SetGeomOffset `0x800E90C8` and SetDefDrawEnv `0x800E9354` bodies through the reversible generated seam. `mmx4_runtime_test` drives those production transformations with an injected framework plan and proves exact 4:3 identity, 16:9 OFX/width 214/428, and unchanged OFY/H/x/y/h/UV/color/order; Clang links the full substrate against the unlanded typed framework candidate. Real-disc startup A/B reaches that retail wrapper and logs 320x240 -> 428x240, OFX 214, draw width 428 with the knob on (`scratch/logs/re08-typed-wide-boot.log`) and exact 320/160 identity off (`re08-typed-4x3-boot.log`). Against the separate shared-time candidate, normally paced PRESENT captures at frames 800/1000 prove a coherent 4:3 title-screen control. `tools/verify_title_composition.py --check --selftest` now follows title mode 0 to quad ID 0x0B variant 0x0A and its exact 320x240 edge row, plus mode 12 to nine exact title-only logo/menu x/y records; its 10/10 positive/negative matrix rejects mutations in either coordinate chain. Wide pixels are not yet verified.
 - notes: Do not attach a local present stretch or force native. X4 owns guest CR24 and RECT.w only; the typed framework plan owns host clip, renderer margin coverage, and presentation sampling. `RenderMode::enhancementsAllowed()` remains Native-only, so no interpolation/native-depth/internal-resolution apparatus enters the Gte title path. Psx/ORACLE/SBS resolve exact 4:3.
-- gap: The framework is recorded at 9c2e3f1c; direct runtime inheritance removes the concrete Fps60 link and that pin includes the temporal-only helper split from neutral services. Capture matched title/gameplay fields with widescreen off/on and verify newly composed margins, unchanged central scale, and 4:3 identity; classify any title culling or 2D layout gap from pixels rather than adding offsets.
-- where: tools/verify_projection.py; tools/verify_no_temporal_dependency.py; game/core/widescreen_controller.{h,cpp}; game/core/recomp_register.cpp; game/core/x4_runtime.{h,cpp}; tests/test_x4_runtime.cpp
+- gap: The framework is recorded at 9c2e3f1c; direct runtime inheritance removes the concrete Fps60 link and that pin includes the temporal-only helper split from neutral services. The full-screen edge quad and nine logo/menu positions now have exact title-owned source seams, but their widescreen policies are not implemented or visually proven. Capture matched title/gameplay fields with widescreen off/on and verify newly composed margins, unchanged central scale, and 4:3 identity; continue classifying title primitives before changing coordinates.
+- where: tools/verify_projection.py; tools/verify_title_composition.py; tools/verify_no_temporal_dependency.py; game/core/widescreen_controller.{h,cpp}; game/core/recomp_register.cpp; game/core/x4_runtime.{h,cpp}; tests/test_x4_runtime.cpp
 
 ### RE-09 — the game's OWN scripted wait states, fade ramps and frame-count timers
 - status: re-partial
@@ -136,12 +144,12 @@ downstream of RE-07 should be attempted before it.
 ## ownership
 
 ### RE-10 — native ownership seeded from the AGPL matching decomp
-- status: todo
+- status: in-progress
 - deps: RE-01, RE-02
-- evidence:
-- where: game/ (no native body exists yet)
-- gap: The substrate now exists, removing the mechanical blocker. The next prerequisite is a byte-match gate over one selected matching-decomp body and its generated body before importing any native implementation. **An imported body with no byte-gate is a hack with a citation attached.** mmx4 is a partial supply (18.5% upper bound) and dormant since 2025-08-25.
-- notes: Anything imported here is AGPL-derived and stays in THIS repo forever — never lifted into psxport, which five ports share. Mark such files with `// SPDX-License-Identifier: AGPL-3.0-or-later` + `// derived from external/mmx4` (LICENSING.md), and keep `tools/check_license_containment.py` green.
+- evidence: Retail SLUS_005.61 (SHA-1 213733031136d095ca275d6957695aa25011cfa5): tools/re_title_quad.py reuses the complete title-composition path through title quad update 0x800D76F8, proves state-0 dispatch 0x8010FDD0 -> 0x800D6F94, matches all 49 instructions in the selected leaf, and diffs 17 shipped facts plus the retained-super triple. Its 4/4 selftest rejects a changed body instruction, state dispatch, and shipping table address. game/core/title_quad.cpp is the readable AGPL-derived native body; x4_title_quad hermetically pins 23 output/register checks. Clang linked the product and full CTest passes 13/13 against clean shared psxport dbdb2baf. An exact-pin serialized real-disc run reaches guest main and reports `[mirror-verify] 0x800D6F94 OK (pass #1)`. Present captures at 120, 600, 1000, and 1100..1600 all contain the same dark title field (55.52% technically non-black due the near-black display rectangle), so this run does not prove visible title composition.
+- where: game/core/title_quad.{h,cpp}; tools/re_title_quad.py; tests/test_x4_title_quad.cpp; game/core/x4_runtime.cpp
+- gap: Static/hermetic ownership plus live override reach/equality are complete. A deliberate one-byte native perturbation must still make the same live mirror gate fail; until that opposite answer is observed this step remains in-progress, not re-verified.
+- notes: This imports one title-object initializer only. It does not change pixels, fix issue #19, or create native producers/interpolation/depth. The source stays AGPL inside this repo; nothing moved into psxport.
 
 ## platform synchronization
 

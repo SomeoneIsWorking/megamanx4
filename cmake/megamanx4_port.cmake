@@ -35,6 +35,7 @@ set(SEAM_SRC
   game/core/enhancements.cpp
   game/core/main.cpp
   game/core/recomp_register.cpp
+  game/core/title_quad.cpp
   game/core/vsync_sync.cpp
   game/core/widescreen_controller.cpp
   game/core/x4_context.cpp
@@ -83,6 +84,10 @@ if(BUILD_TESTING)
     COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/tools/verify_title_composition.py --check --selftest
   )
   add_test(
+    NAME title_quad_ownership_evidence
+    COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/tools/re_title_quad.py --check --selftest
+  )
+  add_test(
     NAME no_temporal_source_dependency
     COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/tools/verify_no_temporal_dependency.py
             --check --selftest
@@ -99,6 +104,7 @@ if(BUILD_TESTING)
     ${CMAKE_SOURCE_DIR}/game/core/game_config.cpp
     ${CMAKE_SOURCE_DIR}/game/core/game_hooks.cpp
     ${CMAKE_SOURCE_DIR}/game/core/recomp_register.cpp
+    ${CMAKE_SOURCE_DIR}/game/core/title_quad.cpp
     ${CMAKE_SOURCE_DIR}/game/core/vsync_sync.cpp
     ${CMAKE_SOURCE_DIR}/game/core/widescreen_controller.cpp
     ${CMAKE_SOURCE_DIR}/game/core/x4_context.cpp
@@ -121,6 +127,17 @@ if(BUILD_TESTING)
     CXX_STANDARD_REQUIRED ON
   )
   add_test(NAME x4_player_object COMMAND mmx4_player_object_test)
+  add_executable(mmx4_title_quad_test
+    ${CMAKE_SOURCE_DIR}/game/core/title_quad.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_x4_title_quad.cpp
+  )
+  target_include_directories(mmx4_title_quad_test PRIVATE game game/core)
+  target_link_libraries(mmx4_title_quad_test PRIVATE psxport)
+  set_target_properties(mmx4_title_quad_test PROPERTIES
+    CXX_STANDARD 20
+    CXX_STANDARD_REQUIRED ON
+  )
+  add_test(NAME x4_title_quad COMMAND mmx4_title_quad_test)
 endif()
 
 if(NOT PSXPORT_BUILD_PORT)

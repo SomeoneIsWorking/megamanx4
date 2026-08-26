@@ -5,7 +5,7 @@ status: investigating
 symptom: The 16:9 title image moves 162 host pixels left instead of exposing newly composed margins
 tags: widescreen,title,2d,composition,RE-08
 created: 2026-08-24
-updated: 2026-08-24
+updated: 2026-08-26
 ---
 
 ## Measured root cause
@@ -29,6 +29,33 @@ routes player, weapons, shots, visual, item, misc, unknown, and quad pools throu
 function would silently impose title composition on gameplay/HUD and is the blanket workaround this
 issue refuses. The next implementation seam must be owned by the measured title state/subsystem and
 derive any placement from the latched guest-wide plan, not repeat a literal 54-pixel correction.
+
+## Retail coordinate publications
+
+`tools/verify_title_composition.py` now grounds two title-only publication chains rather than stopping
+at object ownership. Title mode 0 (`0x8001DCCC`) calls the quad allocator with ID `0x0B`, variant
+`0x0A`. The ID and state tables reach initializer `0x800D6F94`, which indexes 16-byte rows at
+`0x8010FCCC`; row `0x0A` is exactly `(319,0) (319,239) (0,239) (0,0)`. This is an authored 320x240
+edge quad, not a camera projection or a renderer-wide placement rule.
+
+Title mode 12 (`0x8001E54C`) creates nine misc ID `0x13` objects from variant list
+`0x800F21F8`. Their title-only state-0 owner `0x800CB634` indexes six-byte rows at `0x8010E71C` and
+publishes x/y as s16.16. The nine retail positions are `(128,72)`, `(176,72)`, `(144,72)`,
+`(208,72)`, `(248,72)`, `(160,160)`, `(160,216)`, `(288,120)`, and `(176,216)`. This is the first
+exact title layout seam: future widescreen work can distinguish the full-screen quad from menu/logo
+placement at their title-owned sources without changing shared gameplay drawing semantics.
+
+The verifier's 10/10 selftest mutates both coordinate chains, including the spawn variant, menu
+variant list, x/y publication, one menu coordinate, and one white-quad edge. It still does not
+classify every title primitive or prove the eventual wide pixels.
+
+An exact-`dbdb2baf` real-disc run of the new retained/native initializer reached `0x800D6F94` and
+passed mirror verification, but present samples at 120, 600, 1000, and 1100 through 1600 were the
+same dark title field. The present instrument called that field 55.52% non-black because the display
+rectangle is near-black rather than zero; visual inspection rejects that statistic as evidence of a
+rendered logo. An earlier capture did contain the Mega Man logo, so frame-number sampling is not a
+stable title-state selector. Future matched widescreen evidence must first select the same visible
+state in both legs rather than treating a nonzero coverage percentage as a picture.
 
 ## Refused workaround
 

@@ -57,6 +57,15 @@ migration; old integrated pixels exposed issue #19 instead of completing the ste
 remains authored as a 320-wide composition and becomes left-anchored when the guest clip widens.
 Fresh matched title/gameplay captures remain mandatory.
 
+**RE-10 has one selected native body in progress:** the title state-0 white-logo quad initializer
+`0x800D6F94`, derived from `external/mmx4/src/main/title_quad.c` and independently gated against all
+49 retail instructions by `tools/re_title_quad.py`. `X4Runtime` installs the retained-super pair and
+the hermetic C++ test pins the object/register contract. An exact-pin serialized real-disc run reaches
+the body and reports `[mirror-verify] 0x800D6F94 OK (pass #1)`. Do not call it fully verified yet: a
+deliberate live mismatch discriminator remains open. The same run's sampled presents were a stable
+dark title field, so they do not prove visible title composition. This body changes no pixels and is
+not a fix for widescreen issue #19.
+
 The direct development build/gate is:
 
 ```sh

@@ -8,6 +8,7 @@
 #include "game.h"
 #include "legacy_game_interface.h"
 #include "recomp_register.h"
+#include "title_quad.h"
 #include "vsync_sync.h"
 #include "x4_context.h"
 
@@ -67,6 +68,7 @@ void X4Runtime::registerOverrides(Game &game) {
   // recompiled guest code; vsync_sync restores the missing asynchronous producer between them.
   vsync::install(&game);
   bios_threads::install(game);
+  title_quad::registerOverride();
   x4_install_projection_overrides();
   // The loading-coroutine conversion (RE-09 job B): the two measured retail wait bodies, wrapped by
   // the super-call seam so PSXPORT_X4_FASTWAIT can withhold their presentation without touching a
