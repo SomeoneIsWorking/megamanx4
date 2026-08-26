@@ -41,14 +41,6 @@ int main(int argc, char **argv) {
   psxport_install_game(runtime);
   x4_install_recomp();
 
-  // X4 is an enhancement-class port: the guest owns the picture and there are deliberately no
-  // PC-native producers. Letting the framework's producer-only default stand would present black
-  // even after the guest built a valid OT, so make the title's required backend explicit and refuse
-  // an incompatible selection by name.
-  if (!runtime.configureRenderPath()) {
-    return 2;
-  }
-
   // Say out loud which enhancement knobs this run will do NOTHING with. Co-op and fast-wait remain
   // `planned` (docs/re-frontier.md RE-07/09), so a user who sets PSXPORT_X4_COOP=1 today would
   // otherwise see a completely clean startup and a clean exit audit — registering them as CVars is
@@ -58,12 +50,6 @@ int main(int argc, char **argv) {
   const char *path = argc > 1 ? argv[1] : kDefaultExe;
 
   Game *game = new Game();
-  // Game construction loads persisted settings into the CVar ladder. Validate only now so a saved
-  // `fps60=1` cannot silently arm interpolation after the earlier render-path decision. This does not
-  // reject the retail game's own 60 Hz cadence; it rejects only psxport's synthetic in-between tier.
-  if (!runtime.validateRenderEnhancements()) {
-    return 2;
-  }
   Core *c = &game->core;
 
   // Self-provision the executable so the binary is runnable straight from a disc image with no prior

@@ -16,9 +16,10 @@ USER decision, 2026-08-12, verbatim, which is why this file exists at all:
 
 USER clarification, 2026-08-22: X4 (`SLUS_005.61`) is one of the already-60fps titles that needs
 widescreen only; it does not need lerp or anything whose only purpose is to support lerp. `X4Runtime`
-now encodes that render policy and refuses `PSXPORT_FPS60`/persisted `fps60=1` instead of silently
-accepting a synthetic interpolation tier. This refusal does not alter or cap the retail game's own
-60 Hz cadence.
+now declares the shared widescreen-only capability profile. The framework omits the Native and 60fps
+player controls, refuses to activate `PSXPORT_FPS60`/persisted `fps60=1`, and resolves an unsupported
+diagnostic renderer without selecting an empty native-producer path. This policy does not alter or cap
+the retail game's own 60 Hz cadence.
 
 All three are the framework's `pc_enh` class with `affect: full` — they deliberately change canon guest
 state — and all three are read through the single chokepoint `x4::enh()`

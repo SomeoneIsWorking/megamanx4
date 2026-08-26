@@ -307,42 +307,26 @@ int main() {
   static_assert(std::is_base_of_v<GameRuntime, x4::X4Runtime>);
   static_assert(!std::is_base_of_v<LegacyGameRuntimeAdapter, x4::X4Runtime>);
 
-  if (x4::X4Runtime::requiredRenderPath() != RenderPath::Gte || !x4::X4Runtime::supportsRenderPath(RenderPath::Gte) ||
-      !x4::X4Runtime::supportsRenderPath(RenderPath::Psx) || x4::X4Runtime::supportsRenderPath(RenderPath::Native)) {
-    std::fprintf(stderr, "X4Runtime accepted a producer-only picture path\n");
-    return 1;
-  }
-  static_assert(x4::X4Runtime::executableId() == "SLUS_005.61");
-  static_assert(x4::X4Runtime::targetsWidescreen());
-  static_assert(!x4::X4Runtime::supportsTemporalInterpolation());
-  static_assert(!x4::X4Runtime::requiresNativeDepth());
-  static_assert(!x4::X4Runtime::requiresNativeProducers());
-
   x4::X4Runtime runtime;
-  if (!runtime.configureRenderPath() || psx::config::render_path() != RenderPath::Gte) {
-    std::fprintf(stderr, "X4Runtime did not install the guest-picture default\n");
+  const RenderCapabilities capabilities = runtime.renderCapabilities();
+  if (capabilities.defaultPath != RenderPath::Gte || capabilities.nativeRenderPath ||
+      capabilities.temporalInterpolation || !capabilities.supports(RenderPath::Gte) ||
+      !capabilities.supports(RenderPath::Psx) || capabilities.supports(RenderPath::Native) ||
+      !capabilities.playerSelectable(RenderPath::Gte) || capabilities.playerSelectable(RenderPath::Psx) ||
+      capabilities.playerSelectable(RenderPath::Native) || capabilities.playerPathCount() != 1 ||
+      render_path_resolve(RenderPath::Native, capabilities) != RenderPath::Gte) {
+    std::fprintf(stderr, "X4Runtime exposed a renderer or temporal product outside its guest-wide policy\n");
     return 1;
   }
-  psx::config::cv_render_path.set(psx::config::Layer::Runtime, "native");
-  if (runtime.configureRenderPath()) {
-    std::fprintf(stderr, "X4Runtime accepted the explicit producer-only path\n");
-    return 1;
-  }
-  psx::config::cv_render_path.clear(psx::config::Layer::Runtime);
 
-  if (!runtime.validateRenderEnhancements()) {
-    std::fprintf(stderr, "X4Runtime rejected its neutral no-interpolation default\n");
-    return 1;
-  }
   psx::config::cv_fps60.set(psx::config::Layer::Value, true);
-  if (runtime.validateRenderEnhancements()) {
-    std::fprintf(stderr, "X4Runtime accepted synthetic temporal interpolation\n");
-    return 1;
-  }
-  psx::config::cv_fps60.clear(psx::config::Layer::Value);
-
   psxport_install_game(runtime);
   auto game = std::make_unique<Game>();
+  psx::config::cv_fps60.clear(psx::config::Layer::Value);
+  if (game->mods.temporalInterpolationSupported() || game->mods.fps60 != 0) {
+    std::fprintf(stderr, "X4Runtime allowed the settings layer to arm synthetic interpolation\n");
+    return 1;
+  }
   Core *core = &game->core;
   gte_init();
   gte_bind(core);

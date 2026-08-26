@@ -1,10 +1,7 @@
 #pragma once
 
 #include "game_runtime.h"
-#include "render_mode.h"
 #include "widescreen_controller.h"
-
-#include <string_view>
 
 namespace x4 {
 
@@ -15,34 +12,11 @@ class X4Runtime final : public GameRuntime {
 public:
   X4Runtime();
 
-  bool configureRenderPath();
-  bool validateRenderEnhancements() const;
-
   // X4's retail update/display cadence is already the target cadence. Widescreen therefore owns
   // only projection/culling/presentation work; it must not pull in the framework's interpolated-frame
   // pipeline or either of that pipeline's native-render prerequisites.
-  static constexpr std::string_view executableId() {
-    return "SLUS_005.61";
-  }
-  static constexpr bool targetsWidescreen() {
-    return true;
-  }
-  static constexpr bool supportsTemporalInterpolation() {
-    return false;
-  }
-  static constexpr bool requiresNativeDepth() {
-    return false;
-  }
-  static constexpr bool requiresNativeProducers() {
-    return false;
-  }
-
-  static constexpr RenderPath requiredRenderPath() {
-    return RenderPath::Gte;
-  }
-
-  static constexpr bool supportsRenderPath(RenderPath path) {
-    return path == RenderPath::Gte || path == RenderPath::Psx;
+  RenderCapabilities renderCapabilities() const override {
+    return RenderCapabilities::widescreenOnly();
   }
 
   void *createContext(Core &core) override;

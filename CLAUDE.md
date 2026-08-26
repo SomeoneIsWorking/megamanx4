@@ -23,9 +23,10 @@ untouched retail scheduler: OpenTh captures entry/SP/GP, ChangeTh preserves both
 cooperative yields, and CloseTh releases the TCB. The rejected synchronous-task bypass remains removed.
 The recorded 9c2e3f1c framework includes 7bd24f2b's field-aware CD time and advances through `0x800128B8`, Capcom-logo
 decode, task `0x8001DAF8`, and a coherent title screen. X4
-defaults to the guest `gte` picture path and refuses `native`, because this
-enhancement-class port deliberately has no PC-native producers; selecting them produced guaranteed
-black independently of the scheduler.
+declares the guest `gte` picture as its only player renderer, because this enhancement-class port
+deliberately has no PC-native producers. The shared capability resolver removes Native from the menu
+and warns before falling back to GTE for an explicit diagnostic request; it never selects the
+guaranteed-black producer path.
 **The field seam is the port's heartbeat.** The guest owns its loop, so EVERY per-field host service
 lives in `x4::vsync::deliver_field` (game/core/vsync_sync.cpp): the retail IRQ-0 delivery (the
 SetInterrupt class-0 slot's CURRENT occupant — after SsStart that chains the VBlank walk AND the

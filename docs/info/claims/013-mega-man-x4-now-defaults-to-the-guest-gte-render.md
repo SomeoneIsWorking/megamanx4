@@ -1,12 +1,13 @@
 ---
 id: C013
 kind: claim
-status: holds
+status: falsified
 created: 2026-08-22
 tags:
 depends: game/core/x4_runtime.cpp#configureRenderPath
 reconfirmed: 2026-08-22 15:30:37
 verified_at: 2026-08-22 15:30:37
+falsified_on: 2026-08-26
 ---
 
 ## Claim
@@ -24,3 +25,9 @@ X4Runtime::configureRenderPath, game/core/main.cpp, or framework render-path sem
 ## Re-confirmed 2026-08-22 15:30:37
 
 mmx4_runtime_test after the render-policy change proves the unchanged gte default, diagnostic psx support, and explicit native refusal; full Clang CTest passes 6/6.
+
+## FALSIFIED 2026-08-26
+
+X4Runtime::configureRenderPath was removed when render-path policy moved to the shared RenderCapabilities resolver; unsupported Native now warns and resolves to GTE instead of exiting 2.
+
+> Anything that cited this claim as proof must be re-checked. Grep the repo for it.

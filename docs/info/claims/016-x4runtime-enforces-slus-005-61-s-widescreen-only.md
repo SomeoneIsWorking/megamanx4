@@ -1,12 +1,13 @@
 ---
 id: C016
 kind: claim
-status: holds
+status: falsified
 created: 2026-08-22
 tags: architecture,widescreen,fps60
 depends: game/core/x4_runtime.cpp#validateRenderEnhancements
 reconfirmed: 2026-08-22 18:10:37
 verified_at: 2026-08-22 18:10:37
+falsified_on: 2026-08-26
 ---
 
 ## Claim
@@ -39,3 +40,9 @@ framework extraction. The narrower claim above remains true.
 ## Re-confirmed 2026-08-22 18:10:37
 
 2026-08-22 clean psxport ad5cf802: x4_runtime and full CTest pass; synthetic interpolation remains rejected. This is request-policy evidence, not operational independence; C018/#12 remain unchanged.
+
+## FALSIFIED 2026-08-26
+
+X4Runtime::validateRenderEnhancements was removed when temporal policy moved to RenderCapabilities/Mods; unsupported fps60 is now omitted/refused without the title-local startup exit asserted by this claim.
+
+> Anything that cited this claim as proof must be re-checked. Grep the repo for it.

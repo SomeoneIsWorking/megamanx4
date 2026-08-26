@@ -32,18 +32,20 @@ started in."*
 | `PSXPORT_X4_COOP` | Bool | `false` | yes | `x4::cv_coop` | **`x4::enh(x4::cv_coop)`** — no consumer yet (RE-07) |
 | `PSXPORT_X4_FASTWAIT` | Bool | `true` | yes | `x4::cv_fastwait` | **`x4::enh(x4::cv_fastwait)`** — consumer: game/core/fast_wait.cpp (loading-coroutine conversion, RE-09 job B) |
 
-## Title render policy: `PSXPORT_FPS60` is unsupported
+## Title render policy: Native and synthetic 60fps are not player options
 
-The shared framework declares `PSXPORT_FPS60`, but X4 (`SLUS_005.61`) deliberately does not consume
-its synthetic interpolated-frame tier. The retail title already runs at the target 60 Hz cadence;
-X4's rendering enhancement target is widescreen only, with no temporal capture/replay, native-depth,
-or native-producer prerequisite. `X4Runtime::validateRenderEnhancements()` runs after `Game`
-construction has loaded the persisted settings file and refuses startup when the resolved
-`PSXPORT_FPS60` CVar is true. This covers both a launch override and a saved `fps60=1`, names the
-winning CVar layer, and does not alter the retail game's own cadence.
+X4 (`SLUS_005.61`) deliberately consumes neither the framework's PC-native renderer nor its synthetic
+interpolated-frame tier. The retail title already owns the target cadence, and the guest GTE produces
+the picture. `X4Runtime::renderCapabilities()` is the title authority: its widescreen-only profile
+declares GTE as the player path, no native renderer, and no temporal interpolation. The shared menu,
+settings loader/saver, and runtime render-path resolver consume that same declaration.
 
-The no-argument policy is therefore unambiguous: synthetic interpolation is off and cannot be armed
-silently. `PSXPORT_X4_WIDESCREEN` is the product default now that the title has a typed guest
+The menu therefore offers neither Native rendering nor 60fps interpolation, and this repository's
+settings file carries no `fps60` key. An explicit diagnostic request for an unsupported mode remains a
+loud refusal or capability-owned fallback; it does not silently enable a product X4 does not own.
+
+The no-argument policy is therefore unambiguous. `PSXPORT_X4_WIDESCREEN` is the product default now
+that the title has a typed guest
 projection consumer; a persisted or launch/runtime `false` still supplies the exact 4:3 control.
 Default-on is not a pixel-verification claim: the framework candidates must still land and the
 deterministic off/on capture must classify culling and 2D layout before RE-08 is complete.
