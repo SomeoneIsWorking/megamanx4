@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import io
 import os
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -68,6 +69,11 @@ class LauncherTest(unittest.TestCase):
         (self.root / "external" / "psxport" / "cmake").mkdir(parents=True)
         (self.root / "external" / "psxport" / "cmake" / "psxport.cmake").write_text(
             "# fixture\n"
+        )
+        policy = self.root / "external/psxport/tools/port/launch_environment.py"
+        policy.parent.mkdir(parents=True)
+        shutil.copyfile(
+            REPO_ROOT / "external/psxport/tools/port/launch_environment.py", policy
         )
 
     def tearDown(self) -> None:
@@ -148,18 +154,25 @@ class LauncherTest(unittest.TestCase):
             )
         )
 
-    def test_nowindow_changes_only_the_final_sink(self) -> None:
+    def test_player_exec_strips_ambient_agent_policy(self) -> None:
         host = FakeHost()
         code, _, stderr = self.invoke(
             host,
-            environment={"PATH": os.environ.get("PATH", ""), "PSXPORT_NOWINDOW": "1"},
+            environment={
+                "PATH": os.environ.get("PATH", ""),
+                "PSXPORT_NOWINDOW": "1",
+                "PSXPORT_VK_HEADLESS": "1",
+                "PSXPORT_NOAUDIO": "1",
+                "PSXPORT_NOPACE": "1",
+            },
         )
 
         self.assertEqual(code, 0)
         self.assertEqual(stderr, "")
         launch_env = host.commands[-1][1]["env"]
-        self.assertEqual(launch_env["PSXPORT_VK_HEADLESS"], "1")
-        self.assertNotIn("PSXPORT_VK_WINDOW", launch_env)
+        self.assertEqual(launch_env["PSXPORT_VK_WINDOW"], "1")
+        for key in ("PSXPORT_NOWINDOW", "PSXPORT_VK_HEADLESS", "PSXPORT_NOAUDIO", "PSXPORT_NOPACE"):
+            self.assertNotIn(key, launch_env)
 
     def test_missing_cmake_prints_exact_fedora_command_before_mutation(self) -> None:
         host = FakeHost(missing={"cmake"})

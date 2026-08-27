@@ -89,9 +89,9 @@ is checked with this repository's `.clang-format`, the 1,200-line ownership cap 
 there is no copied checker and no pre-commit hook. CTest also runs `tools/test_run.py`: the shipping
 launcher enters the frozen `uv.lock` environment through `bootstrap.py`, while `run.sh` is only its
 stable exec wrapper. It performs no compiler-identity filtering; explicit `CC`/`CXX` pass through
-and otherwise CMake owns toolchain discovery. The user launcher opens the window by default;
-`PSXPORT_NOWINDOW=1` changes only the final sink to headless and never enables a diagnostic server
-implicitly.
+and otherwise CMake owns toolchain discovery. The user launcher explicitly opens the window, audio
+device, and paced presenter at its final exec boundary. Agent tools launch the product directly with
+explicit headless, silent, and unpaced policy; ambient agent flags never change the player path.
 
 **`external/psxport` is NOT a submodule any more (2026-08-16)** — it is a symlink to the workspace's
 shared framework clone when one exists, or a private clone at this repo's `psxport.pin` on a fresh

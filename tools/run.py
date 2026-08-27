@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import os
 import platform
+import runpy
 import shutil
 import subprocess
 import sys
@@ -317,11 +318,8 @@ def run_launcher(
         say("Mega Man X4 is built and ready.", stdout)
         return 0
 
-    launch_env = dict(environment)
-    if launch_env.get("PSXPORT_NOWINDOW"):
-        launch_env["PSXPORT_VK_HEADLESS"] = "1"
-    else:
-        launch_env["PSXPORT_VK_WINDOW"] = "1"
+    policy = runpy.run_path(str(psxport_path / "tools/port/launch_environment.py"))
+    launch_env = policy["player_environment"](environment)
     launch_env.setdefault("PSXPORT_ASSET_DIR", str(psxport_path))
     say("launching Mega Man X4…", stdout)
     try:
