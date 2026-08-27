@@ -25,6 +25,7 @@ public:
   // body is always the untouched recompiled retail function.
   void publishProjection(Core &core, GuestBody retailBody);
   void publishDrawEnvironment(Core &core, GuestBody retailBody);
+  void synchronizePresentation(Core &core);
 
   const GuestProjectionPlan &plan() const {
     return plan_;

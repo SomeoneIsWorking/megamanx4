@@ -24,14 +24,23 @@ Statuses: ✅ re-verified · 🟡 re-partial (honest gap) · 🔬 in-progress ·
 RE-01 owns the measured and wired crt0 group. RE-06 owns the two measured InitPAD buffers. RE-02 now
 owns a measured resident bootstrap: 6,193 binary roots → 7,534 functions, real generated registry,
 resident range, and runtime dispatch through InitHeap into `gameMain`. Its one explicit seed is the
-retail/live-proven HookEntryInt continuation at 0x800E5194. RE-11 owns a retail-derived VBlank producer
-at libetc's exact counter-wait helper and its one-field frame commit. Recorded framework pin 9c2e3f1c
+retail/live-proven HookEntryInt continuation at 0x800E5194. RE-11 owns a finite boot prefix, one-step
+title frame driver, retail-derived VBlank producer, and full-entry VSync trap. Recorded framework pin 124b85c8
 uses a neutral presenter, creates no temporal product, and separates temporal-only helper translation
 units. Direct `GameRuntime` inheritance removes the concrete Fps60 implementation; full Clang CTest
 11/11 includes strict source and shipping-binary dependency gates. RE-04 owns the separate CD
 interrupt boundary: the VBlank-only SysEnq element correctly declines IRQ2, the shared BIOS restores
-HookEntryInt, and retail trapIntr dispatches libcd's slot-2 callback. The current RE-04 gap is earlier
-than the archive loader on the recorded pin: `X4Runtime` supplies the retail BIOS
+HookEntryInt, and retail trapIntr dispatches libcd's slot-2 callback. Live PID 2710117 proves the
+corrected stream path publishes per-channel table `0x8011DC5C`, writes callback `0x800E8188` to DMA3
+slot `0x8011DC68`, fills the seven-chunk frame, arms the final DMA3 transfer, and dispatches that
+callback at field 15. Narrow ring-watch PID 2717335 proves the resulting frame is consumed correctly:
+slot zero changes 3 -> 2 -> 4, then `StFreeRing` clears all seven chunk headers to zero. The title
+frame driver now keeps that blocking movie transaction suspended at `UpdateTasks` across host fields
+and does not restart the gameplay draw/clear prefix until the stream releases. Real-disc PID 3087406
+completed 90/90 fields without guest VSync; presents 30/60/90 are coherent, and the frame-30 dump has
+live pixels across columns 0..479 in both 24-bit buffers. That directly falsifies the former
+right-third image: the missing area was the gameplay clear erasing the first 320 words of the active
+movie buffer, not missing MDEC slices or DMA callbacks. `X4Runtime` supplies the retail BIOS
 OpenTh/CloseTh/ChangeTh contract and the untouched scheduler transfers into task entry 0x8001D064. The
 recorded field-aware CD time crosses `0x800128B8`, logo decode, task `0x8001DAF8`, and a coherent title
 screen. The former capture overflow is resolved as a missing
@@ -104,16 +113,16 @@ narrows issue #19's future widescreen correction to the real coordinate sources.
 - deps:
 - evidence: USER decision, 2026-08-12, verbatim: "Mega Man doesn't need native producers or lerp or native depth, it's already 60fps." Quoted in full in CLAUDE.md and recorded as a claim in docs/info/claims/ so a later session cannot 'discover' this as a missing subsystem and start building it.
 - where: game/core/game_config.cpp (otRegionBase/Stride, packetPoolBase/Stride, otBasePtr, poolPtrCur/Last, clearOtagR, putDrawEnv, drawSync) — zero, with no reader
-- gap: This group only has a reader if the port stands up the framework's NATIVE frame loop, and this port does not: there is no interpolation to serve and no native producer to drive, so the guest's own loop runs on the substrate and owns its OT. GameHooks::frameUpdate and drawOTag are fail-fast permanently. This is a SCOPE decision, not a measurement — it is falsified only by the USER changing it, or by a measurement showing X4 does NOT run at 60fps in the modes we care about, which has NOT been measured in this repo.
-- notes: If the decision is ever reversed, this is where that work starts.
+- gap: The host now owns loop repetition through `X4FrameDriver`, but that driver still calls the retail GTE/OT leaves and needs none of the framework's native-producer packet-pool configuration. `GameHooks::frameUpdate` and `drawOTag` remain fail-fast because they are a different native-renderer path. This skip is about picture production, not frame-loop ownership.
+- notes: If native picture production is ever authorized, this is where that separate work starts.
 
 ### RE-06 — pad driver buffers
 - status: re-verified
 - deps: RE-01
-- evidence: Retail SLUS_005.61 (SHA-1 213733031136d095ca275d6957695aa25011cfa5): a whole-text scan of 294,400 loaded words finds exactly one jal to the matching-decomp-identified InitPAD target 0x800EE0D0, at 0x80012194; immediate dataflow gives (a0,a1,a2,a3)=(0x80166D68,0x22,0x8012F46C,0x22). tools/verify_pad.py --check compares all four arguments to the shipping GameConfig and --selftest proves both answers, 4/4.
-- where: game/core/game_config.cpp (kPadSlot0Buf/kPadSlot1Buf and fixed-buffer bindings); tools/verify_pad.py
+- evidence: Retail SLUS_005.61 (SHA-1 213733031136d095ca275d6957695aa25011cfa5): a whole-text scan of 294,400 loaded words finds exactly one jal to the matching-decomp-identified InitPAD target 0x800EE0D0, at 0x80012194; immediate dataflow gives (a0,a1,a2,a3)=(0x80166D68,0x22,0x8012F46C,0x22). tools/verify_pad.py --check compares all four arguments to the typed GuestPadBufferLayout, its direct-runtime publication, and the legacy compatibility bindings; --selftest proves both answers, 4/4.
+- where: game/core/pad_layout.h (single typed fact authority); game/core/x4_runtime.cpp and game/core/game_config.cpp (direct and compatibility consumers); tools/verify_pad.py
 - gap: The two fixed buffers are complete and execution now passes CD initialization. Runtime input injection remains a separate gate because the observed boot path has not yet consumed a host-injected pad state.
-- notes: padDriverFn/padSlotPtrTable/padSlotPtrStride remain zero deliberately: the retail InitPAD call passes the two buffers directly, and psxport falls back to those fixed buffers when no table is declared. This lands drop-in co-op input plumbing only; RE-07 still has no player-object, camera, routing or spawn implementation.
+- notes: padDriverFn/padSlotPtrTable/padSlotPtrStride remain zero deliberately: the retail InitPAD call passes the two buffers directly. Native frame service now reaches the same typed layout without dereferencing a null legacy config. This lands drop-in co-op input plumbing only; RE-07 still has no player-object, camera, routing or spawn implementation.
 
 ## enhancements
 
@@ -136,9 +145,9 @@ narrows issue #19's future widescreen correction to the real coordinate sources.
 ### RE-09 — the game's OWN scripted wait states, fade ramps and frame-count timers
 - status: re-partial
 - deps: RE-01, RE-02
-- evidence: JOB A's stock-path timing fault remains resolved by recorded framework pin 9c2e3f1c (issue #13). JOB B now implements the user's required synchronous operation at the actual owners instead of at presentation: Ghidra/generated-source cross-reading identifies direct issuer 0x80013890, archive issuer 0x80013AD8, ready callbacks 0x80013A20/0x80013E68, request table 0x800F0E18 (12-byte LBA/length entries), callback slot 0x8011DD20, state byte 0x801406AC, archive postprocess 0x80014780, wait bodies 0x80014C70/0x80014A90, and loading-presentation wait 0x80013530. `game/core/fast_wait.cpp` runs each generated issuer setup, feeds consecutive raw sectors from FIFO offset 12 through the generated callback while virtualizing only measured libcd leaves, pumps postprocess after every callback, and requires state 2 before returning. This timing is structural: producer handlers 0x800142BC/0x80014514 increment enqueued count 0x80137CF4 and reject `(enqueued-processed)>=7`; consumer 0x800147AC clears active records, increments processed count 0x80137CF0, advances its index modulo 16, and clears pending 0x8013BD40 when counts meet. Retail calls 0x80014780 once per main loop, so deferring consumption until the entire archive is not equivalent. The unchanged waits consequently execute zero iterations. A decoded-expression static assertion pins callback slot `(32786<<16)-8928 == 0x8011DD20`; focused production-leaf tests pin inactive super-calls, preparing/delivering CdReady, measured controls, raw+12 GetSector copying, setup VSync, and loading-presentation on/off behavior. Clang build and clang-tidy pass.
+- evidence: JOB A's stock-path timing fault remains resolved by recorded framework pin 9c2e3f1c (issue #13). JOB B implements synchronous direct/archive owners and retains its measured callbacks, request table, ring drain, terminal-state checks, and loading-presentation omission. Native owners now replace the complete direct/archive CD setup bodies and the set_alarm counter query without dispatching guest VSync. Focused production-leaf tests pass, and full-trap real-disc runs complete request 64 (49 sectors) and request 65 (6 sectors) before reaching the separate XA startup frontier.
 - where: game/core/fast_wait.{h,cpp}; game/core/recomp_register.cpp; game/core/x4_context.h; tests/test_x4_runtime.cpp; docs/behavior-map.md (fastwait row)
-- gap: A bounded uninstrumented real-disc run against clean psxport 9c2e3f1c completed archive requests 64/113/51 (49/154/3 sectors) and direct requests 65/80 (6/4 sectors), including terminal-state checks and the measured PsyQ VSync(-1) GPU-timeout query, then remained live until the deliberate timeout. Exact destination-byte comparison for the current synchronous route and a capture proving no loading frame reaches presentation remain open. C025 is falsified because its equal-field RAM dumps measured the discarded presentation-withholding design. The game's OTHER scripted waits/fade ramps (non-load fades via 0x800129A4/0x800129F0 at 21/34 call sites) are still unclassified and must not be collapsed without separate RE.
+- gap: Re-run destination-byte and presentation-absence comparisons on the current full-trap build after XA startup advances far enough to exercise later requests. The game's OTHER scripted waits/fades remain separately unclassified.
 - notes: Depends on RE-04 in practice — you cannot say what is a wait state until you know where the loads are.
 
 ## ownership
@@ -146,7 +155,7 @@ narrows issue #19's future widescreen correction to the real coordinate sources.
 ### RE-10 — native ownership seeded from the AGPL matching decomp
 - status: in-progress
 - deps: RE-01, RE-02
-- evidence: Retail SLUS_005.61 (SHA-1 213733031136d095ca275d6957695aa25011cfa5): tools/re_title_quad.py reuses the complete title-composition path through title quad update 0x800D76F8, proves state-0 dispatch 0x8010FDD0 -> 0x800D6F94, matches all 49 instructions in the selected leaf, and diffs 17 shipped facts plus the retained-super triple. Its 4/4 selftest rejects a changed body instruction, state dispatch, and shipping table address. game/core/title_quad.cpp is the readable AGPL-derived native body; x4_title_quad hermetically pins 23 output/register checks. Clang linked the product and full CTest passes 13/13 against clean shared psxport dbdb2baf. An exact-pin serialized real-disc run reaches guest main and reports `[mirror-verify] 0x800D6F94 OK (pass #1)`. Present captures at 120, 600, 1000, and 1100..1600 all contain the same dark title field (55.52% technically non-black due the near-black display rectangle), so this run does not prove visible title composition.
+- evidence: Retail SLUS_005.61 (SHA-1 213733031136d095ca275d6957695aa25011cfa5): tools/re_title_quad.py reuses the complete title-composition path through title quad update 0x800D76F8, proves state-0 dispatch 0x8010FDD0 -> 0x800D6F94, matches all 49 instructions in the selected leaf, and diffs 17 shipped facts plus the retained-super triple. Its selftest also rejects a changed `PSXPORT_THUNK_FORCE_GEN=0x800D6F94` diagnostic address. game/core/title_quad.cpp is the readable AGPL-derived native body; x4_title_quad hermetically pins 23 output/register checks. A prior exact-pin run reported `[mirror-verify] 0x800D6F94 OK (pass #1)`, but its sampled presents did not prove visible composition. The documented same-binary mirror/force-generated A/B must be repeated after this frame-ownership change.
 - where: game/core/title_quad.{h,cpp}; tools/re_title_quad.py; tests/test_x4_title_quad.cpp; game/core/x4_runtime.cpp
 - gap: Static/hermetic ownership plus live override reach/equality are complete. A deliberate one-byte native perturbation must still make the same live mirror gate fail; until that opposite answer is observed this step remains in-progress, not re-verified.
 - notes: This imports one title-object initializer only. It does not change pixels, fix issue #19, or create native producers/interpolation/depth. The source stays AGPL inside this repo; nothing moved into psxport.
@@ -156,7 +165,7 @@ narrows issue #19's future widescreen correction to the real coordinate sources.
 ### RE-11 — platform-HLE synchronization entry points and executable windows
 - status: re-partial
 - deps: RE-01
-- evidence: `tools/verify_vsync.py` derives six contract groups from retail SLUS_005.61 without consulting matching-decomp labels. VSync 0x800E4DB0 calls helper 0x800E4EF8 twice and retains its own query/hblank/GPU/last-sync logic. The helper occupies exactly [0x800E4EF8,0x800E4F94), spins on counter 0x8011DC50 reaching a0, and carries the retail `VSync: timeout` literal. Init 0x800E56A4 zeroes that counter, clears 8 callbacks at 0x8011DC30, and registers 0x800E56FC for IRQ 0; the handler increments once and walks exactly those 8 callbacks. The title owns only the helper, dispatches the current class-0 handler with interrupted registers preserved, services pad and SPU once per field, then commits through the recorded neutral presenter. Selftest is 8/8, including raw-present, hardcoded-handler, missing-pad, and missing-SPU refusals. `tools/verify_no_temporal_dependency.py` scans shipping sources with one positive plus five source mutations and four binary-symbol mutations.
-- where: game/core/vsync_sync.{h,cpp}; game/core/game_config.cpp (hle window); tools/verify_vsync.py; tools/verify_no_temporal_dependency.py
-- gap: VBlank behavior and the title-side dependency boundary are implemented. Pin 9c2e3f1c supplies the neutral presenter, exact field-rate SPU cadence, temporal helper split, and explicit slot-presence policy; X4 deliberately leaves slot 1 absent until distinct P2 host state exists. The stronger no-fps60 binary control and a real-disc run must reconfirm presentation/capture/pacing. Every other unmeasured platform-HLE entry remains zero.
-- notes: `vsyncTrap` remains zero by design: X4's guest owns its frame loop. The former watchdog stack was a sample inside a repeating deadline query, not proof that VBlank waiting caused the loop; issue #9 records the corrected diagnosis.
+- evidence: `tools/verify_vsync.py` still derives the retail VSync/helper/counter/IRQ chain, then proves shipping ownership has moved: `X4FrameDriver` services one field, `deliverField` dispatches the CURRENT class-0 handler with interrupted registers preserved, pad and SPU advance once, and the neutral presenter commits once. GameConfig admits only `[0x800E4DB0,0x800E4DB4)` and declares that full entry as `vsyncTrap`; the old `0x800E4EF8` helper override/window is absent. Its opposite-answer controls reject a missing field boundary, hardcoded handler, raw present, missing pad/SPU, collapsed window, and missing full trap. `x4_frame_driver` hermetically proves the finite boot prefix and the exact 15-leaf retail frame order, buffer flip, and counter increment.
+- where: game/core/x4_frame_driver.{h,cpp}; game/core/vsync_sync.{h,cpp}; game/core/game_config.cpp; tests/test_x4_frame_driver.cpp; tools/verify_vsync.py
+- gap: Combined product runs cross startup `0x80013588`, GPU timeout setup, both synchronous request setup bodies, display initialization, and a 90-field STR/MDEC movie transaction with the full trap armed. Representative gameplay is now the next live boundary. The separate GetlocP/Sub-Q music fix still needs audible product evidence; later memory-card callers remain separately open under issue #25.
+- notes: Native frame-loop ownership is independent of native rendering or temporal interpolation. X4 remains guest-GTE, widescreen-only.

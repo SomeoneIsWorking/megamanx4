@@ -1,19 +1,19 @@
-// vsync_sync.h — Mega Man X4's measured libetc VBlank synchronization seam.
+// vsync_sync.h — Mega Man X4's native-owned display-field service.
 #pragma once
 
 #include <cstdint>
 
-class Game;
+class Core;
 
 namespace x4::vsync {
 
 // Retail SLUS_005.61, SHA-1 213733031136d095ca275d6957695aa25011cfa5.
-// 0x800E4EF8 is the helper called twice by libetc VSync: it waits until the IRQ-owned counter
-// reaches a0. 0x800E4F94 is the next function entry, so this half-open interval is the helper's
-// exact executable body rather than a broad library window.
-inline constexpr uint32_t kWait = 0x800E4EF8u;
-inline constexpr uint32_t kWaitEnd = 0x800E4F94u;
+// Full libetc VSync entry. The native frame shell owns timing, so every guest call and every mode is
+// forbidden. The half-open four-byte window admits only this measured entry to PlatformHle.
+inline constexpr uint32_t kVSync = 0x800E4DB0u;
+inline constexpr uint32_t kVSyncEntryEnd = 0x800E4DB4u;
 
-void install(Game *game);
+// Advance exactly one retail display field at the native frame boundary.
+void deliverField(Core &core);
 
 } // namespace x4::vsync

@@ -50,6 +50,22 @@ projection consumer; a persisted or launch/runtime `false` still supplies the ex
 Default-on is not a pixel-verification claim: the framework candidates must still land and the
 deterministic off/on capture must classify culling and 2D layout before RE-08 is complete.
 
+## Title-sprite retained/generated A/B
+
+The title white-logo quad initializer keeps both implementations in the shipping binary. Use the
+same product build for both diagnostic legs:
+
+```sh
+PSXPORT_MIRROR_VERIFY=0x800D6F94 ./scratch/build/player/megamanx4_port
+PSXPORT_THUNK_FORCE_GEN=0x800D6F94 ./scratch/build/player/megamanx4_port
+```
+
+The first command compares the native initializer with its retained generated body when the title
+reaches it. The second forces only `0x800D6F94` back to generated code, isolating that sprite seam
+without disabling unrelated title behavior. These are diagnostic launch inputs, not player options.
+Static registration and hermetic object-state tests do not prove visible sprite correctness; a
+serialized launch must capture the same known title phase in both legs before making a visual claim.
+
 `PSXPORT_X4_DISC` is spelled identically in exactly three places and they must not diverge:
 `.env.example`, `GameConfig::discEnvVar`, and `tools/resolve_disc.py`'s `ENV_KEY`.
 

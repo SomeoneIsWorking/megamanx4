@@ -17,6 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_EXE = ROOT / "scratch/bin/megamanx4/SLUS_005.61"
 SYNC_HEADER = ROOT / "game/core/vsync_sync.h"
 SYNC_SOURCE = ROOT / "game/core/vsync_sync.cpp"
+FRAME_SOURCE = ROOT / "game/core/x4_frame_driver.cpp"
 CONFIG_SOURCE = ROOT / "game/core/game_config.cpp"
 
 EXPECTED_SHA1 = "213733031136d095ca275d6957695aa25011cfa5"
@@ -41,6 +42,7 @@ class Inputs:
     exe: bytes
     header: str
     source: str
+    frame: str
     config: str
 
 
@@ -210,13 +212,14 @@ def verify(inputs: Inputs, *, check_digest: bool = True) -> list[str]:
         "retail bodies reproduce the observed CD-init -> command -> VSync chain"
     )
 
-    # Shipping wiring must use the same constants and exact window, with no vsyncTrap.
+    # Shipping wiring moves the field boundary into the native frame driver and traps the FULL
+    # VSync entry. The old helper remains retail evidence only; it is not an admitted HLE window.
     if (
-        source_constant(inputs.header, "kWait") != WAIT
-        or source_constant(inputs.header, "kWaitEnd") != WAIT_END
+        source_constant(inputs.header, "kVSync") != VSYNC
+        or source_constant(inputs.header, "kVSyncEntryEnd") != VSYNC + 4
     ):
         raise VerificationError(
-            "shipping wait/window constants disagree with retail boundaries"
+            "shipping full-VSync trap constants disagree with the retail entry"
         )
     for token in (
         "kVblankCounter = 0x8011DC50u",
@@ -227,11 +230,7 @@ def verify(inputs: Inputs, *, check_digest: bool = True) -> list[str]:
         "c->game->pad.serviceFrame()",
         "c->game->spu_audio.frameLogic()",
         "c->game->spu_audio.frame()",
-        "c->r[5] <<= 15",
-        "c->r[3] = UINT32_MAX",
-        "c->r[2] = 0",
         "c->game->presentation.commit(c, 1)",
-        "register_(kWait",
     ):
         if token not in inputs.source:
             raise VerificationError(
@@ -241,20 +240,36 @@ def verify(inputs: Inputs, *, check_digest: bool = True) -> list[str]:
         window_lo, window_hi = platform_hle_windows(inputs.config)
     except ValueError as exc:
         raise VerificationError(str(exc)) from exc
-    if window_lo[0] != "x4::vsync::kWait" or window_hi[0] != "x4::vsync::kWaitEnd":
+    if (
+        window_lo[0] != "x4::vsync::kVSync"
+        or window_hi[0] != "x4::vsync::kVSyncEntryEnd"
+    ):
         raise VerificationError(
-            "GameConfig does not declare the exact wait-helper executable window"
+            "GameConfig does not admit only the full VSync entry"
         )
-    if ".vsyncTrap" in inputs.config:
+    if ".vsyncTrap = x4::vsync::kVSync" not in inputs.config:
         raise VerificationError(
-            "GameConfig sets vsyncTrap even though the guest owns VSync"
+            "GameConfig does not fail-fast the full VSync entry"
         )
+    if inputs.frame.count("fieldService_(core)") != 1:
+        raise VerificationError(
+            "X4FrameDriver must service exactly one display field per step"
+        )
+    if "0x800E4DB0u" in inputs.frame or "kVSync" in inputs.frame:
+        raise VerificationError(
+            "X4FrameDriver still dispatches guest VSync instead of owning the boundary"
+        )
+    for retired in ("wait_for_counter", "register_(kWait", "kWaitEnd"):
+        if retired in inputs.source or retired in inputs.header:
+            raise VerificationError(
+                f"retired successful VSync helper remains in shipping source: {retired}"
+            )
     if "gpu_present(c)" in inputs.source or "gpu_pace_frame(c)" in inputs.source:
         raise VerificationError(
             "shipping wait helper bypasses or duplicates the authoritative presentation fence"
         )
     checks.append(
-        "shipping handler and exact PlatformHle window match the measured contract"
+        "native field service and full-entry VSync trap match the measured contract"
     )
     return checks
 
@@ -266,6 +281,7 @@ def load_inputs(exe_path: Path) -> Inputs:
         exe_path.read_bytes(),
         SYNC_HEADER.read_text(),
         SYNC_SOURCE.read_text(),
+        FRAME_SOURCE.read_text(),
         CONFIG_SOURCE.read_text(),
     )
 
@@ -291,6 +307,7 @@ def selftest(inputs: Inputs) -> list[str]:
         mutate_word(inputs.exe, 0x800E5ADC, 0),
         inputs.header,
         inputs.source,
+        inputs.frame,
         inputs.config,
     )
     results.append(expect_refusal("broken observed call edge", wrong_edge))
@@ -298,6 +315,7 @@ def selftest(inputs: Inputs) -> list[str]:
         mutate_word(inputs.exe, 0x800E5750, 0x2A220007),
         inputs.header,
         inputs.source,
+        inputs.frame,
         inputs.config,
     )
     results.append(expect_refusal("seven callback slots", wrong_bound))
@@ -305,7 +323,10 @@ def selftest(inputs: Inputs) -> list[str]:
         inputs.exe,
         inputs.header,
         inputs.source,
-        inputs.config.replace("x4::vsync::kWaitEnd", "x4::vsync::kWait", 1),
+        inputs.frame,
+        inputs.config.replace(
+            "x4::vsync::kVSyncEntryEnd", "x4::vsync::kVSync", 1
+        ),
     )
     results.append(expect_refusal("collapsed executable window", wrong_config))
     raw_present = Inputs(
@@ -314,6 +335,7 @@ def selftest(inputs: Inputs) -> list[str]:
         inputs.source.replace(
             "c->game->presentation.commit(c, 1)", "gpu_present(c)", 1
         ),
+        inputs.frame,
         inputs.config,
     )
     results.append(expect_refusal("raw present without frame fence", raw_present))
@@ -323,6 +345,7 @@ def selftest(inputs: Inputs) -> list[str]:
         inputs.source.replace(
             "rec_dispatch(c, vblankHandler)", "rec_dispatch(c, kVblankHandler)", 1
         ),
+        inputs.frame,
         inputs.config,
     )
     results.append(
@@ -332,6 +355,7 @@ def selftest(inputs: Inputs) -> list[str]:
         inputs.exe,
         inputs.header,
         inputs.source.replace("c->game->pad.serviceFrame()", "", 1),
+        inputs.frame,
         inputs.config,
     )
     results.append(expect_refusal("missing pad field service", no_pad_service))
@@ -339,9 +363,26 @@ def selftest(inputs: Inputs) -> list[str]:
         inputs.exe,
         inputs.header,
         inputs.source.replace("c->game->spu_audio.frame()", "", 1),
+        inputs.frame,
         inputs.config,
     )
     results.append(expect_refusal("missing SPU field service", no_spu_service))
+    no_field_boundary = Inputs(
+        inputs.exe,
+        inputs.header,
+        inputs.source,
+        inputs.frame.replace("fieldService_(core)", "", 1),
+        inputs.config,
+    )
+    results.append(expect_refusal("missing native field boundary", no_field_boundary))
+    no_vsync_trap = Inputs(
+        inputs.exe,
+        inputs.header,
+        inputs.source,
+        inputs.frame,
+        inputs.config.replace(".vsyncTrap = x4::vsync::kVSync", ".vsyncTrap = 0", 1),
+    )
+    results.append(expect_refusal("missing full VSync trap", no_vsync_trap))
     return results
 
 

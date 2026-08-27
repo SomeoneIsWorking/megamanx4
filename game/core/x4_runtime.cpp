@@ -3,16 +3,32 @@
 #include "bios_threads.h"
 #include "cfg.h"
 #include "core.h"
+#include "display_init.h"
 #include "game.h"
+#include "gpu_timeout.h"
 #include "legacy_game_interface.h"
+#include "movie_field.h"
+#include "pad_layout.h"
 #include "recomp_register.h"
+#include "startup_cd.h"
+#include "stream_interrupt.h"
+#include "stream_startup.h"
 #include "title_quad.h"
 #include "vsync_sync.h"
 #include "x4_context.h"
+#include "x4_frame_driver.h"
 
 #include <cstdlib>
+#include <memory>
 
 namespace x4 {
+namespace {
+
+void synchronizePresentation(Core &core) {
+  context(core).widescreen.synchronizePresentation(core);
+}
+
+} // namespace
 
 X4Runtime::X4Runtime() {
   // Compatibility views remain available to unmigrated generic framework algorithms, but behavior
@@ -30,10 +46,13 @@ void X4Runtime::destroyContext(void *context) {
 }
 
 void X4Runtime::registerOverrides(Game &game) {
-  // RE-11 owns only libetc's measured wait helper. The retail VSync body and IRQ-0 handler remain
-  // recompiled guest code; vsync_sync restores the missing asynchronous producer between them.
-  vsync::install(&game);
   bios_threads::install(game);
+  display_init::registerOverride();
+  gpu_timeout::registerOverride();
+  movie::registerOverrides();
+  startup_cd::registerOverride();
+  stream_interrupt::registerOverride();
+  stream_startup::registerOverride();
   title_quad::registerOverride();
   x4_install_projection_overrides();
   // The loading-coroutine conversion (RE-09 job B): the two measured retail wait bodies, wrapped by
@@ -50,19 +69,31 @@ void X4Runtime::bootInit(Core &core) {
              "to dispatch address 0");
     std::abort();
   }
-  cfg_logi("boot", "dispatching guest main() 0x%08X on the recompiled substrate", image->gameMainEntry);
-  rec_dispatch(&core, image->gameMainEntry);
+  cfg_logi("boot",
+           "executing finite prefix of guest main() 0x%08X; native frame shell owns repetition",
+           image->gameMainEntry);
+  frame::bootPrefix(core);
+}
+
+std::unique_ptr<FrameDriver> X4Runtime::createFrameDriver(Game &) {
+  return std::make_unique<frame::X4FrameDriver>(rec_dispatch, vsync::deliverField, synchronizePresentation);
+}
+
+const GuestPadBufferLayout *X4Runtime::guestPadBufferLayout() const {
+  return &pad::kGuestBufferLayout;
 }
 
 const GuestProgramImage *X4Runtime::guestProgramImage() const {
   return &legacy::measuredProgramImage;
 }
 
-bool X4Runtime::guestVramIsPicture(const Game &) const {
-  // X4's shipping picture is the GTE primitive stream. Widescreen widens that stream's guest clip;
-  // it does not turn persistent VRAM uploads into a second picture owner. No measured mode transition
-  // currently changes that ownership, so the derived runtime answers false for every frame.
-  return false;
+bool X4Runtime::guestVramIsPicture(const Game &game) const {
+  // Ordinary X4 gameplay is the GTE primitive stream, but the title's STR path is the measured
+  // ownership transition: while its continuous CD stream is active, MDEC output reaches the display
+  // exclusively through 24-bit LoadImage slices in guest VRAM. The native CD controller clears this
+  // bit on the guest's Pause/Stop command, returning ownership to the primitive stream without a
+  // frame-type heuristic or a renderer-specific special case.
+  return game.cd.stream_active != 0;
 }
 
 const GuestWidescreenProjection *X4Runtime::guestWidescreenProjection() const {

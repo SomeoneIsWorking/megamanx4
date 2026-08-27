@@ -175,16 +175,194 @@ void load_synchronously(Core *core,
                load.sectorsDelivered);
 }
 
+void archive_cd_setup(Core *core,
+                      GuestBody retailBody,
+                      GuestBody issueLocation,
+                      GuestBody queryStatus,
+                      GuestBody cdReadyBody,
+                      GuestBody cdControlBody) {
+  if (!core || !core->game) {
+    lucent::error("x4-fastwait", "archive CD setup requires a bound Core/Game");
+    std::abort();
+  }
+  State &load = state(*core);
+  require_body(retailBody, "archive CD setup", load);
+  if (!enh(cv_fastwait) || !scoped(load)) {
+    retailBody(core);
+    return;
+  }
+  require_body(issueLocation, "archive CD setup issue-location", load);
+  require_body(queryStatus, "archive CD setup status", load);
+  require_body(cdReadyBody, "archive CD setup CdReady", load);
+  require_body(cdControlBody, "archive CD setup CdControl", load);
+
+  // Exact finite body of SLUS_005.61 0x80013DA8, except for its VSync(3). The scoped libcd leaves
+  // below complete immediately, so advancing three emulated fields here would invent time inside a
+  // host-owned synchronous transition.
+  core->r[29] -= 32u;
+  core->r[5] = 0x80137CF8u;
+  core->r[4] = core->mem_r32(0x80137CCCu);
+  core->r[2] = 0xA0u;
+  core->mem_w32(core->r[29] + 24u, core->r[31]);
+  core->mem_w8(core->r[29] + 16u, static_cast<uint8_t>(core->r[2]));
+  core->mem_w32(0x80137CECu, 0u);
+  core->r[31] = 0x80013DD8u;
+  rec_guest_instruction_ticks(core, 12u);
+  issueLocation(core);
+
+  do {
+    core->r[31] = 0x80013DE0u;
+    rec_guest_instruction_ticks(core, 2u);
+    queryStatus(core);
+    core->r[2] &= 64u;
+    core->r[4] = 1u;
+    rec_guest_instruction_ticks(core, 3u);
+  } while (core->r[2] != 0u);
+
+  do {
+    core->r[5] = 0u;
+    core->r[31] = 0x80013DF4u;
+    rec_guest_instruction_ticks(core, 2u);
+    cdReadyBody(core);
+    core->r[4] = 1u;
+    rec_guest_instruction_ticks(core, 2u);
+  } while (core->r[2] != 0u);
+
+  core->r[4] = 14u;
+  core->r[5] = core->r[29] + 16u;
+  core->r[31] = 0x80013E0Cu;
+  core->r[6] = 0u;
+  rec_guest_instruction_ticks(core, 4u);
+  cdControlBody(core);
+  rec_guest_instruction_ticks(core, 2u);
+  if (core->r[2] == 0u) {
+    refuse("archive CD setup", "native Setmode did not complete synchronously", load);
+  }
+
+  // Retail's VSync(3) was only a fixed settling delay after the asynchronous Setmode command. The
+  // native scoped command above has already completed; no game-owned field/query call is made.
+  core->r[4] = 2u;
+  core->r[5] = 0x80137CF8u;
+  core->r[31] = 0x80013E30u;
+  core->r[6] = 0u;
+  rec_guest_instruction_ticks(core, 7u);
+  cdControlBody(core);
+  core->r[4] = 6u;
+  rec_guest_instruction_ticks(core, 2u);
+  if (core->r[2] == 0u) {
+    refuse("archive CD setup", "native Setloc did not complete synchronously", load);
+  }
+
+  do {
+    core->r[5] = 0u;
+    core->r[31] = 0x80013E44u;
+    core->r[6] = 0u;
+    rec_guest_instruction_ticks(core, 3u);
+    cdReadyBody(core);
+    core->r[4] = 6u;
+    rec_guest_instruction_ticks(core, 2u);
+  } while (core->r[2] == 0u);
+
+  core->r[2] = 1u;
+  core->mem_w8(kLoadState, static_cast<uint8_t>(core->r[2]));
+  core->r[31] = core->mem_r32(core->r[29] + 24u);
+  core->r[29] += 32u;
+  rec_guest_instruction_ticks(core, 7u);
+}
+
+void direct_cd_setup(Core *core,
+                     GuestBody retailBody,
+                     GuestBody issueLocation,
+                     GuestBody cdReadyBody,
+                     GuestBody cdControlBody,
+                     GuestBody publishReadyCallback) {
+  if (!core || !core->game) {
+    lucent::error("x4-fastwait", "direct CD setup requires a bound Core/Game");
+    std::abort();
+  }
+  State &load = state(*core);
+  require_body(retailBody, "direct CD setup", load);
+  if (!enh(cv_fastwait) || !scoped(load)) {
+    retailBody(core);
+    return;
+  }
+  require_body(issueLocation, "direct CD setup issue-location", load);
+  require_body(cdReadyBody, "direct CD setup CdReady", load);
+  require_body(cdControlBody, "direct CD setup CdControl", load);
+  require_body(publishReadyCallback, "direct CD setup callback publication", load);
+
+  // Exact finite body of SLUS_005.61 0x80013968 around the same synchronous Setmode/Setloc
+  // transition as the archive path. Its fixed VSync(3) settling delay is deliberately absent.
+  core->r[29] -= 32u;
+  core->r[5] = 0x80137CF8u;
+  core->r[4] = core->mem_r32(0x80137CCCu);
+  core->r[2] = 0xA0u;
+  core->mem_w32(core->r[29] + 24u, core->r[31]);
+  core->mem_w8(core->r[29] + 16u, static_cast<uint8_t>(core->r[2]));
+  core->mem_w8(kLoadState, 0u);
+  core->mem_w32(0x80137CECu, 0u);
+  core->r[31] = 0x800139A0u;
+  rec_guest_instruction_ticks(core, 14u);
+  issueLocation(core);
+  core->mem_w32(0x80137CCCu, core->mem_r32(0x80137CCCu) - 1u);
+  core->r[4] = 1u;
+  rec_guest_instruction_ticks(core, 7u);
+
+  do {
+    core->r[5] = 0u;
+    core->r[31] = 0x800139C4u;
+    rec_guest_instruction_ticks(core, 2u);
+    cdReadyBody(core);
+    core->r[4] = 1u;
+    rec_guest_instruction_ticks(core, 2u);
+  } while (core->r[2] != 0u);
+
+  core->r[4] = 14u;
+  core->r[5] = core->r[29] + 16u;
+  core->r[31] = 0x800139DCu;
+  core->r[6] = 0u;
+  rec_guest_instruction_ticks(core, 4u);
+  cdControlBody(core);
+  rec_guest_instruction_ticks(core, 2u);
+  if (core->r[2] == 0u) {
+    refuse("direct CD setup", "native Setmode did not complete synchronously", load);
+  }
+
+  core->r[4] = 2u;
+  core->r[5] = 0x80137CF8u;
+  core->r[31] = 0x80013A00u;
+  core->r[6] = 0u;
+  rec_guest_instruction_ticks(core, 7u);
+  cdControlBody(core);
+  rec_guest_instruction_ticks(core, 2u);
+  if (core->r[2] == 0u) {
+    refuse("direct CD setup", "native Setloc did not complete synchronously", load);
+  }
+
+  core->r[31] = 0x80013A10u;
+  rec_guest_instruction_ticks(core, 2u);
+  publishReadyCallback(core);
+  core->r[31] = core->mem_r32(core->r[29] + 24u);
+  core->r[29] += 32u;
+  rec_guest_instruction_ticks(core, 4u);
+}
+
 void cd_ready(Core *core, GuestBody retailBody) {
   State &load = state(*core);
   if (!scoped(load)) {
     retailBody(core);
     return;
   }
-  if (core->r[4] != 1u) {
-    refuse("CdReady", "synchronous loader only measured blocking mode 1", load);
+  const uint32_t mode = core->r[4];
+  if (mode == 1u) {
+    core->r[2] = load.phase == Phase::Delivering ? 1u : 0u;
+    return;
   }
-  core->r[2] = load.phase == Phase::Delivering ? 1u : 0u;
+  if (mode == 6u && load.phase == Phase::Preparing) {
+    core->r[2] = 1u;
+    return;
+  }
+  refuse("CdReady", "unexpected synchronous mode", load);
 }
 
 void cd_control(Core *core, GuestBody retailBody, bool blocking) {
@@ -229,26 +407,6 @@ void cd_get_sector(Core *core, GuestBody retailBody) {
   }
   load.sectorCursor += bytes;
   core->r[2] = 1u;
-}
-
-void vsync(Core *core, GuestBody retailBody) {
-  State &load = state(*core);
-  if (!scoped(load)) {
-    retailBody(core);
-    return;
-  }
-  // The archive consumer reaches libgpu's transfer setup at 0x800ECB38. That measured body calls
-  // VSync(-1) only to sample the current field counter for its 240-field timeout deadline. It does
-  // not wait or present, so preserve the untouched query even while the load is being delivered.
-  // Other VSync modes remain closed unless they are the issuer's measured setup VSync(3).
-  if (core->r[4] == UINT32_MAX) {
-    retailBody(core);
-    return;
-  }
-  if (load.phase != Phase::Preparing || core->r[4] != 3u) {
-    refuse("VSync", "unexpected VSync in synchronous loader scope", load);
-  }
-  core->r[2] = 0u;
 }
 
 void loading_presentation_wait(Core *core, GuestBody retailBody) {

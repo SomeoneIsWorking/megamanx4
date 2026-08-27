@@ -27,12 +27,16 @@ declares the guest `gte` picture as its only player renderer, because this enhan
 deliberately has no PC-native producers. The shared capability resolver removes Native from the menu
 and warns before falling back to GTE for an explicit diagnostic request; it never selects the
 guaranteed-black producer path.
-**The field seam is the port's heartbeat.** The guest owns its loop, so EVERY per-field host service
-lives in `x4::vsync::deliver_field` (game/core/vsync_sync.cpp): the retail IRQ-0 delivery (the
+**The native field seam is the port's heartbeat.** The shared frame shell calls
+`X4FrameDriver::stepFrame()` once per field; the driver replaces only retail `VSync(0)` and preserves
+the remaining `0x80012024` body in its measured order. EVERY per-field host service lives in
+`x4::vsync::deliverField` (`game/core/vsync_sync.cpp`): the retail IRQ-0 delivery (the
 SetInterrupt class-0 slot's CURRENT occupant — after SsStart that chains the VBlank walk AND the
 libsnd sequencer tick, which is why audio works), pad service, SPU advance, snapshot tick, and the
-neutral presentation commit. A per-field service that "has no call site" on this port is missing
-because it belongs THERE — that was the whole root cause of both the silence and the dead input.
+neutral presentation commit. Full libetc VSync `0x800E4DB0` is a fail-fast PlatformHle trap for every
+mode; no guest wait or counter query owns cadence. A per-field service that "has no call site" on this
+port is missing because it belongs THERE — that was the whole root cause of both silence and dead
+input.
 
 **The framework seam is inherited directly now:** process-lifetime `x4::X4Runtime` derives
 `GameRuntime` and owns title render-path selection, a typed `GuestProgramImage`, measured boot
@@ -133,9 +137,11 @@ The consequence, in framework vocabulary:
 - The whole **native-producer / `ProducerScope` / frame-interpolation (`fps60`, lerp) / native-depth**
   apparatus is **➖ not-applicable** here, not ⬜ todo. psxport's hardest constraint — the picture must
   come from game state, and lerp is native too — exists to serve interpolation of a 30fps guest. X4
-  already runs at 60. There is no native producer to drive and no native frame loop to stand up;
-  the legacy `GameHooks::frameUpdate` is fail-fast and stays that way. Marking these ⬜ would put four steps on
-  the roadmap the USER has ruled out.
+  already runs at 60. There is no native producer or temporal decorator to drive, but the host still
+  owns the one-step retail loop and timing through `X4FrameDriver`; native loop ownership does not
+  imply native rendering. The legacy `GameHooks::frameUpdate` stays fail-fast because it is not this
+  title's typed driver seam. Marking native producers/interpolation ⬜ would put those steps on the
+  roadmap the USER has ruled out.
 
   **The neutral presenter, exact field-rate SPU cadence, and field-aware CD time are recorded at
   the recorded 9c2e3f1c pin (introduced at 7bd24f2b).** X4 schedules no

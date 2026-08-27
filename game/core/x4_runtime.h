@@ -23,6 +23,8 @@ public:
   void destroyContext(void *context) override;
   void registerOverrides(Game &game) override;
   void bootInit(Core &core) override;
+  std::unique_ptr<FrameDriver> createFrameDriver(Game &game) override;
+  const GuestPadBufferLayout *guestPadBufferLayout() const override;
   const GuestProgramImage *guestProgramImage() const override;
   bool guestVramIsPicture(const Game &game) const override;
   const GuestWidescreenProjection *guestWidescreenProjection() const override;

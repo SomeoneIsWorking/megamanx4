@@ -2,6 +2,7 @@
 
 #include "core.h"
 #include "enhancements.h"
+#include "game.h"
 #include "gpu_vk.h"
 
 #include <cstdlib>
@@ -18,7 +19,14 @@ constexpr uint32_t kDrawEnvironmentWidthOffset = 4u;
 
 } // namespace
 
-PresentationAspect WidescreenPolicy::presentationAspect(const Core &) const {
+PresentationAspect WidescreenPolicy::presentationAspect(const Core &core) const {
+  // X4's STR movies are authored as 320x240 24-bit VRAM pictures. They do not publish the
+  // title-owned GTE projection that makes gameplay genuinely wider, so widening their presentation
+  // extent would crop the pre-rendered picture. CdControl Pause/Stop clears stream_active and the
+  // native frame owner restores the requested 16:9 presentation plan.
+  if (core.game && core.game->cd.stream_active != 0) {
+    return PresentationAspect::Standard4x3;
+  }
   return enh(cv_widescreen) ? PresentationAspect::Wide16x9 : PresentationAspect::Standard4x3;
 }
 
@@ -79,6 +87,18 @@ void WidescreenController::publishDrawEnvironment(Core &core, GuestBody retailBo
   // The retail body remains the authority for x/y/h and every non-RECT field. Its RECT.w is the only
   // measured field replaced, matching the already-latched guest projection plan.
   core.mem_w16(environment + kDrawEnvironmentWidthOffset, static_cast<uint16_t>(plan_.guestDrawWidth));
+}
+
+void WidescreenController::synchronizePresentation(Core &core) {
+  if (!projectionPublished_) {
+    lucent::error("x4-wide", "frame presentation ran before the title published its projection");
+    std::abort();
+  }
+
+  // The title policy reads the current STR ownership bit. Re-latching the pure plan at the native
+  // frame boundary makes the pre-rendered movie 4:3 while preserving the already-published wide GTE
+  // state; when Pause/Stop clears the bit, the same measured geometry restores 16:9 gameplay.
+  plan_ = latch_(&core, kRetailProjection);
 }
 
 } // namespace x4

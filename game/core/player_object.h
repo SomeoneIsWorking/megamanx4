@@ -14,6 +14,7 @@
 #pragma once
 
 #include "core.h"
+#include "pad_layout.h"
 
 #include <cstdint>
 
@@ -45,8 +46,8 @@ inline constexpr uint32_t kEngineCharacterAddress = 0x80172203; // selected char
                                                                 // the +2 branch in func_80035240)
 
 // libpad packet buffers handed to InitPAD at 0x80012194 (RE-06), capacity 0x22 each.
-inline constexpr uint32_t kPadPacketBufferP1 = 0x80166D68;
-inline constexpr uint32_t kPadPacketBufferP2 = 0x8012F46C;
+inline constexpr uint32_t kPadPacketBufferP1 = pad::kSlot0Buffer;
+inline constexpr uint32_t kPadPacketBufferP2 = pad::kSlot1Buffer;
 
 // Named guest functions (documentation-grade constants for traces/gates; no call site here).
 inline constexpr uint32_t kInputRouterFn = 0x80012328;

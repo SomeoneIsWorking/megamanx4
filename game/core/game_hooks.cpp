@@ -58,13 +58,9 @@ static void unstood_up(const char *what) {
   abort();
 }
 
-// frameUpdate / drawOTag are fail-fast AND STAY THAT WAY. They are not "not
-// yet" — this port does not stand up the framework's native frame loop at all,
-// because the game is already 60fps so there is no interpolation to serve and
-// no native producer to drive (USER decision 2026-08-12, CLAUDE.md). In codemap
-// vocabulary the native frame loop is ➖ not-applicable, NOT ⬜ todo. If either
-// of these is ever reached, the run wandered somewhere this port has no
-// business being, and aborting says so.
+// frameUpdate / drawOTag are fail-fast AND STAY THAT WAY. The typed X4FrameDriver owns the one-step
+// retail loop directly; it does not route through these legacy native-producer hooks. If either is
+// reached, the run entered a second loop/render ownership path, and aborting exposes that split.
 static void x4_frameUpdate(Core *) {
   unstood_up("frameUpdate (native frame loop)");
 }

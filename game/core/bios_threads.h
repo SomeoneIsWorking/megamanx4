@@ -44,6 +44,11 @@ public:
   bool close(uint32_t handle);
   bool change(uint32_t handle);
 
+  // Title-owned finite boundaries may park the currently running retail task without dispatching
+  // the guest ChangeTh thunk. The preserved Coro stack resumes on the next retail scheduler turn;
+  // callers must already be executing inside one of the measured non-main TCBs.
+  void yieldToMain();
+
   [[nodiscard]] bool isOpen(uint32_t handle) const;
   [[nodiscard]] bool isDone(uint32_t handle) const;
 

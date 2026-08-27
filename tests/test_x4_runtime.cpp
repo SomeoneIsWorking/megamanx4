@@ -4,13 +4,17 @@
 #include "config_var.h"
 #include "config_vars.h"
 #include "core.h"
+#include "dma_irq.h"
 #include "enhancements.h"
 #include "fast_wait.h"
 #include "game.h"
 #include "game_iface.h"
 #include "hw_bind.h"
+#include "movie_field.h"
+#include "stream_startup.h"
 #include "widescreen_controller.h"
 #include "x4_context.h"
+#include "x4_frame_driver.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -27,16 +31,10 @@ GuestProjectionGeometry g_projectionGeometry;
 uint32_t g_publishedOfx = 0;
 uint32_t g_publishedOfy = 0;
 uint32_t g_retailBodyCalls = 0;
-constexpr uint32_t kVblankCounter = 0x8011DC50u;
 
 void mark_retail_body(Core *core) {
   ++g_retailBodyCalls;
   core->r[2] = 0xC0DEC0DEu;
-}
-
-void query_retail_vsync(Core *core) {
-  ++g_retailBodyCalls;
-  core->r[2] = core->mem_r32(kVblankCounter);
 }
 
 GuestProjectionPlan latch_projection(Core *, GuestProjectionGeometry geometry) {
@@ -149,6 +147,15 @@ bool verify_widescreen_controller(Core &core) {
     std::fprintf(stderr, "4:3 projection was not an exact 160/320 identity\n");
     return false;
   }
+
+  g_projectionPlan.aspect = PresentationAspect::Wide16x9;
+  g_projectionPlan.presentationExtent = {428, 240};
+  standardController.synchronizePresentation(core);
+  if (standardController.plan().aspect != PresentationAspect::Wide16x9 ||
+      standardController.plan().presentationExtent.width != 428) {
+    std::fprintf(stderr, "native frame boundary did not re-latch the title presentation mode\n");
+    return false;
+  }
   return true;
 }
 
@@ -207,6 +214,64 @@ bool verify_bios_thread_contract(Core &core) {
   return subject.close(reused) && subject.close(second) && subject.close(third);
 }
 
+bool verify_title_movie_field_yield(Core &core) {
+  constexpr uint32_t kEntry = 0x8001D064u;
+  constexpr uint32_t kStack = 0x801F8100u;
+  constexpr uint32_t kGp = 0x8012F418u;
+  x4::bios_threads::Service *service = nullptr;
+  uint32_t activeHandle = 0;
+  int phase = 0;
+  bool valid = true;
+  x4::bios_threads::Service subject(core, [&](Core &taskCore, uint32_t entry) {
+    valid &= entry == kEntry;
+    taskCore.r[31] = 0x80018BC4u;
+    phase = 1;
+    x4::movie::yieldField(taskCore, 0x80018BC4u, *service);
+    valid &= taskCore.r[2] == 0u;
+    phase = 2;
+    valid &= service->close(activeHandle);
+  });
+  service = &subject;
+  activeHandle = subject.open(kEntry, kStack, kGp);
+  if (!subject.change(activeHandle) || phase != 1 || !valid) {
+    std::fprintf(stderr, "title movie field did not park the retail task fiber\n");
+    return false;
+  }
+  if (!subject.change(activeHandle) || phase != 2 || subject.isOpen(activeHandle) || !valid) {
+    std::fprintf(stderr, "title movie field did not resume the preserved retail task stack\n");
+    return false;
+  }
+  return true;
+}
+
+bool verify_title_stream_field_yield(Core &core) {
+  constexpr uint32_t kEntry = 0x80018788u;
+  constexpr uint32_t kStack = 0x801F8100u;
+  constexpr uint32_t kGp = 0x8012F418u;
+  x4::bios_threads::Service *service = nullptr;
+  uint32_t activeHandle = 0;
+  int phase = 0;
+  bool valid = true;
+  x4::bios_threads::Service subject(core, [&](Core &taskCore, uint32_t entry) {
+    valid &= entry == kEntry;
+    phase = 1;
+    x4::stream_startup::awaitField(taskCore, *service);
+    phase = 2;
+    valid &= service->close(activeHandle);
+  });
+  service = &subject;
+  activeHandle = subject.open(kEntry, kStack, kGp);
+  if (!subject.change(activeHandle) || phase != 1 || !valid) {
+    std::fprintf(stderr, "title stream field did not park the retail task fiber\n");
+    return false;
+  }
+  if (!subject.change(activeHandle) || phase != 2 || subject.isOpen(activeHandle) || !valid) {
+    std::fprintf(stderr, "title stream field did not resume the preserved retail task stack\n");
+    return false;
+  }
+  return true;
+}
+
 bool verify_synchronous_loader_leaves(Core &core) {
   constexpr uint32_t kDestination = 0x80110080u;
   constexpr uint32_t kResult = 0x801100C0u;
@@ -227,10 +292,10 @@ bool verify_synchronous_loader_leaves(Core &core) {
     std::fprintf(stderr, "preparing synchronous loader reported a ready sector\n");
     return false;
   }
-  core.r[4] = 3;
-  x4::fast_wait::vsync(&core, mark_retail_body);
-  if (core.r[2] != 0) {
-    std::fprintf(stderr, "synchronous loader's setup VSync did not remain a no-op\n");
+  core.r[4] = 6;
+  x4::fast_wait::cd_ready(&core, mark_retail_body);
+  if (core.r[2] != 1) {
+    std::fprintf(stderr, "synchronous loader did not complete the measured Setloc-ready query\n");
     return false;
   }
   core.r[4] = 0x0E;
@@ -253,14 +318,6 @@ bool verify_synchronous_loader_leaves(Core &core) {
   }
   load.phase = x4::fast_wait::Phase::Delivering;
   g_retailBodyCalls = 0;
-  core.mem_w32(kVblankCounter, 317u);
-  core.r[4] = UINT32_MAX;
-  x4::fast_wait::vsync(&core, query_retail_vsync);
-  if (g_retailBodyCalls != 1 || core.r[2] != 317u || core.mem_r32(kVblankCounter) != 317u ||
-      load.phase != x4::fast_wait::Phase::Delivering) {
-    std::fprintf(stderr, "synchronous archive drain did not preserve the measured VSync(-1) query\n");
-    return false;
-  }
   load.sectorCursor = 12;
   core.r[4] = kDestination;
   core.r[5] = 3;
@@ -331,12 +388,20 @@ int main() {
   gte_init();
   gte_bind(core);
   const GameHooks *legacyHooks = runtime.legacyHooksForMigration();
+  const GameConfig *legacyConfig = runtime.legacyConfigForMigration();
   const GuestProgramImage *programImage = runtime.guestProgramImage();
+  const GuestPadBufferLayout *padLayout = runtime.guestPadBufferLayout();
   if (psxport_game_runtime() != &runtime || core->runtime != &runtime || game->runtime != &runtime ||
-      runtime.legacyConfigForMigration() == nullptr || legacyHooks == nullptr || programImage == nullptr ||
-      programImage->gameMainEntry != 0x80012024u || programImage->residentText.begin != 0x00010000u ||
-      programImage->residentText.end != 0x0012F800u) {
+      legacyConfig == nullptr || legacyHooks == nullptr || programImage == nullptr || padLayout == nullptr ||
+      padLayout->slot0Buffer != 0x80166D68u || padLayout->slot1Buffer != 0x8012F46Cu ||
+      padLayout->slotPointerTable != 0u || programImage->gameMainEntry != 0x80012024u ||
+      programImage->residentText.begin != 0x00010000u || programImage->residentText.end != 0x0012F800u) {
     std::fprintf(stderr, "X4Runtime did not own the installed compatibility seam\n");
+    return 1;
+  }
+  if (legacyConfig->dmaCallbackTable != x4::stream_startup::kDmaCallbackTable ||
+      dma_callback_slot(legacyConfig->dmaCallbackTable, 3) != x4::stream_startup::kDmaChannel3CallbackSlot) {
+    std::fprintf(stderr, "X4Runtime did not publish the measured per-channel DMA callback table\n");
     return 1;
   }
   if (legacyHooks->bootInit != nullptr || legacyHooks->registerOverrides != nullptr ||
@@ -345,14 +410,21 @@ int main() {
     std::fprintf(stderr, "boot, override, or temporal ownership remained in legacy GameHooks\n");
     return 1;
   }
-  if (game->temporalPresentation != nullptr || runtime.guestWidescreenProjection() == nullptr) {
-    std::fprintf(stderr, "X4Runtime constructed temporal history or omitted its guest-wide policy\n");
+  if (game->temporalPresentation != nullptr || game->frameDriver == nullptr ||
+      runtime.guestWidescreenProjection() == nullptr) {
+    std::fprintf(stderr, "X4Runtime omitted its frame driver/widescreen policy or constructed temporal history\n");
     return 1;
   }
   if (runtime.guestVramIsPicture(*game) || game_guest_vram_is_picture(*game)) {
-    std::fprintf(stderr, "X4Runtime treated persistent guest VRAM as a second picture owner\n");
+    std::fprintf(stderr, "X4Runtime treated idle persistent guest VRAM as a second picture owner\n");
     return 1;
   }
+  game->cd.stream_active = 1;
+  if (!runtime.guestVramIsPicture(*game) || !game_guest_vram_is_picture(*game)) {
+    std::fprintf(stderr, "X4Runtime did not transfer picture ownership to the active STR stream\n");
+    return 1;
+  }
+  game->cd.stream_active = 0;
 
   x4::cv_widescreen.set(psx::config::Layer::Runtime, false);
   if (runtime.guestWidescreenProjection()->presentationAspect(*core) != PresentationAspect::Standard4x3) {
@@ -362,6 +434,16 @@ int main() {
   x4::cv_widescreen.set(psx::config::Layer::Runtime, true);
   if (runtime.guestWidescreenProjection()->presentationAspect(*core) != PresentationAspect::Wide16x9) {
     std::fprintf(stderr, "enabled widescreen did not select the 16:9 guest projection\n");
+    return 1;
+  }
+  game->cd.stream_active = 1;
+  if (runtime.guestWidescreenProjection()->presentationAspect(*core) != PresentationAspect::Standard4x3) {
+    std::fprintf(stderr, "active 24-bit STR movie did not preserve its authored 4:3 picture\n");
+    return 1;
+  }
+  game->cd.stream_active = 0;
+  if (runtime.guestWidescreenProjection()->presentationAspect(*core) != PresentationAspect::Wide16x9) {
+    std::fprintf(stderr, "widescreen gameplay did not resume after the STR stream stopped\n");
     return 1;
   }
   psx::config::cv_oracle.set(psx::config::Layer::Runtime, true);
@@ -376,6 +458,12 @@ int main() {
     return 1;
   }
   if (!verify_bios_thread_contract(*core)) {
+    return 1;
+  }
+  if (!verify_title_movie_field_yield(*core)) {
+    return 1;
+  }
+  if (!verify_title_stream_field_yield(*core)) {
     return 1;
   }
   if (!verify_synchronous_loader_leaves(*core)) {

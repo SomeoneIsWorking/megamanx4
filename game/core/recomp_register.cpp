@@ -11,6 +11,7 @@
 #include "core.h"
 #include "fast_wait.h"
 #include "recomp_iface.h"
+#include "stream_interrupt.h"
 #include <stdlib.h>
 
 #ifdef MMX4_HAVE_SUBSTRATE
@@ -56,6 +57,10 @@ void run_direct_request(Core *core) {
                                     "direct CD request 0x80013890");
 }
 
+void run_direct_cd_setup(Core *core) {
+  x4::fast_wait::direct_cd_setup(core, gen_func_80013968, func_800E61BC, func_800E5D40, func_800E5D90, func_80013650);
+}
+
 void run_archive_request(Core *core) {
   x4::fast_wait::load_synchronously(core,
                                     gen_func_80013AD8,
@@ -65,11 +70,18 @@ void run_archive_request(Core *core) {
                                     "archive CD request 0x80013AD8");
 }
 
+void run_archive_cd_setup(Core *core) {
+  x4::fast_wait::archive_cd_setup(core, gen_func_80013DA8, func_800E61BC, func_8001385C, func_800E5D40, func_800E5D90);
+}
+
 void remove_loading_presentation_wait(Core *core) {
   x4::fast_wait::loading_presentation_wait(core, gen_func_80013530);
 }
 
 void synchronous_cd_ready(Core *core) {
+  if (x4::stream_interrupt::consumeCompletedCallback(*core)) {
+    return;
+  }
   x4::fast_wait::cd_ready(core, gen_func_800E5D40);
 }
 
@@ -83,10 +95,6 @@ void synchronous_cd_control_blocking(Core *core) {
 
 void synchronous_cd_get_sector(Core *core) {
   x4::fast_wait::cd_get_sector(core, gen_func_800E6158);
-}
-
-void synchronous_load_vsync(Core *core) {
-  x4::fast_wait::vsync(core, gen_func_800E4DB0);
 }
 
 } // namespace
@@ -116,13 +124,14 @@ void x4_install_projection_overrides() {
 void x4_install_loading_overrides() {
 #ifdef MMX4_HAVE_SUBSTRATE
   engine_set_override_main(x4::fast_wait::kDirectRequest, run_direct_request, gen_func_80013890);
+  engine_set_override_main(x4::fast_wait::kDirectCdSetup, run_direct_cd_setup, gen_func_80013968);
   engine_set_override_main(x4::fast_wait::kArchiveRequest, run_archive_request, gen_func_80013AD8);
+  engine_set_override_main(x4::fast_wait::kArchiveCdSetup, run_archive_cd_setup, gen_func_80013DA8);
   engine_set_override_main(
       x4::fast_wait::kLoadingPresentationWait, remove_loading_presentation_wait, gen_func_80013530);
   engine_set_override_main(x4::fast_wait::kCdReady, synchronous_cd_ready, gen_func_800E5D40);
   engine_set_override_main(x4::fast_wait::kCdControl, synchronous_cd_control, gen_func_800E5D90);
   engine_set_override_main(x4::fast_wait::kCdControlBlocking, synchronous_cd_control_blocking, gen_func_800E5FF4);
   engine_set_override_main(x4::fast_wait::kCdGetSector, synchronous_cd_get_sector, gen_func_800E6158);
-  engine_set_override_main(x4::fast_wait::kVSync, synchronous_load_vsync, gen_func_800E4DB0);
 #endif
 }

@@ -1,12 +1,13 @@
 ---
 id: C029
 kind: claim
-status: holds
+status: falsified
 created: 2026-08-24
 tags: RE-09,fastwait,runtime
 depends: game/core/fast_wait.cpp#vsync
 reconfirmed: 2026-08-24 23:09:53
 verified_at: 2026-08-24 23:09:53
+falsified_on: 2026-08-27
 ---
 
 ## Claim
@@ -28,3 +29,9 @@ Retail/generated chain 0x80014780 -> 0x800147AC -> LoadImage 0x800148EC -> PsyQ 
 ## Re-confirmed 2026-08-24 23:09:53
 
 On commit a53c255 against clean psxport 9c2e3f1c, full Clang CTest passed 11/11 including the counter-317 VSync(-1) focused control. A bounded 20-second uninstrumented real-disc run completed archive requests 64/113/51 as 49/154/3 sectors and direct requests 65/80 as 6/4 sectors, then remained live until deliberate timeout with no loader presentation or state fault.
+
+## FALSIFIED 2026-08-27
+
+The full VSync trap removes fast_wait's successful VSync(-1) super-call, so the synchronous archive route no longer preserves that guest query and must migrate its timeout owner.
+
+> Anything that cited this claim as proof must be re-checked. Grep the repo for it.

@@ -4,14 +4,14 @@ kind: claim
 status: holds
 created: 2026-08-20
 tags: pad,coop
-depends: game/core/game_config.cpp, tools/verify_pad.py
+depends: game/core/pad_layout.h, game/core/x4_runtime.cpp, game/core/game_config.cpp, tools/verify_pad.py
 reconfirmed: 2026-08-24 23:09:44
 verified_at: 2026-08-24 23:09:44
 ---
 
 ## Claim
 
-Mega Man X4 initializes libpad with fixed slot buffers 0x80166D68 and 0x8012F46C, both capacity 0x22; GameConfig binds those two fixed buffers and intentionally declares no pointer table.
+Mega Man X4 initializes libpad with fixed slot buffers 0x80166D68 and 0x8012F46C, both capacity 0x22; the direct X4Runtime and legacy GameConfig bind the same typed layout and intentionally declare no pointer table.
 
 ## Evidence
 

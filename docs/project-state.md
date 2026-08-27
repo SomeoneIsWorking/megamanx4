@@ -40,12 +40,24 @@ established by emission or linking.
 
 ### S003 — Guest field service
 
-The measured VBlank path services the current retail class-0 handler, pad packets, SPU advancement,
-and neutral presentation once per field. Recorded runs reached distinct P1 input state and produced
-non-silent samples through the retail libsnd chain.
+The title now exposes a finite boot prefix and a one-step `X4FrameDriver`. Focused production-seam
+tests prove the measured retail call order, one field-service call, draw-buffer flip, and frame-counter
+increment. That field service dispatches the current retail class-0 handler, pad packets, one SPU
+advance, snapshot, and neutral presentation; full libetc VSync is trapped for every mode.
 
-Gap: distinct shipping P2 host state is absent, audible device playback still needs human checking,
-and representative long gameplay has not verified timing/input/audio together.
+Live PID 2710117 proves the corrected shipping path writes `StDataReadyCallback` `0x800E8188` to
+measured DMA3 slot `0x8011DC68`, leaves generic IRQ slot `0x8011CBA4` alone, fills a seven-chunk libstr
+frame, arms DMA3 only on the final chunk, and dispatches `0x800E8188` at field 15. Narrow ring-watch
+PID 2717335 proves state 3 -> 2 -> 4 -> 0 through DMA completion, `StGetNext`, and `StFreeRing`.
+`X4FrameDriver` now preserves the retail blocking-movie transaction: while stream ownership is live,
+it resumes at `UpdateTasks` instead of restarting the gameplay draw/clear prefix, then runs the retail
+suffix when the movie releases. Real-disc PID 3087406 reconciled 90/90 fields without guest VSync or
+a dropped layer; inspected presents 30/60/90 are coherent full-width movie frames. Its frame-30 VRAM
+dump has nonzero pixels in every one of columns 0..479 in both 24-bit buffers, falsifying the prior
+right-third-only corruption caused by the gameplay clear erasing words 0..319.
+
+Gap: distinct shipping P2 host state is absent, the separate GetlocP/Sub-Q music path was not reached
+and remains unaudited, and representative gameplay has not verified timing/input/audio together.
 
 ### S004 — Guest-rendered front end
 

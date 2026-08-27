@@ -24,6 +24,8 @@
 #include "guest_program_image.h"
 #include "legacy_game_config.h"
 #include "legacy_game_interface.h"
+#include "pad_layout.h"
+#include "stream_startup.h"
 #include "vsync_sync.h"
 
 // MEASURED, from the PS-EXE header of the extracted SLUS_005.61 (tools/extract_exe.py prints it) and
@@ -174,12 +176,6 @@ static_assert(kCrt0BssZeroLo < kPsExeTextAddr + kPsExeTextSize,
 // supports this exact shape: when padSlotPtrTable is zero, it writes its four-byte packet to these
 // fixed buffers. Leaving the unrelated fields zero is therefore a measured ownership decision, not an
 // unfinished guess.
-static constexpr uint32_t kPadSlot0Buf = 0x80166D68u;
-static constexpr uint32_t kPadSlot1Buf = 0x8012F46Cu;
-static constexpr uint32_t kPadCapacity = 0x22u;
-static_assert(kPadSlot0Buf + kPadCapacity <= kPadSlot1Buf || kPadSlot1Buf + kPadCapacity <= kPadSlot0Buf,
-              "the two InitPAD buffers must not overlap");
-
 // Direct X4Runtime ownership consumes this narrow immutable image instead of reading boot/routing
 // facts out of GameConfig. The compatibility table below names the same measured constants for
 // framework algorithms that have not migrated yet; tools/verify_crt0.py compares both against the
@@ -259,11 +255,10 @@ static const GameConfig g_x4_cfg = {
     .bootFmv = {nullptr, nullptr, nullptr, nullptr},
 
     // --- per-frame OT / packet pool -------------------------------- RE-05, ➖ SKIP-BY-DESIGN here --
-    // NOT a todo. This group only has a reader if the port stands up the framework's NATIVE frame loop,
-    // and this port never will: X4 already runs at 60fps, so there is no interpolation to serve and no
-    // native producer to drive (USER decision 2026-08-12, quoted in CLAUDE.md). The guest's own loop
-    // runs on the substrate and owns its OT. If that decision is ever reversed, RE-05 is where it
-    // starts — but zero here is the correct value for the port as scoped, not an outstanding gap.
+    // NOT a todo. This legacy group belongs to the framework's native-producer frame path. X4's
+    // X4FrameDriver owns repetition but still calls the retail GTE/OT leaves, so it needs none of
+    // these native-renderer packet-pool facts. If native picture production is ever authorized,
+    // RE-05 is where it starts; zero is correct for the current widescreen-only guest-GTE product.
     .otRegionBase = 0,
     .otRegionStride = 0,
     .packetPoolBase = 0,
@@ -333,7 +328,10 @@ static const GameConfig g_x4_cfg = {
     .cdReadStock = 0,
     .cdReadSync = 0,
     .cdSearchFile = 0,
-    .dmaCallbackTable = 0,
+    // FUN_800E59A0 (DMACallback) indexes this seven-entry table directly. STR installs its DMA3
+    // completion at 0x8011DC68; that callback promotes a completed ring entry from state 3 to 2,
+    // which is the only state StGetNext accepts. 0x8011CB98 is the distinct generic IRQ-class table.
+    .dmaCallbackTable = x4::stream_startup::kDmaCallbackTable,
 
     // --- pad driver -------------------------------------------------------------- RE-06, MEASURED --
     // X4-SPECIFIC NOTE, and it is the one piece of good news co-op has: `padSlot1Buf` is the
@@ -343,24 +341,25 @@ static const GameConfig g_x4_cfg = {
     // supported by anything is the PLAYER-OBJECT half (one player struct, one camera, one input route):
     // that is RE-07, and it is the step this whole port turns on. Do not read a working second pad as
     // co-op being close.
-    .padSlot0Buf = kPadSlot0Buf,
-    .padSlot1Buf = kPadSlot1Buf,
+    .padSlot0Buf = x4::pad::kSlot0Buffer,
+    .padSlot1Buf = x4::pad::kSlot1Buffer,
     .padDriverFn = 0,
     .padSlotPtrTable = 0,
     .padSlotPtrStride = 0,
 
     // --- platform HLE (the hardware-sync primitives) ------------------------ RE-11: ONE MEASURED --
-    // Each window is an exact measured ownership range: libetc's counter-wait helper and the three
-    // contiguous BIOS thread thunks used by X4's retail scheduler. Adjacent engine code remains
-    // refused; tools/verify_{vsync,threads}.py derive both ranges from SLUS_005.61.
-    // vsyncTrap remains zero because X4's guest loop legitimately calls VSync.
-    .hle = {.windowLo = {x4::vsync::kWait, x4::bios_threads::kOpenThread},
-            .windowHi = {x4::vsync::kWaitEnd, x4::bios_threads::kThreadWindowEnd}},
+    // Each window is an exact measured ownership range: the full libetc VSync entry and the three
+    // contiguous BIOS thread thunks used by X4's retail scheduler. The native frame shell owns all
+    // timing, so every guest VSync mode traps. Adjacent library/engine code remains refused;
+    // tools/verify_{vsync,threads}.py derive both ranges from SLUS_005.61.
+    .hle = {.windowLo = {x4::vsync::kVSync, x4::bios_threads::kOpenThread},
+            .windowHi = {x4::vsync::kVSyncEntryEnd, x4::bios_threads::kThreadWindowEnd},
+            .vsyncTrap = x4::vsync::kVSync},
 
     // --- retired rendering-policy mirror -------------------------------- compatibility only, false --
-    // Shipping ownership lives in X4Runtime::guestVramIsPicture(), where it can follow actual title
-    // state if a measured transition is found. X4 currently claims only its GTE primitive stream as
-    // picture content; it does not claim persistent guest-VRAM uploads as a second picture owner.
+    // Shipping ownership lives in X4Runtime::guestVramIsPicture(), which follows X4's measured STR
+    // transition: ordinary GTE gameplay is false, while an active MDEC/CD stream owns the picture
+    // through guest-VRAM LoadImage slices.
     // Keep this legacy mirror false so an accidental adapter regression cannot resurrect the retired
     // static policy while generic consumers finish migrating away from GameConfig.
     .preserveVramBackdrop = 0,

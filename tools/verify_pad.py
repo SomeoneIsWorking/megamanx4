@@ -4,8 +4,8 @@
 The matching decomp is a locator only: its US symbol map identifies InitPAD at 0x800EE0D0 and its
 boot initializer identifies the call worth inspecting. This tool independently scans every loaded
 instruction in SLUS_005.61, requires exactly one call to that target, symbolically evaluates the four
-argument registers at the call (including its delay slot), and compares them with the constants that
-actually ship in game/core/game_config.cpp.
+argument registers at the call (including its delay slot), and compares them with the title-owned
+typed layout that the direct runtime ships. The legacy GameConfig view must bind the same constants.
 
 Blind spots: this proves the static call arguments and call count, not runtime mutation of either
 buffer. It also relies on the matching decomp's identity for the InitPAD target; the executable-side
@@ -24,9 +24,11 @@ from dataclasses import dataclass
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_EXE = os.path.join(ROOT, "scratch", "bin", "megamanx4", "SLUS_005.61")
-SHIPPED_FILE = os.path.join(ROOT, "game", "core", "game_config.cpp")
+SHIPPED_FILE = os.path.join(ROOT, "game", "core", "pad_layout.h")
+CONFIG_FILE = os.path.join(ROOT, "game", "core", "game_config.cpp")
+RUNTIME_FILE = os.path.join(ROOT, "game", "core", "x4_runtime.cpp")
 INIT_PAD = 0x800EE0D0
-WANTED_CONSTANTS = ("kPadSlot0Buf", "kPadSlot1Buf", "kPadCapacity")
+WANTED_CONSTANTS = ("kSlot0Buffer", "kSlot1Buffer", "kBufferCapacity")
 
 
 class Refused(Exception):
@@ -172,7 +174,7 @@ def measure(image: Image) -> Measurement:
 
 
 CONST_RE = re.compile(
-    r"^\s*static\s+constexpr\s+uint32_t\s+(kPad\w+)\s*=\s*(0x[0-9A-Fa-f]+|[0-9]+)u?\s*;",
+    r"^\s*inline\s+constexpr\s+std::uint32_t\s+(k\w+)\s*=\s*(0x[0-9A-Fa-f]+|[0-9]+)u?\s*;",
     re.MULTILINE,
 )
 
@@ -190,32 +192,58 @@ def shipping_state(path: str = SHIPPED_FILE) -> Shipping:
             f"shipping file does not define {', '.join(missing)} in a parseable form"
         )
     source = re.sub(r"//[^\n]*|/\*.*?\*/", "", text, flags=re.DOTALL)
-    config_at = source.find("static const GameConfig g_x4_cfg")
+    failures = []
+    layout_bindings = {
+        "slot0Buffer": "kSlot0Buffer",
+        "slot1Buffer": "kSlot1Buffer",
+    }
+    for field, expected in layout_bindings.items():
+        match = re.search(rf"\.{field}\s*=\s*([^,\n]+)", source)
+        actual = match.group(1).strip() if match else "<absent>"
+        if actual != expected:
+            failures.append(
+                f"GuestPadBufferLayout .{field} ships {actual}, expected {expected}"
+            )
+
+    try:
+        with open(CONFIG_FILE, encoding="utf-8") as stream:
+            config_source = re.sub(
+                r"//[^\n]*|/\*.*?\*/", "", stream.read(), flags=re.DOTALL
+            )
+        with open(RUNTIME_FILE, encoding="utf-8") as stream:
+            runtime_source = re.sub(
+                r"//[^\n]*|/\*.*?\*/", "", stream.read(), flags=re.DOTALL
+            )
+    except OSError as exc:
+        raise Refused(f"cannot read pad consumer source: {exc}") from exc
+
+    config_at = config_source.find("static const GameConfig g_x4_cfg")
     if config_at < 0:
-        raise Refused("shipping file has no parseable g_x4_cfg initializer")
-    config = source[config_at:]
+        raise Refused("GameConfig source has no parseable g_x4_cfg initializer")
+    config = config_source[config_at:]
     bindings = {
-        "padSlot0Buf": "kPadSlot0Buf",
-        "padSlot1Buf": "kPadSlot1Buf",
+        "padSlot0Buf": "x4::pad::kSlot0Buffer",
+        "padSlot1Buf": "x4::pad::kSlot1Buffer",
         "padDriverFn": "0",
         "padSlotPtrTable": "0",
         "padSlotPtrStride": "0",
     }
-    failures = []
     for field, expected in bindings.items():
         match = re.search(rf"\.{field}\s*=\s*([^,\n]+)", config)
         actual = match.group(1).strip() if match else "<absent>"
         if actual != expected:
             failures.append(f"GameConfig .{field} ships {actual}, expected {expected}")
+    if "return &pad::kGuestBufferLayout;" not in runtime_source:
+        failures.append("X4Runtime does not return the measured GuestPadBufferLayout")
     return Shipping(values, tuple(failures))
 
 
 def compare(measured: Measurement, shipped: dict[str, int]) -> list[str]:
     expected = (
-        shipped["kPadSlot0Buf"],
-        shipped["kPadCapacity"],
-        shipped["kPadSlot1Buf"],
-        shipped["kPadCapacity"],
+        shipped["kSlot0Buffer"],
+        shipped["kBufferCapacity"],
+        shipped["kSlot1Buffer"],
+        shipped["kBufferCapacity"],
     )
     names = ("slot0 buffer", "slot0 capacity", "slot1 buffer", "slot1 capacity")
     return [

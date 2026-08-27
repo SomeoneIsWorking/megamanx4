@@ -29,16 +29,25 @@ include(${PSXPORT_DIR}/cmake/psxport.cmake)
 # clang-tidy rather than leaving one source outside every gate.
 set(SEAM_SRC
   game/core/bios_threads.cpp
+  game/core/command_line.cpp
+  game/core/display_init.cpp
   game/core/fast_wait.cpp
   game/core/game_config.cpp
   game/core/game_hooks.cpp
+  game/core/gpu_timeout.cpp
   game/core/enhancements.cpp
   game/core/main.cpp
+  game/core/movie_field.cpp
   game/core/recomp_register.cpp
+  game/core/startup_cd.cpp
+  game/core/stream_interrupt.cpp
+  game/core/stream_field.cpp
+  game/core/stream_startup.cpp
   game/core/title_quad.cpp
   game/core/vsync_sync.cpp
   game/core/widescreen_controller.cpp
   game/core/x4_context.cpp
+  game/core/x4_frame_driver.cpp
   game/core/x4_runtime.cpp
 )
 add_library(megamanx4_seam OBJECT ${SEAM_SRC})
@@ -96,18 +105,30 @@ if(BUILD_TESTING)
     NAME thread_evidence
     COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/tools/verify_threads.py --check --selftest
   )
+  add_test(
+    NAME movie_fiber_generator
+    COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/tools/generate_x4_movie_fiber.py --selftest
+  )
   add_executable(mmx4_runtime_test
     ${CMAKE_SOURCE_DIR}/game/core/bios_threads.cpp
+    ${CMAKE_SOURCE_DIR}/game/core/display_init.cpp
     ${CMAKE_SOURCE_DIR}/game/core/fast_wait.cpp
     ${CMAKE_SOURCE_DIR}/tests/test_x4_runtime.cpp
     ${CMAKE_SOURCE_DIR}/game/core/enhancements.cpp
     ${CMAKE_SOURCE_DIR}/game/core/game_config.cpp
     ${CMAKE_SOURCE_DIR}/game/core/game_hooks.cpp
+    ${CMAKE_SOURCE_DIR}/game/core/gpu_timeout.cpp
+    ${CMAKE_SOURCE_DIR}/game/core/movie_field.cpp
     ${CMAKE_SOURCE_DIR}/game/core/recomp_register.cpp
+    ${CMAKE_SOURCE_DIR}/game/core/startup_cd.cpp
+    ${CMAKE_SOURCE_DIR}/game/core/stream_interrupt.cpp
+    ${CMAKE_SOURCE_DIR}/game/core/stream_field.cpp
+    ${CMAKE_SOURCE_DIR}/game/core/stream_startup.cpp
     ${CMAKE_SOURCE_DIR}/game/core/title_quad.cpp
     ${CMAKE_SOURCE_DIR}/game/core/vsync_sync.cpp
     ${CMAKE_SOURCE_DIR}/game/core/widescreen_controller.cpp
     ${CMAKE_SOURCE_DIR}/game/core/x4_context.cpp
+    ${CMAKE_SOURCE_DIR}/game/core/x4_frame_driver.cpp
     ${CMAKE_SOURCE_DIR}/game/core/x4_runtime.cpp
   )
   target_include_directories(mmx4_runtime_test PRIVATE game game/core)
@@ -117,6 +138,84 @@ if(BUILD_TESTING)
     CXX_STANDARD_REQUIRED ON
   )
   add_test(NAME x4_runtime COMMAND mmx4_runtime_test)
+  add_executable(mmx4_command_line_test
+    ${CMAKE_SOURCE_DIR}/game/core/command_line.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_x4_command_line.cpp
+  )
+  target_include_directories(mmx4_command_line_test PRIVATE game/core)
+  set_target_properties(mmx4_command_line_test PROPERTIES
+    CXX_STANDARD 20
+    CXX_STANDARD_REQUIRED ON
+  )
+  add_test(NAME x4_command_line COMMAND mmx4_command_line_test)
+  add_executable(mmx4_frame_driver_test
+    ${CMAKE_SOURCE_DIR}/game/core/x4_frame_driver.cpp
+    ${CMAKE_SOURCE_DIR}/game/core/vsync_sync.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_x4_frame_driver.cpp
+  )
+  target_include_directories(mmx4_frame_driver_test PRIVATE game game/core)
+  target_link_libraries(mmx4_frame_driver_test PRIVATE psxport)
+  set_target_properties(mmx4_frame_driver_test PROPERTIES
+    CXX_STANDARD 20
+    CXX_STANDARD_REQUIRED ON
+  )
+  add_test(NAME x4_frame_driver COMMAND mmx4_frame_driver_test)
+  add_executable(mmx4_startup_cd_test
+    ${CMAKE_SOURCE_DIR}/game/core/startup_cd.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_x4_startup_cd.cpp
+  )
+  target_include_directories(mmx4_startup_cd_test PRIVATE game game/core)
+  target_link_libraries(mmx4_startup_cd_test PRIVATE psxport)
+  set_target_properties(mmx4_startup_cd_test PROPERTIES
+    CXX_STANDARD 20
+    CXX_STANDARD_REQUIRED ON
+  )
+  add_test(NAME x4_startup_cd COMMAND mmx4_startup_cd_test)
+  add_executable(mmx4_gpu_timeout_test
+    ${CMAKE_SOURCE_DIR}/game/core/gpu_timeout.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_x4_gpu_timeout.cpp
+  )
+  target_include_directories(mmx4_gpu_timeout_test PRIVATE game game/core)
+  target_link_libraries(mmx4_gpu_timeout_test PRIVATE psxport)
+  set_target_properties(mmx4_gpu_timeout_test PROPERTIES
+    CXX_STANDARD 20
+    CXX_STANDARD_REQUIRED ON
+  )
+  add_test(NAME x4_gpu_timeout COMMAND mmx4_gpu_timeout_test)
+  add_executable(mmx4_display_init_test
+    ${CMAKE_SOURCE_DIR}/game/core/display_init.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_x4_display_init.cpp
+  )
+  target_include_directories(mmx4_display_init_test PRIVATE game game/core)
+  target_link_libraries(mmx4_display_init_test PRIVATE psxport)
+  set_target_properties(mmx4_display_init_test PROPERTIES
+    CXX_STANDARD 20
+    CXX_STANDARD_REQUIRED ON
+  )
+  add_test(NAME x4_display_init COMMAND mmx4_display_init_test)
+  add_executable(mmx4_stream_startup_test
+    ${CMAKE_SOURCE_DIR}/game/core/stream_startup.cpp
+    ${CMAKE_SOURCE_DIR}/game/core/vsync_sync.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_x4_stream_startup.cpp
+  )
+  target_include_directories(mmx4_stream_startup_test PRIVATE game game/core)
+  target_link_libraries(mmx4_stream_startup_test PRIVATE psxport)
+  set_target_properties(mmx4_stream_startup_test PROPERTIES
+    CXX_STANDARD 20
+    CXX_STANDARD_REQUIRED ON
+  )
+  add_test(NAME x4_stream_startup COMMAND mmx4_stream_startup_test)
+  add_executable(mmx4_stream_interrupt_test
+    ${CMAKE_SOURCE_DIR}/game/core/stream_interrupt.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_x4_stream_interrupt.cpp
+  )
+  target_include_directories(mmx4_stream_interrupt_test PRIVATE game game/core)
+  target_link_libraries(mmx4_stream_interrupt_test PRIVATE psxport)
+  set_target_properties(mmx4_stream_interrupt_test PROPERTIES
+    CXX_STANDARD 20
+    CXX_STANDARD_REQUIRED ON
+  )
+  add_test(NAME x4_stream_interrupt COMMAND mmx4_stream_interrupt_test)
   add_executable(mmx4_player_object_test
     ${CMAKE_SOURCE_DIR}/tests/test_x4_player_object.cpp
   )
@@ -164,11 +263,22 @@ endif()
 # per loop, and the process SIGSEGVs.
 include(${CMAKE_SOURCE_DIR}/generated/rec_sources.cmake)
 list(TRANSFORM GEN_REC_SRCS PREPEND generated/)
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
 set_source_files_properties(${GEN_REC_SRCS}
   PROPERTIES LANGUAGE CXX
   COMPILE_OPTIONS "-O1;-foptimize-sibling-calls;-fno-strict-aliasing;-fwrapv")
 
-add_executable(megamanx4_port ${SEAM_SRC} ${GEN_REC_SRCS})
+set(X4_MOVIE_FIBER_BODY ${CMAKE_BINARY_DIR}/generated/x4_movie_fiber.cpp)
+add_custom_command(
+  OUTPUT ${X4_MOVIE_FIBER_BODY}
+  COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/tools/generate_x4_movie_fiber.py
+          --generated-dir ${CMAKE_SOURCE_DIR}/generated
+          --output ${X4_MOVIE_FIBER_BODY}
+  DEPENDS ${CMAKE_SOURCE_DIR}/tools/generate_x4_movie_fiber.py ${GEN_REC_SRCS}
+  VERBATIM
+)
+
+add_executable(megamanx4_port ${SEAM_SRC} ${X4_MOVIE_FIBER_BODY} ${GEN_REC_SRCS})
 
 # Select the measured generated-symbol adapter in recomp_register.cpp.
 target_compile_definitions(megamanx4_port PRIVATE MMX4_HAVE_SUBSTRATE=1)
@@ -184,7 +294,7 @@ set_target_properties(megamanx4_port PROPERTIES
 
 # Only game/* include dirs here — the framework's (runtime, generated, vendored backends, SDL, freetype)
 # are inherited PUBLICly from the psxport link below.
-target_include_directories(megamanx4_port PRIVATE game game/core)
+target_include_directories(megamanx4_port PRIVATE game game/core generated)
 
 target_compile_options(megamanx4_port PRIVATE -w -O2 -g
   ${SDL3_CFLAGS_OTHER} ${FREETYPE_CFLAGS_OTHER})

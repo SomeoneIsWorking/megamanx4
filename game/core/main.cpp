@@ -5,9 +5,10 @@
 // nothing here names anything but framework symbols.
 //
 // RE-01, RE-02's static bootstrap, and RE-06 are measured (docs/re-frontier.md). The sequence below
-// boots the generated resident substrate; RE-11 restores the retail IRQ-owned VBlank timebase at the
-// measured libetc wait helper while leaving the guest's VSync body and loop in control.
+// boots the generated resident substrate; RE-11 returns from the finite gameMain prefix, then the
+// shared shell drives X4FrameDriver one field at a time while full libetc VSync remains trapped.
 #include "cfg.h"
+#include "command_line.h"
 #include "core.h"
 #include "disc.h"
 #include "enhancements.h"
@@ -32,10 +33,20 @@ int selftest_run(const char *path); // runtime/recomp/selftest.cpp (framework ha
 // (`BOOT = cdrom:\SLUS_005.61;1` — measured 2026-08-12), so there is no SCEA boot stub LoadExec'ing a
 // second image the way Tomba!2's SCUS_944.54 -> MAIN.EXE hand-off does; the framework's stub stage is
 // unused here.
-static const char *kDefaultExe = "scratch/bin/megamanx4/SLUS_005.61";
 static const char *kDiscExePath = "\\SLUS_005.61";
 
 int main(int argc, char **argv) {
+  const x4::cli::Options options = x4::cli::parse(argc, argv);
+  if (options.action == x4::cli::Action::Help) {
+    x4::cli::printUsage(stdout, argv[0]);
+    return 0;
+  }
+  if (options.action == x4::cli::Action::Error) {
+    std::fprintf(stderr, "megamanx4_port: %s\n", options.error);
+    x4::cli::printUsage(stderr, argv[0]);
+    return 2;
+  }
+
   // Process-lifetime derived owner. Installation must precede the first Core, which snapshots it.
   static x4::X4Runtime runtime;
   psxport_install_game(runtime);
@@ -47,7 +58,7 @@ int main(int argc, char **argv) {
   // exactly what removed the framework's "UNKNOWN knob ... it did NOTHING" warning for them.
   x4::audit_declared_enhancements();
 
-  const char *path = argc > 1 ? argv[1] : kDefaultExe;
+  const char *path = options.executablePath;
 
   Game *game = new Game();
   Core *c = &game->core;

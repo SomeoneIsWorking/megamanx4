@@ -34,6 +34,7 @@ HEADER = ROOT / "game/core/title_quad.h"
 SOURCE = ROOT / "game/core/title_quad.cpp"
 RUNTIME = ROOT / "game/core/x4_runtime.cpp"
 DECOMP_SOURCE = ROOT / "external/mmx4/src/main/title_quad.c"
+CONFIG_DOC = ROOT / "docs/config.md"
 
 INITIALIZER = 0x800D6F94
 INITIALIZER_END = 0x800D7058
@@ -181,7 +182,9 @@ def parse_constant(text: str, name: str) -> int:
     return int(match.group(1), 0)
 
 
-def verify_source(header: str, source: str, runtime: str, decomp: str) -> None:
+def verify_source(
+    header: str, source: str, runtime: str, decomp: str, config_doc: str
+) -> None:
     mismatches = []
     for name, expected in SHIPPED_CONSTANTS.items():
         actual = parse_constant(header, name)
@@ -201,6 +204,12 @@ def verify_source(header: str, source: str, runtime: str, decomp: str) -> None:
     )
     if "title_quad::registerOverride();" not in runtime:
         mismatches.append("X4Runtime does not install title_quad::registerOverride")
+    for diagnostic in (
+        "PSXPORT_MIRROR_VERIFY=0x800D6F94",
+        "PSXPORT_THUNK_FORCE_GEN=0x800D6F94",
+    ):
+        if diagnostic not in config_doc:
+            mismatches.append(f"missing title-sprite A/B diagnostic {diagnostic!r}")
 
     body_start = decomp.find("void func_800D6F94(struct QuadObj* entity)")
     body_end = decomp.find("// TitleUpdate2 state 1", body_start)
@@ -217,13 +226,14 @@ def verify_source(header: str, source: str, runtime: str, decomp: str) -> None:
         raise Refused("shipping/source mismatch: " + "; ".join(mismatches))
 
 
-def read_sources() -> tuple[str, str, str, str]:
+def read_sources() -> tuple[str, str, str, str, str]:
     try:
         return (
             HEADER.read_text(),
             SOURCE.read_text(),
             RUNTIME.read_text(),
             DECOMP_SOURCE.read_text(),
+            CONFIG_DOC.read_text(),
         )
     except OSError as exc:
         raise Refused(f"cannot read ownership source: {exc}") from exc
@@ -235,7 +245,7 @@ def mutate(image: psexe.PsxExe, address: int, word: int) -> psexe.PsxExe:
     return dataclasses.replace(image, text=bytes(changed))
 
 
-def selftest(image: psexe.PsxExe, sources: tuple[str, str, str, str]) -> None:
+def selftest(image: psexe.PsxExe, sources: tuple[str, str, str, str, str]) -> None:
     cases = 0
     verify_retail(image)
     verify_source(*sources)
@@ -271,6 +281,21 @@ def selftest(image: psexe.PsxExe, sources: tuple[str, str, str, str]) -> None:
                 f"selftest changed shipping constant: wrong diagnostic: {exc}"
             ) from exc
     print("[re-title-quad:selftest] PASS changed shipping constant rejected")
+    cases += 1
+
+    changed_config = sources[4].replace(
+        "PSXPORT_THUNK_FORCE_GEN=0x800D6F94",
+        "PSXPORT_THUNK_FORCE_GEN=0x800D6F98",
+    )
+    try:
+        verify_source(*sources[:4], changed_config)
+        raise Refused("selftest changed generated A/B address: mutation was accepted")
+    except Refused as exc:
+        if "A/B diagnostic" not in str(exc):
+            raise Refused(
+                f"selftest changed generated A/B address: wrong diagnostic: {exc}"
+            ) from exc
+    print("[re-title-quad:selftest] PASS changed generated A/B address rejected")
     cases += 1
     print(f"[re-title-quad:selftest] PASS {cases}/{cases} cases")
 

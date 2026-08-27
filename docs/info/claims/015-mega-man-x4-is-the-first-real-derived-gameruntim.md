@@ -1,12 +1,13 @@
 ---
 id: C015
 kind: claim
-status: holds
+status: falsified
 created: 2026-08-22
 tags: architecture,game-runtime
 depends: game/core/x4_runtime.cpp#bootInit
 reconfirmed: 2026-08-24 23:09:49
 verified_at: 2026-08-24 23:09:49
+falsified_on: 2026-08-27
 ---
 
 ## Claim
@@ -28,3 +29,9 @@ main installs the legacy pair directly, boot or override callbacks return to Gam
 ## Re-confirmed 2026-08-24 23:09:49
 
 On commit a53c255, the full Clang build and CTest passed 11/11, including mmx4_runtime_test coverage of direct X4Runtime ownership, compatibility views, render policy, override installation, and measured boot dispatch. The clean-pin bounded runtime entered native crt0 and dispatched guest main 0x80012024 through X4Runtime.
+
+## FALSIFIED 2026-08-27
+
+X4Runtime::bootInit no longer dispatches the non-returning 0x80012024 body; it executes a finite measured prefix and returns to the shared frame shell, which drives X4FrameDriver.
+
+> Anything that cited this claim as proof must be re-checked. Grep the repo for it.

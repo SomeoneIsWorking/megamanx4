@@ -1,12 +1,13 @@
 ---
 id: C009
 kind: claim
-status: holds
+status: falsified
 created: 2026-08-21
 tags: RE-11,vsync,vblank,irq
 depends: psxport.pin, game/core/vsync_sync.cpp#deliver_field, tools/verify_vsync.py#verify
 reconfirmed: 2026-08-25 00:56:30
 verified_at: 2026-08-25 00:56:30
+falsified_on: 2026-08-27
 ---
 
 ## Claim
@@ -80,3 +81,9 @@ On commit a53c255 against clean psxport 9c2e3f1c, verify_vsync.py passed six ret
 ## Re-confirmed 2026-08-25 00:56:30
 
 At the exact recorded framework pin 75456947 (named by both build/psxport_resolved.txt and scratch/build/player/psxport_resolved.txt), verify_vsync.py passed all 6 retail groups and 8/8 opposite-answer controls. The complete 9c2e3f1c..75456947 framework delta changes only Gte presentation policy/docs/tests, not VSync, IRQ, timing, or the X4 seam; the retained exact-pin frame-180 capture has 29,921/691,200 non-black pixels, so blocking field delivery/presentation advanced on this pin.
+
+## FALSIFIED 2026-08-27
+
+Native frame ownership replaces the successful 0x800E4EF8 wait-helper override with a full-entry 0x800E4DB0 trap; the claim's shipping ownership description is no longer true.
+
+> Anything that cited this claim as proof must be re-checked. Grep the repo for it.

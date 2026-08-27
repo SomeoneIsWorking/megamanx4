@@ -157,6 +157,20 @@ bool Service::change(uint32_t handle) {
   return true;
 }
 
+void Service::yieldToMain() {
+  if (activeSlot_ <= 0 || activeSlot_ >= kThreadCount) {
+    lucent::error("x4-thread", "title field yield ran outside a retail task fiber");
+    std::abort();
+  }
+  Thread &running = threads_[activeSlot_];
+  if (!running.open || !running.fiber || running.fiber->done()) {
+    lucent::error("x4-thread", "title field yield has no live retail task fiber");
+    std::abort();
+  }
+  running.regs = static_cast<R3000 &>(core_);
+  running.fiber->yield();
+}
+
 bool Service::isOpen(uint32_t handle) const {
   const int slot = slotForHandle(handle);
   return slot >= 0 && threads_[slot].open;
