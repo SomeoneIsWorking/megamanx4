@@ -20,6 +20,15 @@ FUNCTIONS = {
     "80018B88": ("x4_native_movie_frame", ("80018BC4",)),
 }
 
+CAPCOM_CANCEL_MASK = 0x0840
+CAPCOM_CANCEL_LOAD = re.compile(
+    r"(?P<prefix>"
+    r"  c->r\[1\] = \(uint32_t\)32783u << 16;\n"
+    r"  c->r\[1\] = c->r\[1\] \+ c->r\[17\];\n)"
+    r"  c->r\[2\] = \(uint32_t\)c->mem_r16\(\(c->r\[1\] \+ \(uint32_t\)7438\)\);\n"
+    r"(?=  c->r\[2\] = c->r\[2\] & c->r\[3\];)"
+)
+
 
 def extract_function(sources: list[str], address: str) -> str:
     marker = f"void gen_func_{address}(Core* c) {{"
@@ -63,6 +72,15 @@ def transform_function(body: str, address: str) -> str:
         )
     if "func_800E4DB0(c)" in body:
         raise ValueError(f"movie {address} retains an unowned VSync call")
+    if address == "800182E8":
+        body, replacements = CAPCOM_CANCEL_LOAD.subn(
+            rf"\g<prefix>  c->r[2] = c->r[0] + (uint32_t){CAPCOM_CANCEL_MASK};\n", body
+        )
+        if replacements != 1:
+            raise ValueError(
+                "CAPCOM movie cancel-mask seam drift: expected one retail Start-only mask load, "
+                f"observed {replacements}"
+            )
     return body
 
 
@@ -89,13 +107,23 @@ def selftest() -> None:
             "  c->r[4] = c->r[0]; rec_guest_instruction_ticks(c, 2u); func_800E4DB0(c);"
             for return_address in returns
         )
+        capcom_cancel = ""
+        if address == "800182E8":
+            capcom_cancel = (
+                "  c->r[1] = (uint32_t)32783u << 16;\n"
+                "  c->r[1] = c->r[1] + c->r[17];\n"
+                "  c->r[2] = (uint32_t)c->mem_r16((c->r[1] + (uint32_t)7438));\n"
+                "  c->r[2] = c->r[2] & c->r[3];\n"
+            )
         sources.append(
-            f"void gen_func_{address}(Core* c) {{\n{calls}\n}}\n\n"
+            f"void gen_func_{address}(Core* c) {{\n{capcom_cancel}{calls}\n}}\n\n"
             f"void gen_func_F{address[1:]}(Core* c) {{\n}}\n"
         )
     result = generate(sources)
     assert result.count("movie::yieldField") == 4
     assert "func_800E4DB0(c)" not in result
+    assert f"c->r[2] = c->r[0] + (uint32_t){CAPCOM_CANCEL_MASK};" in result
+    assert "c->mem_r16((c->r[1] + (uint32_t)7438))" not in result
     for native_name, _ in FUNCTIONS.values():
         assert f"void {native_name}" in result
 
@@ -107,6 +135,15 @@ def selftest() -> None:
         assert "boundary drift" in str(error)
     else:
         raise AssertionError("changed movie field return was accepted")
+
+    changed = sources.copy()
+    changed[1] = changed[1].replace("(uint32_t)7438", "(uint32_t)7439")
+    try:
+        generate(changed)
+    except ValueError as error:
+        assert "cancel-mask seam drift" in str(error)
+    else:
+        raise AssertionError("changed CAPCOM cancel-mask source was accepted")
 
 
 def parse_args() -> argparse.Namespace:
