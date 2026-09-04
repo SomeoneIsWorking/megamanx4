@@ -1,5 +1,8 @@
 #include "core.h"
+#include "coro.h"
 #include "game.h"
+#include "movie_cleanup.h"
+#include "music_stream.h"
 #include "x4_frame_driver.h"
 
 #include <array>
@@ -21,11 +24,45 @@ std::vector<Call> g_calls;
 std::uint32_t g_fieldServices = 0;
 std::uint32_t g_presentationSyncs = 0;
 bool g_releaseMovieOnUpdate = false;
+x4::music_stream::State *g_musicStream = nullptr;
+bool g_yieldMusicFields = false;
+bool g_runMovieCleanup = false;
+x4::movie_cleanup::State *g_movieCleanup = nullptr;
+std::unique_ptr<Coro> g_cleanupTransaction;
+
+void cleanupDispatch(Core *core, std::uint32_t entry) {
+  if (entry == 0x800E5FF4u) {
+    core->game->cd.stream_active = 0;
+  }
+  core->r[2] = 1u;
+}
+
+void cleanupReset(Core &core) {
+  core.game->cd.stream_active = 0;
+}
+
+void suspendCleanupField(Core &) {
+  g_cleanupTransaction->yield();
+}
 
 void recordDispatch(Core *core, std::uint32_t entry) {
   g_calls.push_back({entry, core->r[31], core->r[4], core->r[5]});
+  if (g_yieldMusicFields && entry == x4::music_stream::kBeforeObjectsB) {
+    core->r[31] = x4::music_stream::kSetModeFieldReturn;
+    core->r[4] = x4::music_stream::kSetModeFields;
+    g_musicStream->yieldFields(core->r[31], core->r[4]);
+  }
   if (g_releaseMovieOnUpdate && entry == 0x80012600u) {
     core->game->cd.stream_active = 0;
+  }
+  if (g_runMovieCleanup && entry == 0x80012600u) {
+    if (!g_cleanupTransaction) {
+      g_cleanupTransaction = std::make_unique<Coro>();
+      g_cleanupTransaction->start([core] {
+        x4::movie_cleanup::run(*core, *g_movieCleanup, cleanupDispatch, cleanupReset);
+      });
+    }
+    g_cleanupTransaction->resume();
   }
 }
 
@@ -70,7 +107,7 @@ bool verifyBootPrefix(Core &core) {
                "boot prefix did not publish the retail loop bases");
 }
 
-bool verifyFrameStep(Core &core) {
+bool verifyFrameStep(Core &core, x4::movie_cleanup::State &movieCleanup, x4::music_stream::State &musicStream) {
   constexpr std::uint32_t kDrawInfo0 = 0x80166C10u;
   constexpr std::uint32_t kDrawInfo1 = kDrawInfo0 + 160u;
   constexpr std::uint32_t kCurrentDrawInfo = 0x80142F80u;
@@ -101,7 +138,7 @@ bool verifyFrameStep(Core &core) {
   g_fieldServices = 0;
   g_presentationSyncs = 0;
 
-  x4::frame::X4FrameDriver driver(recordDispatch, recordField, recordPresentationSync);
+  x4::frame::X4FrameDriver driver(recordDispatch, recordField, recordPresentationSync, movieCleanup, musicStream);
   driver.stepFrame(core, 7u);
 
   if (!check(g_presentationSyncs == 1u, "one frame did not synchronize title presentation exactly once") ||
@@ -125,7 +162,7 @@ bool verifyFrameStep(Core &core) {
          check(core.mem_r32(kFieldCounter) == 42u, "frame step did not increment the retail frame counter once");
 }
 
-bool verifyMovieOwnedFrame(Core &core) {
+bool verifyMovieOwnedFrame(Core &core, x4::movie_cleanup::State &movieCleanup, x4::music_stream::State &musicStream) {
   constexpr std::uint32_t kCurrentDrawInfo = 0x80142F80u;
   constexpr std::uint32_t kDrawInfoPosition = 0x1F800000u;
   constexpr std::uint32_t kFieldCounter = 0x80141BD8u;
@@ -138,7 +175,7 @@ bool verifyMovieOwnedFrame(Core &core) {
   g_presentationSyncs = 0;
   g_releaseMovieOnUpdate = false;
 
-  x4::frame::X4FrameDriver driver(recordDispatch, recordField, recordPresentationSync);
+  x4::frame::X4FrameDriver driver(recordDispatch, recordField, recordPresentationSync, movieCleanup, musicStream);
   driver.stepFrame(core, 8u);
 
   return check(g_fieldServices == 1u && g_presentationSyncs == 1u,
@@ -150,7 +187,9 @@ bool verifyMovieOwnedFrame(Core &core) {
          check(core.mem_r32(kFieldCounter) == 91u, "movie-owned frame advanced the blocked outer main-loop counter");
 }
 
-bool verifyMovieReleaseResumesFrameTail(Core &core) {
+bool verifyMovieReleaseResumesFrameTail(Core &core,
+                                        x4::movie_cleanup::State &movieCleanup,
+                                        x4::music_stream::State &musicStream) {
   constexpr std::array<std::uint32_t, 7> kEntries = {
       0x80012600u,
       0x80014780u,
@@ -164,7 +203,7 @@ bool verifyMovieReleaseResumesFrameTail(Core &core) {
   g_calls.clear();
   g_releaseMovieOnUpdate = true;
 
-  x4::frame::X4FrameDriver driver(recordDispatch, recordField, recordPresentationSync);
+  x4::frame::X4FrameDriver driver(recordDispatch, recordField, recordPresentationSync, movieCleanup, musicStream);
   driver.stepFrame(core, 9u);
   g_releaseMovieOnUpdate = false;
 
@@ -179,14 +218,143 @@ bool verifyMovieReleaseResumesFrameTail(Core &core) {
   return true;
 }
 
+bool verifyMusicFieldTransaction(Core &core,
+                                 x4::movie_cleanup::State &movieCleanup,
+                                 x4::music_stream::State &musicStream) {
+  constexpr std::uint32_t kDrawInfo0 = 0x80166C10u;
+  constexpr std::uint32_t kCurrentDrawInfo = 0x80142F80u;
+  constexpr std::uint32_t kDrawInfoPosition = 0x1F800000u;
+  constexpr std::uint32_t kFieldCounter = 0x80141BD8u;
+
+  core.game->cd.stream_active = 0;
+  core.mem_w32(kDrawInfoPosition, 0u);
+  core.mem_w32(kCurrentDrawInfo, kDrawInfo0);
+  core.mem_w32(kFieldCounter, 23u);
+  core.mem_w32(x4::music_stream::kMusicActive, 2u);
+  core.mem_w32(x4::music_stream::kMachineState, 7u);
+  g_calls.clear();
+  g_fieldServices = 0;
+  g_presentationSyncs = 0;
+  g_musicStream = &musicStream;
+  g_yieldMusicFields = true;
+
+  x4::frame::X4FrameDriver driver(recordDispatch, recordField, recordPresentationSync, movieCleanup, musicStream);
+  driver.stepFrame(core, 10u);
+  if (!check(musicStream.pending(), "music VSync(3) replacement did not suspend its retail call chain") ||
+      !check(g_calls.size() == 6u && g_calls.back().entry == x4::music_stream::kBeforeObjectsB,
+             "music field fence did not stop exactly inside BeforeObjectsB") ||
+      !check(core.mem_r32(kFieldCounter) == 23u, "music field fence advanced the blocked outer frame")) {
+    return false;
+  }
+
+  driver.stepFrame(core, 11u);
+  driver.stepFrame(core, 12u);
+  if (!check(musicStream.pending(), "music field fence resumed before three host-owned fields") ||
+      !check(g_calls.size() == 6u, "music field fence replayed the retail frame prefix")) {
+    return false;
+  }
+
+  driver.stepFrame(core, 13u);
+  g_yieldMusicFields = false;
+  g_musicStream = nullptr;
+  core.mem_w32(x4::music_stream::kMusicActive, 0u);
+  core.mem_w32(x4::music_stream::kMachineState, 0u);
+
+  return check(!musicStream.pending(), "music field fence did not finish on the third host field") &&
+         check(g_fieldServices == 4u && g_presentationSyncs == 4u,
+               "music field fence did not consume exactly three additional native fields") &&
+         check(g_calls.size() == 15u, "music field fence did not resume the blocked frame tail") &&
+         check(core.mem_r32(kFieldCounter) == 24u, "music field fence did not finish the outer frame exactly once");
+}
+
+bool verifyCleanupFieldTransaction(Core &core,
+                                   x4::movie_cleanup::State &movieCleanup,
+                                   x4::music_stream::State &musicStream) {
+  core.game->cd.stream_active = 1;
+  g_calls.clear();
+  g_fieldServices = 0u;
+  g_presentationSyncs = 0u;
+  g_runMovieCleanup = true;
+  g_movieCleanup = &movieCleanup;
+  g_cleanupTransaction.reset();
+
+  x4::frame::X4FrameDriver driver(recordDispatch, recordField, recordPresentationSync, movieCleanup, musicStream);
+  driver.stepFrame(core, 20u);
+  if (!check(movieCleanup.pending() && movieCleanup.phase() == x4::movie_cleanup::Phase::DisplayFence,
+             "movie cleanup did not suspend at its first display field") ||
+      !check(core.game->cd.stream_active == 0, "Pause did not release the stream before cleanup suspension") ||
+      !check(g_calls.size() == 1u && g_calls[0].entry == 0x80012600u,
+             "cleanup entry ran gameplay work around blocked UpdateTasks")) {
+    return false;
+  }
+
+  constexpr std::array<x4::movie_cleanup::Phase, x4::movie_cleanup::kTotalFields - 1u> kPendingPhases = {
+      x4::movie_cleanup::Phase::ResetFence,
+      x4::movie_cleanup::Phase::ResetFence,
+      x4::movie_cleanup::Phase::ResetFence,
+      x4::movie_cleanup::Phase::SetModeFence,
+      x4::movie_cleanup::Phase::SetModeFence,
+      x4::movie_cleanup::Phase::SetModeFence,
+  };
+  for (std::size_t field = 0u; field < kPendingPhases.size(); ++field) {
+    driver.stepFrame(core, 21u + static_cast<std::uint32_t>(field));
+    if (!check(movieCleanup.pending() && movieCleanup.phase() == kPendingPhases[field],
+               "cleanup resumed at the wrong retained field phase") ||
+        !check(g_calls.size() == field + 2u, "cleanup replayed outer drawing while its stack was blocked")) {
+      return false;
+    }
+  }
+
+  driver.stepFrame(core, 27u);
+  g_runMovieCleanup = false;
+  g_movieCleanup = nullptr;
+
+  if (!check(g_cleanupTransaction && g_cleanupTransaction->done(),
+             "cleanup retained stack did not return after its seventh field") ||
+      !check(!movieCleanup.pending() && movieCleanup.completedFields() == x4::movie_cleanup::kTotalFields,
+             "cleanup FSM did not complete all seven host-owned fields") ||
+      !check(g_fieldServices == 8u && g_presentationSyncs == 8u,
+             "cleanup did not consume exactly seven additional native fields")) {
+    return false;
+  }
+
+  constexpr std::array<std::uint32_t, 6> kTail = {
+      0x80014780u,
+      0x800EA20Cu,
+      0x80015E54u,
+      0x80016004u,
+      0x800EA20Cu,
+      0x80012454u,
+  };
+  if (!check(g_calls.size() == 8u + kTail.size(), "cleanup did not resume the outer frame tail exactly once")) {
+    return false;
+  }
+  for (std::size_t field = 0u; field < 8u; ++field) {
+    if (!check(g_calls[field].entry == 0x80012600u, "cleanup resumed through a non-UpdateTasks entry")) {
+      return false;
+    }
+  }
+  for (std::size_t call = 0u; call < kTail.size(); ++call) {
+    if (!check(g_calls[8u + call].entry == kTail[call], "cleanup resumed the wrong outer frame-tail edge")) {
+      return false;
+    }
+  }
+  return true;
+}
+
 } // namespace
 
 int main() {
   auto game = std::make_unique<Game>();
-  if (!verifyBootPrefix(game->core) || !verifyFrameStep(game->core) || !verifyMovieOwnedFrame(game->core) ||
-      !verifyMovieReleaseResumesFrameTail(game->core)) {
+  x4::movie_cleanup::State movieCleanup(game->core, suspendCleanupField);
+  x4::music_stream::State musicStream(game->core);
+  if (!verifyBootPrefix(game->core) || !verifyFrameStep(game->core, movieCleanup, musicStream) ||
+      !verifyMovieOwnedFrame(game->core, movieCleanup, musicStream) ||
+      !verifyMovieReleaseResumesFrameTail(game->core, movieCleanup, musicStream) ||
+      !verifyMusicFieldTransaction(game->core, movieCleanup, musicStream) ||
+      !verifyCleanupFieldTransaction(game->core, movieCleanup, musicStream)) {
     return 1;
   }
-  std::puts("x4_frame_driver: normal and movie-owned finite frame transactions passed");
+  std::puts("x4_frame_driver: normal, movie, cleanup, and XA/BGM finite field transactions passed");
   return 0;
 }

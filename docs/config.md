@@ -5,9 +5,9 @@ This file exists because the framework's instruction "register every enhancement
 repo may not edit.** So the game-local half lives here.
 
 The framework's knobs, the ladder's implementation and the whole `cfg_*` / CVar API are documented in
-`external/psxport/docs/config.md` and `runtime/recomp/config_var.h` and are **not restated here**.
+`external/psxport/docs/config.md` and `runtime/psx/config_var.h` and are **not restated here**.
 
-## The ladder, quoted from `runtime/recomp/config_var.h`
+## The ladder, quoted from `runtime/psx/config_var.h`
 
 ```
     Default   what the framework compiled in
@@ -17,10 +17,8 @@ The framework's knobs, the ladder's implementation and the whole `cfg_*` / CVar 
 ```
 
 A higher layer wins. `Layer` is DERIVED from which slots are set rather than stored, so the
-introspection dump can show every layer of a knob at once. Note the deliberate deviation from Dusklight
-recorded in that header: Runtime sits ABOVE Override, *"because psxport's runtime layer is a human typing
-at a live console after launch, which is later and more specific than the environment the process
-started in."*
+introspection dump can show every layer of a knob at once. Runtime sits above Override because it is
+a human action at a live console after launch, later and more specific than the process environment.
 
 ## This port's knobs
 
@@ -50,21 +48,11 @@ projection consumer; a persisted or launch/runtime `false` still supplies the ex
 Default-on is not a pixel-verification claim: the framework candidates must still land and the
 deterministic off/on capture must classify culling and 2D layout before RE-08 is complete.
 
-## Title-sprite retained/generated A/B
+## Native-override differential checks
 
-The title white-logo quad initializer keeps both implementations in the shipping binary. Use the
-same product build for both diagnostic legs:
-
-```sh
-PSXPORT_MIRROR_VERIFY=0x800D6F94 ./scratch/build/player/megamanx4_port
-PSXPORT_THUNK_FORCE_GEN=0x800D6F94 ./scratch/build/player/megamanx4_port
-```
-
-The first command compares the native initializer with its retained generated body when the title
-reaches it. The second forces only `0x800D6F94` back to generated code, isolating that sprite seam
-without disabling unrelated title behavior. These are diagnostic launch inputs, not player options.
-Static registration and hermetic object-state tests do not prove visible sprite correctness; a
-serialized launch must capture the same known title phase in both legs before making a visual claim.
+Native functions compare against their authenticated original guest bodies through psxport's scoped
+Lightrec original-call API. Diagnostic controls exercise the same runtime dispatcher; there is no
+generated implementation or static selector in the product.
 
 `PSXPORT_X4_DISC` is spelled identically in exactly three places and they must not diverge:
 `.env.example`, `GameConfig::discEnvVar`, and `tools/resolve_disc.py`'s `ENV_KEY`.
@@ -76,27 +64,17 @@ line the overlay writes).
 ## The force-suppression rule — NEVER call `.get()` at a feature call site
 
 Every read of an enhancement knob goes through **one** function, `x4::enh()` in
-`game/core/enhancements.cpp`. It returns `false`, with a one-time-per-knob `[cfg:warn]`, whenever this
-run is a byte-compare run — the three inputs being exactly the ones `runtime/recomp/cfg.cpp:197`'s
-`cfg_enh()` uses:
-
-- `PSXPORT_ORACLE` (via `psx::config::cv_oracle`),
-- `PSXPORT_SBS` (via `cfg_on`),
-- a non-empty `PSXPORT_SBS_MODE` (via `cfg_str`).
-
-Using the same three is what stops the two mechanisms disagreeing about what a byte-compare run *is*; a
-divergence there would mean an SBS variant this gate does not recognise, i.e. a contaminated compare
-that still looks clean. The warn text follows the framework's own wording so both are greppable
-together: `"PSXPORT_X4_COOP SUPPRESSED: oracle/SBS run must stay enhancement-free"`. The one-time flag is
-**per knob**, not one global: a run with two enhancements set must name both, or the second reads as
-never having been asked for.
+`game/core/enhancements.cpp`. It delegates selection and suppression to `psx::config::enh()`, the
+shared owner of `PSXPORT_DIAGNOSTIC_RUN=product|compare-candidate|compare-reference`. Either comparison
+role returns false with a per-knob Lucent warning. Product mode honors the resolved knob. The typed
+role is diagnostic context for the same native/Lightrec product, not a CPU-engine selector.
 
 Calling `cv_coop.get()` directly at a feature call site is the bug the chokepoint exists to prevent. If
 you find one, it is a defect, not a shortcut.
 
 Each knob is also registered in `docs/behavior-map.md` as `class: pc_enh` / `affect: full` with a `guard`
 that cites the suppression — and that text is **machine-checked**: `tools/behavior.py check` fails an
-`affect: full` entry whose guard does not match `oracle|sbs|suppress`. The chokepoint plus that check is
+`affect: full` entry whose guard does not cite the typed comparison/suppression contract. The chokepoint plus that check is
 this port's whole "enhancement-free by construction" story.
 
 ## This port does NOT use `PSXPORT_ENH` / `cfg_enh()`
@@ -157,8 +135,7 @@ every knob the user turned ON through the chokepoint, producing one line per kno
 ```
 
 The audit exists because the read-time check alone cannot fire: a knob nothing reads never reaches
-`enh()`. On a compare run the SUPPRESSED line replaces it (both verified 2026-08-12 against the real
-objects: nothing set → silent; all three set → three DECLARED-but-unread lines; all three set with
-`PSXPORT_ORACLE=1` / `PSXPORT_SBS=1` / `PSXPORT_SBS_MODE=ab` → three SUPPRESSED lines and `enh()` false).
+`enh()`. On a comparison run the shared SUPPRESSED line replaces it. The production test drives the
+same typed `ScopedDiagnosticRun` boundary used by harnesses rather than mutating process environment.
 **Deleting an entry from `kUnimplemented` belongs in the same commit that adds that feature's first real
 call site** — that is what makes the warning shrink to nothing on its own.

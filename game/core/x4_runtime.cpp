@@ -6,10 +6,13 @@
 #include "display_init.h"
 #include "game.h"
 #include "gpu_timeout.h"
+#include "guest_execution.h"
 #include "legacy_game_interface.h"
+#include "movie_cleanup.h"
 #include "movie_field.h"
+#include "music_stream.h"
+#include "native_overrides.h"
 #include "pad_layout.h"
-#include "recomp_register.h"
 #include "startup_cd.h"
 #include "stream_interrupt.h"
 #include "stream_startup.h"
@@ -47,18 +50,18 @@ void X4Runtime::destroyContext(void *context) {
 
 void X4Runtime::registerOverrides(Game &game) {
   bios_threads::install(game);
-  display_init::registerOverride();
-  gpu_timeout::registerOverride();
-  movie::registerOverrides();
-  startup_cd::registerOverride();
-  stream_interrupt::registerOverride();
-  stream_startup::registerOverride();
-  title_quad::registerOverride();
-  x4_install_projection_overrides();
-  // The loading-coroutine conversion (RE-09 job B): the two measured retail wait bodies, wrapped by
-  // the super-call seam so PSXPORT_X4_FASTWAIT can withhold their presentation without touching a
-  // byte of their mechanics.
-  x4_install_loading_overrides();
+  display_init::registerOverride(game.core);
+  gpu_timeout::registerOverride(game.core);
+  movie::registerOverrides(game.core);
+  movie_cleanup::registerOverride(game.core);
+  music_stream::registerOverride(game.core);
+  startup_cd::registerOverride(game.core);
+  stream_interrupt::registerOverride(game.core);
+  stream_startup::registerOverride(game.core);
+  title_quad::registerOverride(game.core);
+  // The loading-coroutine conversion (RE-09 job B): the measured retail owners are registered by
+  // authenticated image/address and retain scoped Lightrec original calls where required.
+  native_overrides::install(game.core);
 }
 
 void X4Runtime::bootInit(Core &core) {
@@ -75,8 +78,12 @@ void X4Runtime::bootInit(Core &core) {
   frame::bootPrefix(core);
 }
 
-std::unique_ptr<FrameDriver> X4Runtime::createFrameDriver(Game &) {
-  return std::make_unique<frame::X4FrameDriver>(rec_dispatch, vsync::deliverField, synchronizePresentation);
+std::unique_ptr<FrameDriver> X4Runtime::createFrameDriver(Game &game) {
+  return std::make_unique<frame::X4FrameDriver>(guest::call,
+                                                vsync::deliverField,
+                                                synchronizePresentation,
+                                                context(game.core).movieCleanup,
+                                                context(game.core).musicStream);
 }
 
 const GuestPadBufferLayout *X4Runtime::guestPadBufferLayout() const {
@@ -93,7 +100,7 @@ bool X4Runtime::guestVramIsPicture(const Game &game) const {
   // exclusively through 24-bit LoadImage slices in guest VRAM. The native CD controller clears this
   // bit on the guest's Pause/Stop command, returning ownership to the primitive stream without a
   // frame-type heuristic or a renderer-specific special case.
-  return game.cd.stream_active != 0;
+  return game.cd.stream_active != 0 || context(game.core).movieCleanup.pending();
 }
 
 const GuestWidescreenProjection *X4Runtime::guestWidescreenProjection() const {

@@ -39,7 +39,7 @@ WHAT IT CANNOT DETECT, and no run of it should be read as evidence about these:
   - IDEAS, struct layouts, field offsets, address maps carried over in a human's head.
   - anything inside psxport/vendor/ (excluded by default: third-party trees whose generic PSX
     vocabulary would drown class B; pass --include-vendor to scan them anyway).
-  - binary or generated artifacts, and files git ignores (build/, scratch/, generated/).
+  - binary artifacts and files git ignores (build/, scratch/).
   - a leak that landed in psxport's HISTORY and was later removed. This scans the WORKING TREE.
     History is `tools/go_public.py`'s job, not this one.
 
@@ -264,7 +264,7 @@ def walk_vocab(dirs):
     vocab, nfiles = set(), 0
     for b in dirs:
         for dirpath, subs, files in os.walk(b):
-            subs[:] = [d for d in subs if d not in (".git", "build", "scratch", "generated",
+            subs[:] = [d for d in subs if d not in (".git", "build", "scratch",
                                                     "external", "__pycache__")]
             for f in files:
                 if os.path.splitext(f)[1].lower() in SCAN_EXT:

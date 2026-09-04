@@ -1,8 +1,8 @@
 # Mega Man X4 — a PC-native enhancement port
 
 A PC-native port of **Mega Man X4** (PS1, USA, `SLUS_005.61`) built on the
-[psxport](https://github.com/SomeoneIsWorking/psxport) static-recompilation framework, vendored here as
-`external/psxport`.
+[psxport](https://github.com/SomeoneIsWorking/psxport), using native title subsystems plus runtime
+Lightrec translation of the authenticated executable.
 
 Unlike psxport's other consumers this is an **enhancement port, not a native-engine rebuild**: X4
 already runs at 60fps, so there is no frame interpolation, no native producer and no native renderer to
@@ -12,7 +12,7 @@ CVars and force-suppressed under the byte-compare oracle. See `docs/plans/enhanc
 
 ## Status: guest runtime reaches the front end; playability is not yet verified
 
-Created 2026-08-12. The retail executable emits a native `megamanx4_port` substrate and boots through
+Created 2026-08-12. The prior product established a measured boot frontier through
 InitHeap into guest `gameMain`, the retail task handoff, and the front-end archive path. The recorded
 framework pin preserves X4's alternating framebuffer pages: a real GTE capture renders the Mega Man X
 logo instead of the prior all-black frame. Forced START reaches the game's held/previous/edge globals,
@@ -21,7 +21,7 @@ These are measured runtime boundaries, not a claim that gameplay, audible device
 or co-op is complete. What exists:
 
 - disc → executable provisioning from **your own** disc image (nothing game-derived is in this repo),
-- the measured CRT0 and pad groups, resident routing range, generated-substrate registry, and three
+- the measured CRT0 and pad groups, authenticated resident range, native override registry, and three
   enhancement CVars,
 - a default-on synchronous direct/archive load owner whose measured requests finish in one issuer
   call, plus removal of the measured loading-presentation task; exact destination-byte comparison and
@@ -39,7 +39,7 @@ or co-op is complete. What exists:
 git clone <this repo> && cd megamanx4
 git submodule update --init external/mmx4           # optional matching-decomp reference
 cp .env.example .env && $EDITOR .env                # point it at your own disc image (.env is gitignored)
-./run.sh                                             # provision, emit, build, launch
+./run.sh                                             # provision, build, launch
 ./run.sh --prepare-only                              # same cold path, but stop before launch
 uv run --frozen python tools/re_frontier.py next    # what to work on
 ```
@@ -49,7 +49,7 @@ recursing into Beetle's URL-less `gnulib` path. Do not recursively initialize `e
 nested build-tool submodules are not needed by this port.
 
 `run.sh` is the play launcher. It enters the repository's frozen `uv.lock` environment through
-`bootstrap.py`; non-trivial policy lives in `tools/run.py` and `tools/ensure_recomp.py`. This player
+`bootstrap.py`; non-trivial policy lives in `tools/run.py`. This player
 entry point only provisions, builds, and launches the current game target. Maintainer verification
 is a separate Clang workflow.
 
@@ -63,7 +63,7 @@ package managers itself.
 ## Legal
 
 **No game content is distributed here.** The disc image, the executable extracted from it and the
-recompiled substrate derived from it are all yours and are gitignored. `tools/go_public.py` audits the
+runtime JIT cache derived from it are all yours and are gitignored. `tools/go_public.py` audits the
 full history for disc-derived material and machine-specific paths.
 
 ### Licensing

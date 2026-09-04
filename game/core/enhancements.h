@@ -17,11 +17,11 @@
 //
 // WHY A CHOKEPOINT AND NOT A CVar READ AT EACH CALL SITE. The framework put cfg_enh()'s suppression in
 // cfg.cpp for a stated reason — "that suppression is the whole point of this function living in cfg
-// rather than at each call site". Same reason here: EVERY read goes through x4::enh(), so
-// "enhancement-free under the oracle" is true BY CONSTRUCTION rather than by per-call-site discipline.
+// rather than at each call site". Same reason here: EVERY read goes through x4::enh(), which delegates
+// to the shared typed diagnostic-role gate.
 // Calling `.get()` at a feature call site is the bug this header exists to prevent.
 #include "config_var.h"  // psx::config::BoolVar
-#include "config_vars.h" // psx::config::cv_oracle — the suppression input
+#include "config_vars.h" // psx::config::enh — shared selection and comparison suppression
 
 namespace x4 {
 
@@ -29,9 +29,8 @@ extern psx::config::BoolVar cv_widescreen; // PSXPORT_X4_WIDESCREEN
 extern psx::config::BoolVar cv_coop;       // PSXPORT_X4_COOP
 extern psx::config::BoolVar cv_fastwait;   // PSXPORT_X4_FASTWAIT
 
-// Returns false — with a ONE-TIME-PER-KNOB [cfg:warn] naming the knob and the reason — whenever this
-// run is a byte-compare run (PSXPORT_ORACLE, PSXPORT_SBS, PSXPORT_SBS_MODE), WHATEVER the user asked
-// for. Otherwise returns the knob's resolved value off the CVar ladder.
+// Delegates selection and typed comparison-run suppression to psx::config::enh(), then reports a
+// title-local no-consumer warning where applicable.
 bool enh(psx::config::BoolVar &v);
 
 // Call ONCE at bring-up (main.cpp). Announces every knob the user turned on that no feature reads yet

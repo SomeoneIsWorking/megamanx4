@@ -1,25 +1,19 @@
 #include "startup_cd.h"
 
-#include "c_subsys.h"
-#include "cdc_state.h"
+#include "cd_controller.h"
 #include "cfg.h"
 #include "core.h"
 #include "game.h"
-#include "override_registry.h"
+#include "guest_execution.h"
 
 #include <cstdlib>
 #include <lucent/log.h>
-
-#ifdef MMX4_HAVE_SUBSTRATE
-extern void gen_func_80013588(Core *);
-extern void shard_set_override(std::uint32_t, void (*)(Core *));
-#endif
 
 namespace x4::startup_cd {
 namespace {
 
 // Retail func_80013588 and its successful CdInit/CdReset chain. Addresses and call edges are
-// measured from generated/shard_{0,1,2,3,5}.c; the matching decomp is external/mmx4/src/main/323C.c.
+// measured from the authenticated executable; the matching decomp is external/mmx4/src/main/323C.c.
 constexpr std::uint32_t kCdInitLog = 0x800EDC74u;
 constexpr std::uint32_t kCdInitLogDetail = 0x800EDCCCu;
 constexpr std::uint32_t kResetCallback = 0x800E4F94u;
@@ -38,13 +32,6 @@ constexpr std::uint32_t kInitialSyncCallback = 0x800E5B5Cu;
 constexpr std::uint32_t kInitialReadyCallback = 0x800E5B84u;
 constexpr std::uint32_t kInitialReadCallback = 0x800E5BACu;
 
-constexpr std::uint32_t kSyncCallbackSlot = 0x8011DD1Cu;
-constexpr std::uint32_t kReadyCallbackSlot = 0x8011DD20u;
-constexpr std::uint32_t kCommandResult = 0x8011DD2Cu;
-constexpr std::uint32_t kCommandStatus = 0x8011DD30u;
-constexpr std::uint32_t kLastInterrupt = 0x8011DD3Cu;
-constexpr std::uint32_t kLastCommand = 0x8011DD3Du;
-
 constexpr std::uint32_t kLoadState = 0x801406ACu;
 constexpr std::uint32_t kArchivePostprocessPending = 0x8013BD40u;
 constexpr std::uint32_t kCdStateA = 0x80137CE4u;
@@ -54,7 +41,6 @@ constexpr std::uint32_t kArchiveProcessedCount = 0x80137CF0u;
 constexpr std::uint32_t kArchiveEnqueuedCount = 0x80137CF4u;
 
 constexpr std::uint8_t kRetailMode = 0xA0u;
-constexpr std::uint8_t kLibCdInterruptMask = 0x07u;
 
 void call(Core &core,
           GuestDispatch dispatch,
@@ -69,25 +55,12 @@ void call(Core &core,
 }
 
 void setupNativeController(Core &core, std::uint8_t mode) {
-  if (!core.game) {
-    cfg_loge("x4-startup-cd", "func_80013588 requires a bound Game");
-    std::abort();
-  }
-
   // CD_init's reset/demute command train returns the drive to its ready state with no command or
   // response pending. Use the controller's one power-on/reset authority, preserving its Game wiring
   // and injected clock, then publish the bank-1 interrupt mask and completed Setmode state directly.
   // No guest command is pending and no polling clock is borrowed.
-  CdcState &controller = core.game->cdc;
-  XaState *const xa = controller.xa;
-  void *const tickContext = controller.tick_context;
-  const CdcTickNowFn tickNow = controller.tick_now;
-  cdc_state_init(&controller);
-  controller.xa = xa;
-  cdc_bind_tick_source(&controller, tickContext, tickNow);
-  controller.irq_en = kLibCdInterruptMask;
-  xa_stream_setmode(&core.game->xa, mode);
-  cdc_set_mode(&controller, mode);
+  cd_controller::reset(core);
+  cd_controller::setMode(core, mode);
 }
 
 } // namespace
@@ -99,7 +72,7 @@ void run(Core &core, GuestDispatch dispatch, ControllerSetup setupController) {
   }
 
   // Preserve the retail activation. The final title initializer is allowed to use this caller's
-  // local frame and the override leaves SP/RA exactly as gen_func_80013588 does.
+  // local frame and the override leaves SP/RA exactly as the retail body at 0x80013588 does.
   core.r[29] -= 32u;
   core.mem_w32(core.r[29] + 24u, core.r[31]);
   core.mem_w8(core.r[29] + 16u, kRetailMode);
@@ -110,12 +83,7 @@ void run(Core &core, GuestDispatch dispatch, ControllerSetup setupController) {
 
   // These are the complete libcd RAM resets performed before the hardware command/alarm chain.
   // The command train is replaced below by the already-native controller's completed ready state.
-  core.mem_w8(kLastCommand, 0u);
-  core.mem_w8(kLastInterrupt, 0u);
-  core.mem_w32(kReadyCallbackSlot, 0u);
-  core.mem_w32(kSyncCallbackSlot, 0u);
-  core.mem_w32(kCommandStatus, 0u);
-  core.mem_w32(kCommandResult, 0u);
+  cd_controller::clearCommandState(core);
 
   call(core, dispatch, kResetCallback, 0x800E7544u, core.r[4], core.r[5]);
   call(core, dispatch, kInterruptCallback, 0x800E7554u, 2u, kCdInterruptHandler);
@@ -151,16 +119,11 @@ void run(Core *core) {
     cfg_loge("x4-startup-cd", "func_80013588 received a null Core");
     std::abort();
   }
-  run(*core, rec_dispatch, setupNativeController);
+  run(*core, guest::call, setupNativeController);
 }
 
-void registerOverride() {
-#ifdef MMX4_HAVE_SUBSTRATE
-  overrides::install(
-      kSetupEntry, "startup::initializeCd", static_cast<void (*)(Core *)>(run), gen_func_80013588, shard_set_override);
-#else
-  lucent::debug("x4-startup-cd", "startup CD ownership registration deferred: no generated substrate");
-#endif
+void registerOverride(Core &core) {
+  guest::install(core, kSetupEntry, "startup::initializeCd", static_cast<void (*)(Core *)>(run));
 }
 
 } // namespace x4::startup_cd

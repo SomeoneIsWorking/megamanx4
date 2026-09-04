@@ -53,7 +53,7 @@ have to flag them forever.
 Treat the subtree as read-only reference documentation, like a PDF of the SDK manual. Do not copy it
 into `game/`, and do not vendor it into `psxport` "to make the types line up" — psxport has **no PSY-Q
 header story at all**, by design: PSX/BIOS entry points are handled by address-keyed HLE
-(`runtime/recomp/platform_hle.h`), so the port never needs a Sony declaration.
+(`runtime/psx/platform_hle.h`), so the port never needs a Sony declaration.
 
 To keep them off local disk (a local-config matter, not a repo matter):
 

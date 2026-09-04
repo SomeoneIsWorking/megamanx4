@@ -4,7 +4,7 @@ kind: claim
 status: holds
 created: 2026-08-22
 tags: widescreen,rendering,architecture
-depends: game/core/recomp_register.cpp#publish_projection
+depends: game/core/native_overrides.cpp#publishProjection
 reconfirmed: 2026-08-24 23:09:52
 verified_at: 2026-08-24 23:09:52
 ---
@@ -15,7 +15,7 @@ SLUS_005.61's title-owned widescreen consumer changes only the measured OFX and 
 
 ## Evidence
 
-Retail tools/verify_projection.py proves the sole SetGeomOffset 0x800E90C8 and SetDefDrawEnv 0x800E9354 publications. game/core/recomp_register.cpp wraps their untouched generated bodies; tests/test_x4_runtime.cpp drives the production WidescreenController with 4:3 and 16:9 plans and proves OFX/width 160/320 -> 214/428 while OFY/H/x/y/h/UV/color/order remain unchanged. tools/verify_no_temporal_dependency.py scans 18 shipping sources and its neutral positive plus five interpolation mutations pass. Clang links the full generated port and CTest passes 8/8 against the isolated typed framework worktree.
+Retail tools/verify_projection.py proves the sole SetGeomOffset 0x800E90C8 and SetDefDrawEnv 0x800E9354 publications. The image-keyed native overrides call their authenticated original guest bodies through Lightrec; tests/test_x4_runtime.cpp drives the production WidescreenController with 4:3 and 16:9 plans and proves OFX/width 160/320 -> 214/428 while OFY/H/x/y/h/UV/color/order remain unchanged. The temporal-dependency policy check covers the shipping sources and its neutral positive plus interpolation mutations. Clang links the native/Lightrec product and the focused contracts pass.
 
 ## What would falsify it
 

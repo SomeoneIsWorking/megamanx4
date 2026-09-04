@@ -17,8 +17,8 @@ Delivering.
 
 ## Superseded resolution
 
-The former resolution admitted exactly UINT32_MAX during Delivering and super-called the untouched
-generated VSync body. That branch returns the live counter without waiting, advancing a field, or
+The former resolution admitted exactly UINT32_MAX during Delivering and called the untouched original
+original VSync guest body. That branch returns the live counter without waiting, advancing a field, or
 presenting. Every other unexpected scoped VSync remains fail-closed. The focused production-leaf test
 plants a nonzero counter and proves the exact return and unchanged counter/phase. A bounded
 uninstrumented real-disc run then completed requests 64, 65, 113, and 51 and remained live until

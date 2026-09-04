@@ -2,20 +2,11 @@
 
 #include "cfg.h"
 #include "core.h"
-#include "override_registry.h"
+#include "execution_services.h"
+#include "guest_execution.h"
 
 #include <cstdlib>
 #include <lucent/log.h>
-
-#ifdef MMX4_HAVE_SUBSTRATE
-extern void gen_func_800185F8(Core *);
-extern void func_800E9D4C(Core *);
-extern void func_800EA3A0(Core *);
-extern void func_800EA20C(Core *);
-extern void func_800EA170(Core *);
-extern void func_800E9424(Core *);
-extern void shard_set_override(std::uint32_t, void (*)(Core *));
-#endif
 
 namespace x4::display_init {
 namespace {
@@ -39,11 +30,25 @@ void copyWords(Core &core, std::uint32_t destination, std::uint32_t source) {
   }
 }
 
-#ifdef MMX4_HAVE_SUBSTRATE
-void run(Core *core) {
-  initialize(core, func_800E9D4C, func_800EA3A0, func_800EA20C, func_800EA170, func_800E9424);
+void resetGraph(Core *core) {
+  guest::call(core, 0x800E9D4Cu);
 }
-#endif
+void clearImage(Core *core) {
+  guest::call(core, 0x800EA3A0u);
+}
+void drawSync(Core *core) {
+  guest::call(core, 0x800EA20Cu);
+}
+void setDisplayMask(Core *core) {
+  guest::call(core, 0x800EA170u);
+}
+void publishEnvironment(Core *core) {
+  guest::call(core, 0x800E9424u);
+}
+
+void run(Core *core) {
+  initialize(core, resetGraph, clearImage, drawSync, setDisplayMask, publishEnvironment);
+}
 
 } // namespace
 
@@ -74,7 +79,7 @@ void initialize(Core *core,
   copyWords(*core, kSecondaryEnvironment, kEnvironmentSource + 160u);
   core->r[31] = 0x800186D4u;
   core->r[4] = 0u;
-  rec_guest_instruction_ticks(core, 55u);
+  psx::cpu::accountGuestInstructions(*core, 55u);
   resetGraph(core);
 
   core->r[4] = 0u;
@@ -82,22 +87,22 @@ void initialize(Core *core,
   core->mem_w16(core->r[29] + 26u, 0u);
   core->mem_w16(core->r[29] + 28u, 480u);
   core->mem_w16(core->r[29] + 30u, 480u);
-  rec_guest_instruction_ticks(core, 7u);
+  psx::cpu::accountGuestInstructions(*core, 7u);
 
   core->r[4] = core->r[29] + 24u;
   core->r[5] = 0u;
   core->r[6] = 0u;
   core->r[31] = 0x80018704u;
   core->r[7] = 0u;
-  rec_guest_instruction_ticks(core, 5u);
+  psx::cpu::accountGuestInstructions(*core, 5u);
   clearImage(core);
   core->r[31] = 0x8001870Cu;
   core->r[4] = 0u;
-  rec_guest_instruction_ticks(core, 2u);
+  psx::cpu::accountGuestInstructions(*core, 2u);
   drawSync(core);
   core->r[31] = 0x80018714u;
   core->r[4] = 1u;
-  rec_guest_instruction_ticks(core, 2u);
+  psx::cpu::accountGuestInstructions(*core, 2u);
   setDisplayMask(core);
 
   core->r[4] = kEnvironmentSource;
@@ -106,7 +111,7 @@ void initialize(Core *core,
   core->r[7] = core->r[17];
   core->r[31] = 0x8001872Cu;
   core->mem_w32(core->r[29] + 16u, core->r[18]);
-  rec_guest_instruction_ticks(core, 6u);
+  psx::cpu::accountGuestInstructions(*core, 6u);
   publishEnvironment(core);
   core->r[16] += 160u;
   core->r[4] = core->r[16];
@@ -115,7 +120,7 @@ void initialize(Core *core,
   core->r[7] = core->r[17];
   core->r[31] = 0x80018748u;
   core->mem_w32(core->r[29] + 16u, core->r[18]);
-  rec_guest_instruction_ticks(core, 7u);
+  psx::cpu::accountGuestInstructions(*core, 7u);
   publishEnvironment(core);
 
   core->r[2] = 1u;
@@ -128,15 +133,11 @@ void initialize(Core *core,
   core->r[17] = core->mem_r32(core->r[29] + 36u);
   core->r[16] = core->mem_r32(core->r[29] + 32u);
   core->r[29] += 48u;
-  rec_guest_instruction_ticks(core, 16u);
+  psx::cpu::accountGuestInstructions(*core, 16u);
 }
 
-void registerOverride() {
-#ifdef MMX4_HAVE_SUBSTRATE
-  overrides::install(kEntry, "display_init::initialize", run, gen_func_800185F8, shard_set_override);
-#else
-  lucent::debug("x4-display-init", "display initialization registration deferred: no generated substrate");
-#endif
+void registerOverride(Core &core) {
+  guest::install(core, kEntry, "display_init::initialize", run);
 }
 
 } // namespace x4::display_init

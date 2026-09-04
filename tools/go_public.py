@@ -13,7 +13,7 @@ Checks:
   B. paths      — absolute/home paths outside the repo, baked into blob TEXT
                   (/home, /Users, /mnt, /root, ~/, C:\\, a configured username)
   C. gitignore  — tracked text that references a *sensitive* gitignored item
-                  (regenerable ignores like build/ or generated/ are NOT flagged)
+                  (regenerable ignores like build/ or scratch/ are NOT flagged)
 
 Usage:
   go_public.py scan                # all checks over full history -> report
@@ -120,7 +120,7 @@ FOREIGN_PATH_EXEMPT = [
 #    gitignored item is flagged ONLY if that item is PRIVATE DATA — content a
 #    public reader can neither regenerate nor supply themselves. Two benign
 #    classes are NOT flagged (a doc referencing them is expected and correct):
-#      • regenerable output — build/, generated/, scratch/ dumps, *.o, logs …
+#      • regenerable output — build/, scratch/ dumps, *.o, logs …
 #      • supply-your-own input — .env (your config), disc images / ROM (yours)
 #    Any ignored pattern matching NEITHER benign class is treated as
 #    private-data-by-default (fail closed) and its references are flagged.
@@ -129,7 +129,7 @@ FOREIGN_PATH_EXEMPT = [
 #    doc and C will surface it. Retune the two lists per repo.
 BENIGN_IGNORE = [
     # regenerable build/output artifacts
-    r"^build", r"^generated", r"^port/build", r"^scratch", r"\.o$", r"\.so$",
+    r"^build", r"^port/build", r"^scratch", r"\.o$", r"\.so$",
     r"\.a$", r"\.d$", r"compile_commands\.json", r"\.cache", r"__pycache__",
     r"\.pyc$", r"\.log$", r"\.lock$", r"\.ppm$", r"^fm", r"^sb", r"^ms",
     r"mario_candidates\.txt", r"build\.stale",

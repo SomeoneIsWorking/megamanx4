@@ -17,4 +17,4 @@ Clang built the full port and 21/21 CTests against shared psxport 124b85c8. The 
 
 ## What would falsify it
 
-Falsified if the generated 0x80012024 body changes, the driver call sequence or field-service count changes, full VSync is no longer trapped, or a combined product launch fails before/inside the native shell-driver boundary.
+Falsified if the original 0x80012024 guest body changes, the driver call sequence or field-service count changes, full VSync is no longer trapped, or a combined product launch fails before/inside the native shell-driver boundary.

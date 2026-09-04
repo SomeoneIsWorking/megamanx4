@@ -8,7 +8,7 @@
 namespace x4 {
 
 // ── THE INVENTORY ───────────────────────────────────────────────────────────────────────────────
-// On the ladder (runtime/recomp/config_var.h):
+// On the ladder (runtime/psx/config_var.h):
 //     Default   what this port compiled in
 //   < Value     the user's persisted choice (psxport_settings.ini)
 //   < Override  a launch argument — the PSXPORT_X4_* environment variable. Never persisted.
@@ -25,21 +25,21 @@ namespace x4 {
 psx::config::BoolVar
     cv_widescreen("PSXPORT_X4_WIDESCREEN",
                   true,
-                  "pc_enh: wider-than-4:3 FOV driven from game state (affect=full; suppressed under ORACLE/SBS)",
+                  "pc_enh: wider-than-4:3 FOV driven from game state (affect=full; suppressed in comparison runs)",
                   /*persistable=*/true);
 
 psx::config::BoolVar
     cv_coop("PSXPORT_X4_COOP",
             false,
-            "pc_enh: drop-in second player — P2 spawns as the other hunter (affect=full; suppressed under "
-            "ORACLE/SBS)",
+            "pc_enh: drop-in second player — P2 spawns as the other hunter (affect=full; suppressed in "
+            "comparison runs)",
             /*persistable=*/true);
 
 psx::config::BoolVar cv_fastwait("PSXPORT_X4_FASTWAIT",
                                  true,
                                  "pc_enh: convert the retail loading coroutine into one synchronous call — the wait "
                                  "bodies still run byte-exactly, but no loading frame is ever presented (affect=full; "
-                                 "suppressed under ORACLE/SBS)",
+                                 "suppressed in comparison runs)",
                                  /*persistable=*/true);
 
 // ── NO CONSUMER YET IS A THING THE RUN MUST SAY ─────────────────────────────────────────────────
@@ -71,10 +71,8 @@ static const char *unimplemented_step(const psx::config::BoolVar &v) {
   return nullptr;
 }
 
-// One-time-per-knob bookkeeping, keyed on the CVar's own identity so a fourth knob needs no edit here.
-// Two independent registers: a run can legitimately warn about suppression AND about no-consumer for
-// different knobs, and neither may silence the other.
-static const void *g_warned_suppressed[8] = {nullptr};
+// One-time-per-knob bookkeeping for title-local no-consumer warnings. Shared comparison suppression
+// is owned and reported by psx::config::enh().
 static const void *g_warned_unimpl[8] = {nullptr};
 
 static bool warn_once(const void *key, const void *(&reg)[8]) {
@@ -94,33 +92,10 @@ static bool warn_once(const void *key, const void *(&reg)[8]) {
 }
 
 // ── THE CHOKEPOINT ──────────────────────────────────────────────────────────────────────────────
-// The three suppression inputs are EXACTLY the ones runtime/recomp/cfg.cpp's cfg_enh() uses —
-// oracle_mode() (i.e. psx::config::cv_oracle), cfg_on("PSXPORT_SBS"), and a non-empty
-// PSXPORT_SBS_MODE — so the two mechanisms cannot disagree about what a byte-compare run IS. Diverging
-// on that definition would mean an SBS variant this gate does not recognise, i.e. a contaminated
-// compare that still looks clean.
-//
-// HONEST NOTE ON THE DUPLICATION. This reproduces cfg_enh's rule instead of calling it, because
-// cfg_enh is ENV-ONLY and off the CVar ladder: it reads lucent::config::text("PSXPORT_ENH") directly
-// into a function-local seeded static, so it has no Value (settings-file) layer, no Runtime (REPL)
-// layer, and never appears in the CVar registry dump. The USER's ruling is CVars, which cfg_enh cannot
-// satisfy. The proper fix is UPSTREAM — migrate PSXPORT_ENH onto the ladder, keeping the suppression as
-// an explicit resolve-time hook with its own log line, per the framework's docs/config-migration.md
-// "Qualification 2" — and a game repo may not make it. Hand it to the operator; do not paper over it
-// here, and do not delete this note when the upstream change lands: delete the duplication instead.
+// Selection and comparison-run suppression have one shared owner. This title wrapper adds only its
+// no-consumer audit; duplicating the diagnostic-role rule here would let the two definitions drift.
 bool enh(psx::config::BoolVar &v) {
-  const char *sbs_mode = cfg_str("PSXPORT_SBS_MODE");
-  const bool compare_run = psx::config::cv_oracle.get() || cfg_on("PSXPORT_SBS") || (sbs_mode && *sbs_mode);
-  if (compare_run) {
-    // ONE-TIME PER KNOB, not one global flag: a run with two enhancements set must name BOTH, or the
-    // second reads as never having been asked for.
-    if (warn_once(&v, g_warned_suppressed)) {
-      // The framework's own wording, so the two suppressions are greppable together.
-      cfg_logw("cfg", "%s SUPPRESSED: oracle/SBS run must stay enhancement-free", v.name());
-    }
-    return false;
-  }
-  const bool on = v.get();
+  const bool on = psx::config::enh(v);
   if (on) {
     if (const char *step = unimplemented_step(v)) {
       if (warn_once(&v, g_warned_unimpl)) {

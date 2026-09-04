@@ -1,15 +1,10 @@
 #include "stream_interrupt.h"
 
 #include "core.h"
-#include "override_registry.h"
+#include "guest_execution.h"
 
 #include <cstdlib>
 #include <lucent/log.h>
-
-#ifdef MMX4_HAVE_SUBSTRATE
-extern void gen_func_800E84D8(Core *);
-extern void shard_set_override(std::uint32_t, void (*)(Core *));
-#endif
 
 namespace x4::stream_interrupt {
 namespace {
@@ -90,15 +85,15 @@ bool consumeCompletedCallback(Core &core) {
 
 void run(Core &core, GuestBody retailBody) {
   if (!retailBody) {
-    refuse("the retained generated body is absent", core);
+    refuse("the original guest-body dispatcher is absent", core);
   }
   if (g_scope.core) {
     refuse("nested callback completion scope", core);
   }
 
   // callback 0x800E7944 calls the registered 0x8011DD20 target with the already-decoded libcd sync
-  // status in a0 and its eight-byte response at a1. StCdInterrupt's generated body preserves neither
-  // value before issuing CdReady, so retain them at this owning boundary.
+  // status in a0 and its eight-byte response at a1. StCdInterrupt preserves neither value before
+  // issuing CdReady, so retain them at this owning boundary.
   g_scope = {
       .core = &core,
       .status = core.r[4],
@@ -110,25 +105,18 @@ void run(Core &core, GuestBody retailBody) {
 }
 
 void run(Core *core) {
-#ifdef MMX4_HAVE_SUBSTRATE
   if (!core) {
     lucent::error("x4-stream-interrupt", "StCdInterrupt received a null Core");
     std::abort();
   }
-  run(*core, gen_func_800E84D8);
-#else
-  (void)core;
-  lucent::error("x4-stream-interrupt", "StCdInterrupt cannot execute without the generated substrate");
-  std::abort();
-#endif
+  const auto original = [](Core *active) {
+    guest::callOriginal(active, kEntry, "stream_interrupt::completeSector original");
+  };
+  run(*core, original);
 }
 
-void registerOverride() {
-#ifdef MMX4_HAVE_SUBSTRATE
-  overrides::install(kEntry, "stream_interrupt::completeSector", run, gen_func_800E84D8, shard_set_override);
-#else
-  lucent::debug("x4-stream-interrupt", "StCdInterrupt registration deferred: no generated substrate");
-#endif
+void registerOverride(Core &core) {
+  guest::install(core, kEntry, "stream_interrupt::completeSector", run);
 }
 
 } // namespace x4::stream_interrupt

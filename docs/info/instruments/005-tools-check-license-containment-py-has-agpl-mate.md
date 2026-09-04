@@ -45,7 +45,7 @@ subtracted the vocabulary of `../{Tomba2Engine,spyro,spider1,vagrant}/game`; a m
 megamanx4 alone has none of them, the subtraction silently did not happen, and generic vocabulary
 became signatures — measured in a bare-clone simulation: `NO BASELINE APPLIED` then
 `FAIL — 27 hit(s) in the HARD classes`, all false (`checkpoint` ×24, an English word in
-psxport/docs/oracle.md; `func_8003F698` ×3, an address-shaped recomp symbol in
+psxport/docs/oracle.md; `func_8003F698` ×3, an address-shaped function symbol in
 psxport/docs/abi-extract.md). The exclusion set is now the tracked, human-readable
 `docs/info/containment-baseline.txt` (25 names, regenerate with `--write-baseline`), sibling trees are
 additive on top, and NO baseline at all is a REFUSAL (exit 2) instead of a wave of hard FAILs, because

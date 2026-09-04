@@ -18,10 +18,10 @@ The loading-coroutine conversion is byte-exact: withholding only the per-field p
 
 ## What would falsify it
 
-any RAM-diff pair at equal delivered field that differs under FASTWAIT on/off, or an ORACLE/SBS run that logs an x4-fastwait line
+any RAM-diff pair at equal delivered field that differs under FASTWAIT on/off, or a typed comparison run that logs an x4-fastwait line
 
 ## FALSIFIED 2026-08-24
 
-The implementation it measured was discarded: fastwait now owns retail issuers 0x80013890/0x80013AD8, feeds the generated callbacks synchronously from raw sectors, and performs no delivered-field presentation loop. Equal-field RAM dumps and commitUnpresented therefore do not verify the current loader.
+The implementation it measured was discarded: fastwait now owns retail issuers 0x80013890/0x80013AD8, feeds the original guest callbacks synchronously from raw sectors, and performs no delivered-field presentation loop. Equal-field RAM dumps and commitUnpresented therefore do not verify the current loader.
 
 > Anything that cited this claim as proof must be re-checked. Grep the repo for it.

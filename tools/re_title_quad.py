@@ -5,11 +5,10 @@ The selected body is the title's state-0 white-logo quad initializer at 0x800D6F
 reuses the title-composition instrument for the front-end -> quad-update path, then proves the
 state-0 dispatch entry and all 49 retail instructions of the leaf body. It also diffs every address
 and field offset consumed by the shipping native implementation back to that measurement and checks
-that the retained-super ownership triple is wired.
+that the image-scoped native registration is wired.
 
-This is the static/hermetic half of the ownership gate. It cannot prove that the override installed
-or ran. RE-10 remains in progress until a serialized live run prints mirror-verify success for
-0x800D6F94, and the same run must be discriminated by a deliberate native-body perturbation.
+This is the binary/hermetic half of the ownership gate. Runtime evidence must separately prove that
+the override and its scoped Lightrec original call both execute through the shipping dispatcher.
 """
 
 from __future__ import annotations
@@ -23,9 +22,9 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "external/psxport/tools/recomp"))
+sys.path.insert(0, str(ROOT / "external/psxport"))
 
-import psexe
+from tools.formats import psx_exe as psexe
 import verify_title_composition
 
 DEFAULT_EXE = ROOT / "scratch/bin/megamanx4/SLUS_005.61"
@@ -34,7 +33,6 @@ HEADER = ROOT / "game/core/title_quad.h"
 SOURCE = ROOT / "game/core/title_quad.cpp"
 RUNTIME = ROOT / "game/core/x4_runtime.cpp"
 DECOMP_SOURCE = ROOT / "external/mmx4/src/main/title_quad.c"
-CONFIG_DOC = ROOT / "docs/config.md"
 
 INITIALIZER = 0x800D6F94
 INITIALIZER_END = 0x800D7058
@@ -182,9 +180,7 @@ def parse_constant(text: str, name: str) -> int:
     return int(match.group(1), 0)
 
 
-def verify_source(
-    header: str, source: str, runtime: str, decomp: str, config_doc: str
-) -> None:
+def verify_source(header: str, source: str, runtime: str, decomp: str) -> None:
     mismatches = []
     for name, expected in SHIPPED_CONSTANTS.items():
         actual = parse_constant(header, name)
@@ -193,23 +189,15 @@ def verify_source(
 
     required_source = (
         "void initializeWhiteLogoQuad(Core *core)",
-        "overrides::install(kInitializeWhiteLogoQuad",
-        "gen_func_800D6F94",
-        "shard_set_override",
+        "guest::install(core, kInitializeWhiteLogoQuad",
     )
     mismatches.extend(
         f"missing source token {token!r}"
         for token in required_source
         if token not in source
     )
-    if "title_quad::registerOverride();" not in runtime:
+    if "title_quad::registerOverride(game.core);" not in runtime:
         mismatches.append("X4Runtime does not install title_quad::registerOverride")
-    for diagnostic in (
-        "PSXPORT_MIRROR_VERIFY=0x800D6F94",
-        "PSXPORT_THUNK_FORCE_GEN=0x800D6F94",
-    ):
-        if diagnostic not in config_doc:
-            mismatches.append(f"missing title-sprite A/B diagnostic {diagnostic!r}")
 
     body_start = decomp.find("void func_800D6F94(struct QuadObj* entity)")
     body_end = decomp.find("// TitleUpdate2 state 1", body_start)
@@ -226,14 +214,13 @@ def verify_source(
         raise Refused("shipping/source mismatch: " + "; ".join(mismatches))
 
 
-def read_sources() -> tuple[str, str, str, str, str]:
+def read_sources() -> tuple[str, str, str, str]:
     try:
         return (
             HEADER.read_text(),
             SOURCE.read_text(),
             RUNTIME.read_text(),
             DECOMP_SOURCE.read_text(),
-            CONFIG_DOC.read_text(),
         )
     except OSError as exc:
         raise Refused(f"cannot read ownership source: {exc}") from exc
@@ -245,7 +232,7 @@ def mutate(image: psexe.PsxExe, address: int, word: int) -> psexe.PsxExe:
     return dataclasses.replace(image, text=bytes(changed))
 
 
-def selftest(image: psexe.PsxExe, sources: tuple[str, str, str, str, str]) -> None:
+def selftest(image: psexe.PsxExe, sources: tuple[str, str, str, str]) -> None:
     cases = 0
     verify_retail(image)
     verify_source(*sources)
@@ -283,19 +270,19 @@ def selftest(image: psexe.PsxExe, sources: tuple[str, str, str, str, str]) -> No
     print("[re-title-quad:selftest] PASS changed shipping constant rejected")
     cases += 1
 
-    changed_config = sources[4].replace(
-        "PSXPORT_THUNK_FORCE_GEN=0x800D6F94",
-        "PSXPORT_THUNK_FORCE_GEN=0x800D6F98",
+    changed_source = sources[1].replace(
+        "guest::install(core, kInitializeWhiteLogoQuad",
+        "guest::install(core, 0x800D6F98u",
     )
     try:
-        verify_source(*sources[:4], changed_config)
-        raise Refused("selftest changed generated A/B address: mutation was accepted")
+        verify_source(sources[0], changed_source, sources[2], sources[3])
+        raise Refused("selftest changed native registration address: mutation was accepted")
     except Refused as exc:
-        if "A/B diagnostic" not in str(exc):
+        if "guest::install" not in str(exc):
             raise Refused(
-                f"selftest changed generated A/B address: wrong diagnostic: {exc}"
+                f"selftest changed native registration address: wrong diagnostic: {exc}"
             ) from exc
-    print("[re-title-quad:selftest] PASS changed generated A/B address rejected")
+    print("[re-title-quad:selftest] PASS changed native registration address rejected")
     cases += 1
     print(f"[re-title-quad:selftest] PASS {cases}/{cases} cases")
 
@@ -323,11 +310,11 @@ def main() -> int:
                 print(f"[re-title-quad] PASS {line}")
             verify_source(*sources)
             print(
-                "[re-title-quad] PASS shipping native body and retained-super ownership triple are wired"
+                "[re-title-quad] PASS shipping native body and image-scoped registration are wired"
             )
             print(
-                "[re-title-quad] BLIND SPOT: static/hermetic evidence cannot prove override reach or "
-                "native-vs-substrate equality; serialized live mirror verification remains required"
+                "[re-title-quad] BLIND SPOT: binary/hermetic evidence cannot prove override reach or "
+                "scoped-original equality; a serialized runtime differential remains required"
             )
         if args.selftest:
             selftest(image, sources)

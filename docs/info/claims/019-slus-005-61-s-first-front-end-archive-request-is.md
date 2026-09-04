@@ -4,7 +4,7 @@ kind: claim
 status: falsified
 created: 2026-08-22
 tags:
-depends: external/psxport/runtime/recomp/cdc_native.cpp#schedule_sector_event, external/psxport/runtime/recomp/timing.cpp#Timing::advanceGuestInstructionTicks
+depends: external/psxport/runtime/psx/cdc_native.cpp#schedule_sector_event, external/psxport/runtime/psx/timing.cpp#Timing::advanceGuestInstructionTicks
 falsified_on: 2026-08-22
 ---
 

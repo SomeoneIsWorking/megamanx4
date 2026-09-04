@@ -5,8 +5,6 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import json
-import re
 import struct
 import sys
 from dataclasses import dataclass
@@ -14,8 +12,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_EXE = ROOT / "scratch/bin/megamanx4/SLUS_005.61"
-SEEDS = ROOT / "game/recomp_seeds.json"
-
 EXPECTED_SHA1 = "213733031136d095ca275d6957695aa25011cfa5"
 TEXT_VADDR = 0x80010000
 TEXT_FILE_OFFSET = 0x800
@@ -40,7 +36,6 @@ class VerificationError(RuntimeError):
 @dataclass(frozen=True)
 class Inputs:
     exe: bytes
-    seeds: str
 
 
 def word(image: bytes, address: int) -> int:
@@ -97,32 +92,6 @@ def expect_word(image: bytes, pc: int, expected: int, label: str) -> None:
         )
 
 
-def parse_seeds(text: str) -> dict[str, object]:
-    without_comments = re.sub(r"//[^\n]*", "", text)
-    try:
-        parsed = json.loads(without_comments)
-    except json.JSONDecodeError as exc:
-        raise VerificationError(f"cannot parse recomp seeds: {exc}") from exc
-    if not isinstance(parsed, dict):
-        raise VerificationError("recomp seeds are not a JSON object")
-    return parsed
-
-
-def expect_reentry_seed(text: str) -> None:
-    parsed = parse_seeds(text)
-    wanted = f"0x{INTERRUPT_REENTRY:08X}"
-    reentries = parsed.get("main_reentry")
-    if not isinstance(reentries, list) or reentries.count(wanted) != 1:
-        raise VerificationError(
-            f"recomp seeds 'main_reentry' must contain {wanted} exactly once"
-        )
-    main = parsed.get("main")
-    if not isinstance(main, list) or wanted in main:
-        raise VerificationError(
-            f"recomp seeds 'main' must not duplicate re-entry {wanted}"
-        )
-
-
 def verify(inputs: Inputs, *, check_digest: bool = True) -> list[str]:
     digest = hashlib.sha1(inputs.exe).hexdigest()
     if check_digest and digest != EXPECTED_SHA1:
@@ -157,7 +126,7 @@ def verify(inputs: Inputs, *, check_digest: bool = True) -> list[str]:
     checks.append("the registered verifier claims only IRQ0 and correctly declines IRQ2")
 
     # setjmp records a mid-function continuation. HookEntryInt installs that buffer, and a non-zero
-    # exception return reaches trapIntr. This is the static-recompiler entry the shipping seeds owe.
+    # exception return reaches trapIntr. Runtime execution must preserve this mid-function edge.
     expect_jal(inputs.exe, 0x800E518C, SETJMP, "startIntr setjmp")
     expect_word(inputs.exe, 0x800E5190, 0x26040038, "setjmp buffer argument")
     expect_word(inputs.exe, INTERRUPT_REENTRY, 0x10400003, "non-zero exception return branch")
@@ -165,7 +134,6 @@ def verify(inputs: Inputs, *, check_digest: bool = True) -> list[str]:
     expect_address(inputs.exe, 0x800E51A4, 0x800E51A8, ENTRY_BUFFER + 4, "entry buffer cursor")
     expect_word(inputs.exe, 0x800E51AC, 0x2604FFFC, "HookEntryInt buffer argument")
     expect_jal(inputs.exe, 0x800E51B4, HOOK_ENTRY_INT, "HookEntryInt call")
-    expect_reentry_seed(inputs.seeds)
     checks.append("HookEntryInt resumes the measured 0x800E5194 continuation into trapIntr")
 
     # trapIntr starts at callback table - 4, scans the eleven hardware interrupt bits, acknowledges
@@ -202,7 +170,7 @@ def verify(inputs: Inputs, *, check_digest: bool = True) -> list[str]:
 def load_inputs(exe_path: Path) -> Inputs:
     if not exe_path.is_file():
         raise VerificationError(f"missing executable: {exe_path}")
-    return Inputs(exe_path.read_bytes(), SEEDS.read_text())
+    return Inputs(exe_path.read_bytes())
 
 
 def mutate_word(image: bytes, address: int, replacement: int) -> bytes:
@@ -225,29 +193,19 @@ def selftest(inputs: Inputs) -> list[str]:
     results.append(
         expect_refusal(
             "IRQ2 verifier claim",
-            Inputs(mutate_word(inputs.exe, 0x800EE2F0, 0x30420004), inputs.seeds),
+            Inputs(mutate_word(inputs.exe, 0x800EE2F0, 0x30420004)),
         )
     )
     results.append(
         expect_refusal(
             "missing trapIntr edge",
-            Inputs(mutate_word(inputs.exe, 0x800E519C, 0), inputs.seeds),
+            Inputs(mutate_word(inputs.exe, 0x800E519C, 0)),
         )
-    )
-    wrong_seed = inputs.seeds.replace(
-        '"main_reentry": ["0x800E5194"]', '"main_reentry": []', 1
-    )
-    results.append(expect_refusal("missing re-entry seed", Inputs(inputs.exe, wrong_seed)))
-    duplicate_seed = inputs.seeds.replace(
-        '"main": []', '"main": ["0x800E5194"]', 1
-    )
-    results.append(
-        expect_refusal("duplicated re-entry ownership", Inputs(inputs.exe, duplicate_seed))
     )
     results.append(
         expect_refusal(
             "wrong CD callback slot",
-            Inputs(mutate_word(inputs.exe, 0x800E7550, 0x24040003), inputs.seeds),
+            Inputs(mutate_word(inputs.exe, 0x800E7550, 0x24040003)),
         )
     )
     return results

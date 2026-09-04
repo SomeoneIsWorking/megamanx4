@@ -3,6 +3,7 @@
 #include "core.h"
 #include "coro.h"
 #include "game.h"
+#include "guest_execution.h"
 #include "platform_hle.h"
 #include "x4_context.h"
 
@@ -13,8 +14,27 @@
 namespace x4::bios_threads {
 namespace {
 
-void run_recompiled_entry(Core &core, uint32_t entry) {
-  rec_coro_run(&core, entry);
+void run_guest_entry(Core &core, uint32_t entry) {
+  std::uint32_t resumeAddress = entry;
+  for (;;) {
+    const psx::cpu::ExecutionResult result = guest::dispatch(core, resumeAddress);
+    if (result.returned()) {
+      return;
+    }
+    if (result.reason != psx::cpu::ExecutionExitReason::FrameBoundary) {
+      lucent::error("x4-thread",
+                    "guest task stopped at 0x{:08X} with unexpected {} boundary: {}",
+                    result.guestPc,
+                    psx::cpu::executionExitName(result.reason),
+                    result.detail);
+      std::abort();
+    }
+
+    // Frame boundaries preserve this task's host and guest stacks. The frame driver explicitly
+    // resumes at the typed guest PC on the next scheduler turn.
+    resumeAddress = result.guestPc;
+    from(core).yieldToMain();
+  }
 }
 
 void open_thread(Core *core) {
@@ -47,7 +67,7 @@ void change_thread(Core *core) {
 } // namespace
 
 Service::Service(Core &core, EntryRunner entryRunner)
-    : core_(core), entryRunner_(entryRunner ? std::move(entryRunner) : EntryRunner{run_recompiled_entry}) {
+    : core_(core), entryRunner_(entryRunner ? std::move(entryRunner) : EntryRunner{run_guest_entry}) {
   threads_[0].open = true;
 }
 

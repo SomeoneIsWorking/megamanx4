@@ -48,22 +48,10 @@ static_assert(kPsExeEntry >= kPsExeTextAddr && kPsExeEntry < kPsExeTextAddr + kP
 // RE-01: THE crt0 BOOT GROUP IS NOW MEASURED. IT IS STILL NOT IN THE STRUCT, AND THAT IS THE FINDING
 // ──────────────────────────────────────────────────────────────────────────────────────────────────
 // 2026-08-12. The entry function at pc0 was disassembled and symbolically executed from these bytes,
-// straight through to its terminating `break` (43 instructions). Reproduce, with per-field citations
-// and a both-classes selftest:
-//
-//     python3 tools/verify_crt0.py --check
-//     python3 tools/verify_crt0.py --selftest [--cross <another game's PS-X EXE>]
-//
-// **`--check` READS THIS FILE.** It parses the `kCrt0*`/`kPsExe*` constants below and diffs them
-// against what it measures from the bytes in the same run — 16 comparisons, one source of truth, so a
-// hand-edit of EITHER side goes red. That is not how it started: the tool used to keep its own copy of
-// the table and only assert the BINARY matched it, this file kept a second copy, nothing compared the
-// two, and with `kCrt0GameMain` set to 0x80999999 and `kCrt0LibcInit` to 0xDEADBEEF both `--check` and
-// `--selftest` still passed. The `static_assert`s below are worth keeping and were never this: they
-// check the constants' RELATIONS, and `hi - lo == 0x46B20` holds just as well when both are wrong. So
-// when you fill a field here, the tool is what proves the number; when you EDIT one, the tool is what
-// catches you. `--check` also asserts the struct's crt0 group is either ALL ZERO (its state today, see
-// below) or every field naming its measured constant — a partial fill is red.
+// straight through to its terminating `break` (43 instructions). Claim C005 retains each field and
+// its instruction citation. The old static-source recognizer was removed with the generated product;
+// the shipping `crt0_audit` independently re-derives this group from the authenticated guest image at
+// every boot and refuses a disagreement.
 //
 // The values below are OURS — derived from this executable, not copied. They happen to CONFIRM the
 // one hypothesis that was on the table (external/mmx4's splat config claimed .bss at 0x8012F418 size
@@ -93,7 +81,7 @@ static_assert(kPsExeEntry >= kPsExeTextAddr && kPsExeEntry < kPsExeTextAddr + kP
 //     gameMain  0x80012024   crt0      0x800DAE8C   heapSizePtr/heapBasePtr: THIS crt0 HAS NEITHER
 //
 // **WHY THE STRUCT BELOW IS STILL ZERO: the framework's crt0_setup cannot run this crt0, and no
-// assignment of these fields makes it able to.** external/psxport/runtime/recomp/native_boot.cpp:218
+// assignment of these fields makes it able to.** external/psxport/runtime/psx/native_boot.cpp
 // is a faithful transcription of TOMBA!2's crt0 wearing generic clothes. Six of its ten steps match
 // X4 exactly (bss clear semantics, stack top from a memory word, the 0x1FFFFFFF heap mask, the heap-size
 // arithmetic, gp/sp/fp, and a0 = maskedHeapBase|0x80000000 + 4). Four do not:
@@ -103,7 +91,7 @@ static_assert(kPsExeEntry >= kPsExeTextAddr && kPsExeEntry < kPsExeTextAddr + kP
 //   2. line 226 `mem_w32(cfg->heapSizePtr, heapsz)` is unconditional. X4's crt0 stores the heap size
 //      NOWHERE — it passes it in a1. Leaving the field 0 writes the heap size to guest 0x00000000.
 //   3. line 228 `mem_w32(cfg->heapBasePtr, a0)` — same, a second write to guest 0x00000000.
-//   4. crt0_setup sets only `c->r[4]` before `rec_dispatch(c, cfg->libcInit)`. Both games' libcInit is
+//   4. crt0_setup sets only `c->r[4]` before entering `cfg->libcInit`. Both games' libcInit is
 //      the BIOS A(39h) InitHeap thunk and BOTH pass the size in a1, so `c->r[5]` is simply missing:
 //      X4's heap would be initialised with whatever was left in the register file.
 //
@@ -117,7 +105,7 @@ static_assert(kPsExeEntry >= kPsExeTextAddr && kPsExeEntry < kPsExeTextAddr + kP
 // heapSizePtr/heapBasePtr == 0 as "this crt0 keeps them in registers only — do not store"; and set
 // `c->r[5] = heapsz` unconditionally, which is faithful to BOTH consumers and is a plain bug fix
 // rather than a new knob. psxport 726d10c9 landed that fix; the measured group below now ships and
-// `tools/verify_crt0.py --check` gates the framework mechanisms as well as these values.
+// the runtime `crt0_audit` gates these values against the executable.
 static constexpr uint32_t kCrt0BssZeroLo = 0x8012F418u;
 static constexpr uint32_t kCrt0BssZeroHi = 0x80175F38u;
 static constexpr uint32_t kCrt0StackTopBase = 0x800DAF3Cu;
@@ -138,7 +126,7 @@ static constexpr uint32_t kCrt0Entry = kPsExeEntry; // crt0 IS the PS-EXE entry
 static constexpr int32_t kCrt0StackBias = 0;
 static_assert(kCrt0BssZeroHi - kCrt0BssZeroLo == 0x46B20u,
               "the measured .bss size must stay 0x46B20 — if this fires, the clear-loop bounds were "
-              "re-derived to something else and tools/verify_crt0.py --check is the arbiter");
+              "re-derived to something else and the authenticated executable must be measured again");
 static_assert(kCrt0HeapBase == kCrt0BssZeroHi,
               "this crt0 starts the heap exactly at the end of .bss; a divergence means one of the "
               "two was mis-derived");
@@ -178,7 +166,7 @@ static_assert(kCrt0BssZeroLo < kPsExeTextAddr + kPsExeTextSize,
 // unfinished guess.
 // Direct X4Runtime ownership consumes this narrow immutable image instead of reading boot/routing
 // facts out of GameConfig. The compatibility table below names the same measured constants for
-// framework algorithms that have not migrated yet; tools/verify_crt0.py compares both against the
+// framework algorithms that have not migrated yet; the runtime crt0 audit compares them with the
 // retail executable so neither representation can drift silently.
 static const GuestProgramImage g_x4_program_image = {
     .bss = {kCrt0BssZeroLo, kCrt0BssZeroHi},
@@ -203,14 +191,9 @@ static const GuestProgramImage g_x4_program_image = {
 // C++20 requires designators in declaration order; keep them so when adding one.
 static const GameConfig g_x4_cfg = {
     // --- crt0 / boot ------------------------------------------------ RE-01: MEASURED and NOW WIRED --
-    // Every field is the kCrt0* constant above, each with the disassembly line behind it, and TWO
-    // independent things diff those constants against the bytes rather than trusting this file:
-    //   * tools/verify_crt0.py --check / --selftest, which PARSES this file (so a partial fill — the one
-    //     failure state that looks like progress — is caught too);
-    //   * psxport's own crt0_audit (external/psxport/runtime/recomp/crt0_verify.h), which at EVERY boot
-    //     re-derives the group from the guest instruction stream at `crt0` and REFUSES to boot on a
-    //     disagreement. That is the gate that makes `stackBias` safe to state here: no python tool has
-    //     to be re-run for the shipped value to be compared to the measurement.
+    // Every field is the kCrt0* constant above, each with its retained binary evidence. psxport's
+    // crt0_audit re-derives the group from the authenticated guest instruction stream at every boot
+    // and REFUSES a disagreement. That is the gate that makes `stackBias` safe to state here.
     //
     // heapSizePtr/heapBasePtr are 0 = ABSENT, and that is now a value the framework can express: this
     // crt0's ONLY absolute store is `sw ra` to 0x8012F418, so there is no heap-size or heap-base global
@@ -229,16 +212,6 @@ static const GameConfig g_x4_cfg = {
     .libcInit = kCrt0LibcInit,
     .gameMain = kCrt0GameMain,
     .crt0 = kCrt0Entry,
-
-    // --- recompiled MAIN .text range (physical) ------------------------------- RE-02: MEASURED --
-    // emit.py independently wrote these exact bounds as REC_MAIN_LO=0x00010000 and
-    // REC_MAIN_HI=0x0012F800 from the retail PS-X EXE. Derive them from the already-gated header
-    // constants so a clean clone does not need generated/ merely to compile the seam, while
-    // tools/verify_crt0.py checks that both fields still name those measured constants. Leaving this
-    // range at zero caused every resident address — including the generated 0x800EDCDC InitHeap thunk
-    // — to bypass main_dispatch and fail as a misleading recomp-MISS.
-    .recMainLo = kPsExeTextAddr & 0x1FFFFFFFu,
-    .recMainHi = (kPsExeTextAddr + kPsExeTextSize) & 0x1FFFFFFFu,
 
     // --- disc key ----------------------------------------------- this port's own env name, not RE --
     // Not an RE fact but a port fact, and it belongs here because the framework must not know it: the
@@ -271,9 +244,6 @@ static const GameConfig g_x4_cfg = {
     .putDrawEnv = 0,
     .drawSync = 0,
     .irqEventClasses = {0, 0, 0},
-    .dualviewRenderOrch = 0,
-    .dualviewSubmit = 0,
-
     // --- scheduler task layout ------------------------------- N/A until a native frame loop exists --
     // The framework's PcScheduler is not wired for this port, and per the scope decision above it is
     // not going to be: GameHooks' scheduler entries are fail-fast stubs, so these values would have no
@@ -335,7 +305,7 @@ static const GameConfig g_x4_cfg = {
 
     // --- pad driver -------------------------------------------------------------- RE-06, MEASURED --
     // X4-SPECIFIC NOTE, and it is the one piece of good news co-op has: `padSlot1Buf` is the
-    // FRAMEWORK'S EXISTING SECOND-CONTROLLER PATH — runtime/recomp/pad_input.cpp:550 reads
+    // FRAMEWORK'S EXISTING SECOND-CONTROLLER PATH — runtime/psx/pad_input.cpp reads
     //     uint32_t bufs[2] = { c->cfg->padSlot0Buf, c->cfg->padSlot1Buf };
     // so drop-in co-op's INPUT half is already framework-supported the moment RE-06 lands. What is NOT
     // supported by anything is the PLAYER-OBJECT half (one player struct, one camera, one input route):
@@ -385,7 +355,7 @@ static const GameConfig g_x4_cfg = {
     // framework's old hardcoded -8 put sp at 0x801FFFF8 instead of 0x80200000. The value NAMES
     // kCrt0StackBias rather than repeating the literal: a second `0` here would be a second copy of a
     // measured value with nothing comparing the two, which is the exact defect that let
-    // kCrt0GameMain = 0x80999999 pass every gate. tools/verify_crt0.py --check diffs BOTH members.
+    // kCrt0GameMain = 0x80999999 pass every gate. The runtime crt0 audit now compares both members.
     .stackBias = {1, kCrt0StackBias},
 };
 

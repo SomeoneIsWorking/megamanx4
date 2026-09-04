@@ -3,6 +3,7 @@
 #include "core.h"
 #include "disc.h"
 #include "enhancements.h"
+#include "execution_services.h"
 #include "game.h"
 #include "r3000.h"
 #include "x4_context.h"
@@ -15,7 +16,7 @@ namespace {
 
 constexpr uint32_t kRequestTable = 0x800F0E18u;
 constexpr uint32_t kRequestStride = 12u;
-// gen_func_800E5D78 materializes (32786 << 16) - 8928 before storing the
+// The retail body at 0x800E5D78 materializes (32786 << 16) - 8928 before storing the
 // CdReady callback. Keep the decoded instruction operands here so a high-word
 // transcription error cannot silently redirect the validation.
 constexpr uint32_t kReadyCallbackSlot = (32786u << 16u) - 8928u;
@@ -47,7 +48,7 @@ State &state(Core &core) {
 
 void require_body(GuestBody body, const char *what, State &load) {
   if (!body) {
-    refuse(what, "generated guest body is absent", load);
+    refuse(what, "original guest-body dispatcher is absent", load);
   }
 }
 
@@ -207,34 +208,34 @@ void archive_cd_setup(Core *core,
   core->mem_w8(core->r[29] + 16u, static_cast<uint8_t>(core->r[2]));
   core->mem_w32(0x80137CECu, 0u);
   core->r[31] = 0x80013DD8u;
-  rec_guest_instruction_ticks(core, 12u);
+  psx::cpu::accountGuestInstructions(*core, 12u);
   issueLocation(core);
 
   do {
     core->r[31] = 0x80013DE0u;
-    rec_guest_instruction_ticks(core, 2u);
+    psx::cpu::accountGuestInstructions(*core, 2u);
     queryStatus(core);
     core->r[2] &= 64u;
     core->r[4] = 1u;
-    rec_guest_instruction_ticks(core, 3u);
+    psx::cpu::accountGuestInstructions(*core, 3u);
   } while (core->r[2] != 0u);
 
   do {
     core->r[5] = 0u;
     core->r[31] = 0x80013DF4u;
-    rec_guest_instruction_ticks(core, 2u);
+    psx::cpu::accountGuestInstructions(*core, 2u);
     cdReadyBody(core);
     core->r[4] = 1u;
-    rec_guest_instruction_ticks(core, 2u);
+    psx::cpu::accountGuestInstructions(*core, 2u);
   } while (core->r[2] != 0u);
 
   core->r[4] = 14u;
   core->r[5] = core->r[29] + 16u;
   core->r[31] = 0x80013E0Cu;
   core->r[6] = 0u;
-  rec_guest_instruction_ticks(core, 4u);
+  psx::cpu::accountGuestInstructions(*core, 4u);
   cdControlBody(core);
-  rec_guest_instruction_ticks(core, 2u);
+  psx::cpu::accountGuestInstructions(*core, 2u);
   if (core->r[2] == 0u) {
     refuse("archive CD setup", "native Setmode did not complete synchronously", load);
   }
@@ -245,10 +246,10 @@ void archive_cd_setup(Core *core,
   core->r[5] = 0x80137CF8u;
   core->r[31] = 0x80013E30u;
   core->r[6] = 0u;
-  rec_guest_instruction_ticks(core, 7u);
+  psx::cpu::accountGuestInstructions(*core, 7u);
   cdControlBody(core);
   core->r[4] = 6u;
-  rec_guest_instruction_ticks(core, 2u);
+  psx::cpu::accountGuestInstructions(*core, 2u);
   if (core->r[2] == 0u) {
     refuse("archive CD setup", "native Setloc did not complete synchronously", load);
   }
@@ -257,17 +258,17 @@ void archive_cd_setup(Core *core,
     core->r[5] = 0u;
     core->r[31] = 0x80013E44u;
     core->r[6] = 0u;
-    rec_guest_instruction_ticks(core, 3u);
+    psx::cpu::accountGuestInstructions(*core, 3u);
     cdReadyBody(core);
     core->r[4] = 6u;
-    rec_guest_instruction_ticks(core, 2u);
+    psx::cpu::accountGuestInstructions(*core, 2u);
   } while (core->r[2] == 0u);
 
   core->r[2] = 1u;
   core->mem_w8(kLoadState, static_cast<uint8_t>(core->r[2]));
   core->r[31] = core->mem_r32(core->r[29] + 24u);
   core->r[29] += 32u;
-  rec_guest_instruction_ticks(core, 7u);
+  psx::cpu::accountGuestInstructions(*core, 7u);
 }
 
 void direct_cd_setup(Core *core,
@@ -302,28 +303,28 @@ void direct_cd_setup(Core *core,
   core->mem_w8(kLoadState, 0u);
   core->mem_w32(0x80137CECu, 0u);
   core->r[31] = 0x800139A0u;
-  rec_guest_instruction_ticks(core, 14u);
+  psx::cpu::accountGuestInstructions(*core, 14u);
   issueLocation(core);
   core->mem_w32(0x80137CCCu, core->mem_r32(0x80137CCCu) - 1u);
   core->r[4] = 1u;
-  rec_guest_instruction_ticks(core, 7u);
+  psx::cpu::accountGuestInstructions(*core, 7u);
 
   do {
     core->r[5] = 0u;
     core->r[31] = 0x800139C4u;
-    rec_guest_instruction_ticks(core, 2u);
+    psx::cpu::accountGuestInstructions(*core, 2u);
     cdReadyBody(core);
     core->r[4] = 1u;
-    rec_guest_instruction_ticks(core, 2u);
+    psx::cpu::accountGuestInstructions(*core, 2u);
   } while (core->r[2] != 0u);
 
   core->r[4] = 14u;
   core->r[5] = core->r[29] + 16u;
   core->r[31] = 0x800139DCu;
   core->r[6] = 0u;
-  rec_guest_instruction_ticks(core, 4u);
+  psx::cpu::accountGuestInstructions(*core, 4u);
   cdControlBody(core);
-  rec_guest_instruction_ticks(core, 2u);
+  psx::cpu::accountGuestInstructions(*core, 2u);
   if (core->r[2] == 0u) {
     refuse("direct CD setup", "native Setmode did not complete synchronously", load);
   }
@@ -332,19 +333,19 @@ void direct_cd_setup(Core *core,
   core->r[5] = 0x80137CF8u;
   core->r[31] = 0x80013A00u;
   core->r[6] = 0u;
-  rec_guest_instruction_ticks(core, 7u);
+  psx::cpu::accountGuestInstructions(*core, 7u);
   cdControlBody(core);
-  rec_guest_instruction_ticks(core, 2u);
+  psx::cpu::accountGuestInstructions(*core, 2u);
   if (core->r[2] == 0u) {
     refuse("direct CD setup", "native Setloc did not complete synchronously", load);
   }
 
   core->r[31] = 0x80013A10u;
-  rec_guest_instruction_ticks(core, 2u);
+  psx::cpu::accountGuestInstructions(*core, 2u);
   publishReadyCallback(core);
   core->r[31] = core->mem_r32(core->r[29] + 24u);
   core->r[29] += 32u;
-  rec_guest_instruction_ticks(core, 4u);
+  psx::cpu::accountGuestInstructions(*core, 4u);
 }
 
 void cd_ready(Core *core, GuestBody retailBody) {

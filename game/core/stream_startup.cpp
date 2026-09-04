@@ -1,27 +1,23 @@
 #include "stream_startup.h"
 
 #include "c_subsys.h"
-#include "cdc_state.h"
+#include "cd_controller.h"
 #include "cfg.h"
 #include "core.h"
 #include "disc.h"
+#include "execution_services.h"
 #include "game.h"
-#include "override_registry.h"
+#include "guest_execution.h"
 
 #include <array>
 #include <cstdlib>
 #include <lucent/log.h>
 
-#ifdef MMX4_HAVE_SUBSTRATE
-extern void gen_func_80018788(Core *);
-extern void shard_set_override(std::uint32_t, void (*)(Core *));
-#endif
-
 namespace x4::stream_startup {
 namespace {
 
 // SLUS_005.61 0x80018788..0x80018ACC. The matching decomp deliberately leaves this body as
-// INCLUDE_ASM; every address and edge below is therefore derived from the retail-generated body.
+// INCLUDE_ASM; every address and edge below is therefore derived from the authenticated executable.
 constexpr std::uint32_t kSetStreamMode = 0x800190F0u;
 constexpr std::uint32_t kDecDctReset = 0x800ECDE0u;
 constexpr std::uint32_t kDecDctOutCallback = 0x800ED084u;
@@ -58,10 +54,9 @@ constexpr std::uint32_t kReadyCallbackSlot = 0x8011DD20u;
 constexpr std::uint32_t kDefaultReadMode = 328u;
 constexpr std::uint32_t kAlternateReadMode = 456u;
 constexpr std::uint32_t kFirstFrameWaitLimit = 601u;
-constexpr std::uint8_t kLibCdInterruptMask = 0x07u;
 
 void tick(Core &core, std::uint32_t ticks) {
-  rec_guest_instruction_ticks(&core, ticks);
+  psx::cpu::accountGuestInstructions(core, ticks);
 }
 
 void call(Core &core, GuestDispatch dispatch, std::uint32_t entry, std::uint32_t returnAddress, std::uint32_t ticks) {
@@ -100,21 +95,14 @@ bool startNativeCdStream(
     return false;
   }
 
-  Game &game = *core.game;
-  CdcState &controller = game.cdc;
-  XaState *const xa = controller.xa;
-  void *const tickContext = controller.tick_context;
-  const CdcTickNowFn tickNow = controller.tick_now;
-
   // This is CdReset(0)'s completed controller state, without its libcd polling/VSync chain. Preserve
   // the Game wiring and the title's deterministic controller clock across the reset.
-  cdc_state_init(&controller);
-  controller.xa = xa;
-  cdc_bind_tick_source(&controller, tickContext, tickNow);
-  controller.irq_en = kLibCdInterruptMask;
+  cd_controller::reset(core);
   core.r[4] = 3u;
   serviceFields(core, serviceField, 3u);
 
+  Game &game = *core.game;
+  CdcState &controller = game.cdc;
   const std::uint8_t file = static_cast<std::uint8_t>(core.mem_r8(filter));
   const std::uint8_t channel = static_cast<std::uint8_t>(core.mem_r8(filter + 1u));
   xa_stream_stop(&game.xa);
@@ -123,8 +111,7 @@ bool startNativeCdStream(
   serviceFields(core, serviceField, 3u);
 
   const std::uint8_t mode = static_cast<std::uint8_t>(readMode);
-  xa_stream_setmode(&game.xa, mode);
-  cdc_set_mode(&controller, mode);
+  cd_controller::setMode(core, mode);
 
   std::array<std::uint8_t, 8> position{};
   if (!disc_get_subq_position(&game.disc, lba, position.data())) {
@@ -298,26 +285,15 @@ void run(Core &core, GuestDispatch dispatch, FieldService serviceField, CdTransa
 }
 
 void run(Core *core) {
-#ifdef MMX4_HAVE_SUBSTRATE
   if (!core) {
     cfg_loge("x4-stream-startup", "STR startup received a null Core");
     std::abort();
   }
-  run(*core, rec_dispatch, awaitField, startNativeCdStream);
-#else
-  (void)core;
-  cfg_loge("x4-stream-startup", "STR startup cannot execute without the generated substrate");
-  std::abort();
-#endif
+  run(*core, guest::call, awaitField, startNativeCdStream);
 }
 
-void registerOverride() {
-#ifdef MMX4_HAVE_SUBSTRATE
-  overrides::install(
-      kEntry, "stream_startup::startStr", static_cast<void (*)(Core *)>(run), gen_func_80018788, shard_set_override);
-#else
-  lucent::debug("x4-stream-startup", "STR startup registration deferred: no generated substrate");
-#endif
+void registerOverride(Core &core) {
+  guest::install(core, kEntry, "stream_startup::startStr", static_cast<void (*)(Core *)>(run));
 }
 
 } // namespace x4::stream_startup

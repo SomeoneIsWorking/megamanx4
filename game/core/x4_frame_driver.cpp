@@ -1,15 +1,16 @@
 #include "x4_frame_driver.h"
 
 #include "core.h"
+#include "execution_services.h"
 #include "game.h"
-#include "vsync_sync.h"
+#include "guest_execution.h"
+#include "music_stream.h"
 
 namespace x4::frame {
 namespace {
 
-// Retail SLUS_005.61 gameMain 0x80012024, measured from generated/shard_4.c and independently
-// readable in external/mmx4/src/main/2824.c. These are entry points and guest globals, not native
-// replacements: every called body remains generated and dispatchable through the ordinary seam.
+// Retail SLUS_005.61 gameMain 0x80012024, measured independently from the authenticated executable
+// and matching source. These are guest entry points; every unowned body executes through Lightrec.
 constexpr std::uint32_t kStartup = 0x800DAE84u;
 constexpr std::uint32_t kInitialize = 0x8001213Cu;
 constexpr std::uint32_t kPutDispEnv = 0x800EAAD8u;
@@ -38,43 +39,54 @@ constexpr std::uint32_t kOrderingTableDrawOffset = 156u;
 
 void call(Core &core, GuestDispatch dispatch, std::uint32_t entry, std::uint32_t returnAddress, std::uint32_t ticks) {
   core.r[31] = returnAddress;
-  rec_guest_instruction_ticks(&core, ticks);
+  psx::cpu::accountGuestInstructions(core, ticks);
   dispatch(&core, entry);
 }
 
-bool movieOwnsPicture(const Core &core) {
-  return core.game && core.game->cd.stream_active != 0;
+bool movieOwnsPicture(const Core &core, const movie_cleanup::State &cleanup) {
+  return cleanup.pending() || (core.game && core.game->cd.stream_active != 0);
 }
 
-void runRetailFramePrefix(Core &core, GuestDispatch dispatch) {
-  std::uint32_t drawInfo = core.mem_r32(kCurrentDrawInfo);
-  core.r[4] = drawInfo;
-  call(core, dispatch, kPutDispEnv, 0x80012060u, 4u);
+bool runRetailFramePrefix(Core &core, GuestDispatch dispatch, music_stream::State &musicStream) {
+  if (musicStream.pending()) {
+    if (!musicStream.dispatchBeforeObjectsB(dispatch)) {
+      return false;
+    }
+  } else {
+    std::uint32_t drawInfo = core.mem_r32(kCurrentDrawInfo);
+    core.r[4] = drawInfo;
+    call(core, dispatch, kPutDispEnv, 0x80012060u, 4u);
 
-  drawInfo = core.mem_r32(kCurrentDrawInfo);
-  core.r[4] = drawInfo + kDrawEnvOffset;
-  call(core, dispatch, kPutDrawEnv, 0x80012070u, 4u);
+    drawInfo = core.mem_r32(kCurrentDrawInfo);
+    core.r[4] = drawInfo + kDrawEnvOffset;
+    call(core, dispatch, kPutDrawEnv, 0x80012070u, 4u);
 
-  drawInfo = core.mem_r32(kCurrentDrawInfo);
-  core.r[4] = drawInfo + kOrderingTableDrawOffset;
-  call(core, dispatch, kDrawOTag, 0x80012080u, 4u);
+    drawInfo = core.mem_r32(kCurrentDrawInfo);
+    core.r[4] = drawInfo + kOrderingTableDrawOffset;
+    call(core, dispatch, kDrawOTag, 0x80012080u, 4u);
 
-  gte_hold_src(&core, 5, kScratchDrawInfoPosition);
-  const std::uint32_t drawInfoPosition = core.mem_r32(kScratchDrawInfoPosition) ^ 1u;
-  drawInfo = kDrawInfos + drawInfoPosition * kDrawInfoStride;
-  core.mem_w32(kScratchDrawInfoPosition, drawInfoPosition);
-  gte_copy_pz(&core, 5, kScratchDrawInfoPosition);
-  core.mem_w32(kCurrentDrawInfo, drawInfo);
-  core.r[4] = drawInfo + kOrderingTableClearOffset;
-  core.r[5] = 12u;
-  call(core, dispatch, kClearOTagR, 0x800120B8u, 14u);
+    gte_hold_src(&core, 5, kScratchDrawInfoPosition);
+    const std::uint32_t drawInfoPosition = core.mem_r32(kScratchDrawInfoPosition) ^ 1u;
+    drawInfo = kDrawInfos + drawInfoPosition * kDrawInfoStride;
+    core.mem_w32(kScratchDrawInfoPosition, drawInfoPosition);
+    gte_copy_pz(&core, 5, kScratchDrawInfoPosition);
+    core.mem_w32(kCurrentDrawInfo, drawInfo);
+    core.r[4] = drawInfo + kOrderingTableClearOffset;
+    core.r[5] = 12u;
+    call(core, dispatch, kClearOTagR, 0x800120B8u, 14u);
 
-  call(core, dispatch, kBeforeObjectsA, 0x800120C0u, 2u);
-  call(core, dispatch, kBeforeObjectsB, 0x800120C8u, 2u);
+    call(core, dispatch, kBeforeObjectsA, 0x800120C0u, 2u);
+    core.r[31] = 0x800120C8u;
+    psx::cpu::accountGuestInstructions(core, 2u);
+    if (!musicStream.dispatchBeforeObjectsB(dispatch)) {
+      return false;
+    }
+  }
   call(core, dispatch, kRoutePads, 0x800120D0u, 2u);
   call(core, dispatch, kClearVramRectPointers, 0x800120D8u, 2u);
 
   core.mem_w32(kFieldCounter, core.mem_r32(kFieldCounter) + 1u);
+  return true;
 }
 
 void runRetailFrameSuffix(Core &core, GuestDispatch dispatch) {
@@ -106,20 +118,30 @@ void bootPrefix(Core &core, GuestDispatch dispatch) {
 }
 
 void bootPrefix(Core &core) {
-  bootPrefix(core, rec_dispatch);
+  bootPrefix(core, guest::call);
 }
 
-X4FrameDriver::X4FrameDriver(GuestDispatch dispatch, FieldService fieldService, PresentationSync presentationSync)
-    : dispatch_(dispatch), fieldService_(fieldService), presentationSync_(presentationSync) {}
-
-X4FrameDriver::X4FrameDriver() : X4FrameDriver(rec_dispatch, vsync::deliverField) {}
+X4FrameDriver::X4FrameDriver(GuestDispatch dispatch,
+                             FieldService fieldService,
+                             PresentationSync presentationSync,
+                             movie_cleanup::State &movieCleanup,
+                             music_stream::State &musicStream)
+    : dispatch_(dispatch), fieldService_(fieldService), presentationSync_(presentationSync),
+      movieCleanup_(&movieCleanup), musicStream_(&musicStream) {}
 
 void X4FrameDriver::stepFrame(Core &core, std::uint32_t) {
-  // The generated loop's back-edge/prologue reaches this call boundary after two guest
-  // instructions. Preserve its deterministic instruction clock before delivering pending work.
-  rec_guest_instruction_ticks(&core, 2u);
+  const bool resumingMusicField = musicStream_->pending();
+  const bool resumingCleanupField = movieCleanup_->pending();
+  const bool resumingNestedField = resumingMusicField || resumingCleanupField;
+
+  // The retail loop's back-edge/prologue reaches a fresh outer field after two guest
+  // instructions. A suspended state-7 transaction is still inside its VSync(3) call, so it must
+  // retain that call's register frame and must not execute the outer back-edge again.
+  if (!resumingNestedField) {
+    psx::cpu::accountGuestInstructions(core, 2u);
+  }
   if (core.pending_work) {
-    rec_irq_poll(&core);
+    psx::cpu::servicePendingWork(core);
   }
 
   if (presentationSync_) {
@@ -129,20 +151,24 @@ void X4FrameDriver::stepFrame(Core &core, std::uint32_t) {
   // This replaces only retail VSync(0). The boundary advances the CURRENT class-0 handler (including
   // libsnd's chained tick), pad, SPU, snapshot, presentation and pacing exactly once. Any actual call
   // to libetc VSync now reaches the full-entry trap declared by the title.
-  core.r[31] = 0x80012050u;
-  core.r[4] = 0u;
-  rec_guest_instruction_ticks(&core, 2u);
+  if (!resumingNestedField) {
+    core.r[31] = 0x80012050u;
+    core.r[4] = 0u;
+    psx::cpu::accountGuestInstructions(core, 2u);
+  }
   fieldService_(core);
 
   // The retail movie call blocks inside UpdateTasks across its VSync boundaries; the outer main
   // loop does not restart its 16-bit gameplay draw prefix while that call is suspended. Replaying
   // the prefix erased words 0..319 of a 480-word 24-bit MDEC buffer, leaving exactly its rightmost
   // third. Resume only the blocked task transaction until the movie releases the continuous stream.
-  if (!movieOwnsPicture(core)) {
-    runRetailFramePrefix(core, dispatch_);
+  if (!movieOwnsPicture(core, *movieCleanup_)) {
+    if (!runRetailFramePrefix(core, dispatch_, *musicStream_)) {
+      return;
+    }
   }
   call(core, dispatch_, kUpdateTasks, 0x800120ECu, 5u);
-  if (movieOwnsPicture(core)) {
+  if (movieOwnsPicture(core, *movieCleanup_)) {
     return;
   }
   runRetailFrameSuffix(core, dispatch_);

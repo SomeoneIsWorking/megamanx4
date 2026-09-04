@@ -18,6 +18,6 @@ void initialize(Core *core,
                 GuestBody drawSync,
                 GuestBody setDisplayMask,
                 GuestBody publishEnvironment);
-void registerOverride();
+void registerOverride(Core &core);
 
 } // namespace x4::display_init

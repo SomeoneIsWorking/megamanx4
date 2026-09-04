@@ -114,8 +114,7 @@ class LauncherTest(unittest.TestCase):
         self.assertIn(
             [LOCKED_PYTHON, "tools/extract_exe.py", "Mega Man X4.chd"], commands
         )
-        self.assertIn([LOCKED_PYTHON, "-B", "tools/ensure_recomp.py"], commands)
-        self.assertTrue(commands[-1][0].endswith("scratch/bin/megamanx4_port"))
+        self.assertTrue(commands[-1][0].endswith("build/player/bin/megamanx4_port"))
         self.assertFalse(
             any(command and Path(command[0]).name == "ctest" for command in commands)
         )
@@ -126,7 +125,7 @@ class LauncherTest(unittest.TestCase):
             if command[:2] == ["cmake", "-S"]
         )
         configure, kwargs = host.commands[configure_index]
-        self.assertEqual(configure[4], "scratch/build/player")
+        self.assertEqual(configure[4], "build/player")
         self.assertIn("-DBUILD_TESTING=OFF", configure)
         self.assertIn(f"-DPython3_EXECUTABLE={LOCKED_PYTHON}", configure)
         self.assertIn("-DCMAKE_C_COMPILER=clang", configure)
@@ -143,7 +142,7 @@ class LauncherTest(unittest.TestCase):
         self.assertIn("built and ready", stdout)
         self.assertTrue(
             any(
-                command[:3] == ["cmake", "--build", "scratch/build/player"]
+                command[:3] == ["cmake", "--build", "build/player"]
                 for command in commands
             )
         )

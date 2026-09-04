@@ -11,6 +11,6 @@ inline constexpr std::uint32_t kSetAlarmEntry = 0x800ECB38u;
 
 // Preserve set_alarm's guest-visible state while sourcing its counter directly from the field owner.
 void setAlarm(Core *core);
-void registerOverride();
+void registerOverride(Core &core);
 
 } // namespace x4::gpu_timeout

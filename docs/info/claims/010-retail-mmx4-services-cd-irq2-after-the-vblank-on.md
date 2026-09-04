@@ -3,15 +3,15 @@ id: C010
 kind: claim
 status: holds
 created: 2026-08-21
-tags: RE-04,cd,irq,HookEntryInt,recompiler
-depends: psxport.pin, tools/verify_cd_irq.py#verify, game/recomp_seeds.json
+tags: RE-04,cd,irq,HookEntryInt,runtime
+depends: psxport.pin, tools/verify_cd_irq.py#verify, game/core/stream_interrupt.cpp
 reconfirmed: 2026-08-25 00:56:30
 verified_at: 2026-08-25 00:56:30
 ---
 
 ## Claim
 
-Retail MMX4 services CD IRQ2 after the VBlank-only SysEnq element declines it by restoring HookEntryInt buffer 0x8011CBCC, resuming at 0x800E5194 with non-zero V0, and dispatching trapIntr slot 2 to libcd callback 0x800E7944; the recompiler therefore requires 0x800E5194 as a `main_reentry` seed.
+Retail MMX4 services CD IRQ2 after the VBlank-only SysEnq element declines it by restoring HookEntryInt buffer 0x8011CBCC, resuming at 0x800E5194 with non-zero V0, and dispatching trapIntr slot 2 to libcd callback 0x800E7944. Dynamic execution must preserve that mid-function continuation.
 
 ## Evidence
 

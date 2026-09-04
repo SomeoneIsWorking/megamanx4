@@ -1,10 +1,8 @@
 # Mega Man X4 (SLUS-00561, USA) — a PC-native port built on the psxport framework
 # (external/psxport shared checkout or pin-resolved private clone).
 #
-# The framework (PSX-generic static-recomp substrate + runtime + HW backends + SBS harness + SDL_GPU
-# renderer) is the reusable `psxport` library; this repo adds the game (game/**) and its generated
-# SLUS_005.61 substrate (generated/**). The crt0, pad buffers, static bootstrap, registry, and resident
-# routing range are measured; see docs/re-frontier.md.
+# The framework supplies the PSX hardware layer and runtime Lightrec executor; this repository owns
+# the title-native modules and authenticated SLUS_005.61 runtime-image policy.
 #
 # THIS PORT IS AN ENHANCEMENT PORT (CLAUDE.md): the game already runs at 60fps, so there is no native
 # producer, no frame interpolation and no native renderer here. What this repo builds beyond the seam is
@@ -12,9 +10,7 @@
 # that TU too — the enhancement knobs are compile-checked from the first commit.
 cmake_minimum_required(VERSION 3.21)
 
-# ccache, when available. The recompiled substrate is hundreds of MB of generated C, so compilation is
-# essentially the whole cost of an iteration. Must be set BEFORE project(), which is when CMake probes
-# the compiler.
+# ccache, when available. This is maintainer acceleration only and never a product prerequisite.
 find_program(CCACHE_PROGRAM ccache)
 if(CCACHE_PROGRAM)
   set(CMAKE_C_COMPILER_LAUNCHER   "${CCACHE_PROGRAM}")

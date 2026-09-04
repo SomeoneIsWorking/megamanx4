@@ -15,7 +15,7 @@ MEASURED on megamanx4 @ inherited dirty tree, framework pin d2266f4b, binary scr
 - WITH `PSXPORT_FNTRACE=8001512C,8001D10C,800182E8,800128B8,8001DAF8`: boot reaches 0x8001512C@f67, 0x8001D10C@f67, 0x800182E8@f67, 0x800128B8@f82, task 0x8001DAF8@f83, ABI violations 0 (scratch/logs/re07-inherited-bootgate2.log) — exactly the recorded claim-020/021 numbers. 4/4 runs with this shape passed (paced/unpaced, REPL/no-REPL).
 - WITHOUT FNTRACE: execution wedges inside guest main before ANY field commit. 4/4 such runs stalled (scratch/logs/re07-iso-A.log, re07-repl-eof-probe.log, re07-repl-cpu-probe.log, re07-iso-C-paced.log). CPU probe: ~99% of one core executing (not blocked); backtrace sits in gpu_beetle_gp0 -> cfg_on -> note_legacy_read under func_800EC228.
 - NOT a flat-out speed race: PSXPORT_NOPACE unset (paced) wedges identically.
-- NOT 'any perturbation': `PSXPORT_FNTRACE=800DAE8C` (crt0, pre-boot) still wedges AND its own summary prints 'NEVER CALLED' even though crt0_setup demonstrably executes it — the wrapper displaced the path it probes (re07-iso-D.log). This matches instrument I011's recorded caveat that raw fntrace generated-wrapper probes displace PlatformHle handlers.
+- NOT 'any perturbation': `PSXPORT_FNTRACE=800DAE8C` (crt0, pre-boot) still wedges AND its own summary prints 'NEVER CALLED' even though crt0_setup demonstrably executes it — the old trace hook displaced the path it probes (re07-iso-D.log). This matches the historical diagnostic caveat that the hook displaced PlatformHle handlers.
 
 SUSPICION (unverified): the traced set includes the BIOS-thread/task functions 0x8001D10C/0x800128B8/0x8001DAF8 — wrapping those perturbs exactly the RE-04 handoff region, and the wedge is real behavior the wrappers accidentally route around.
 

@@ -32,10 +32,9 @@ struct Fields {
 
 // First matching-decomp-seeded native body (RE-10). Initializes the white quad that becomes the
 // MEGAMAN title logo. The guest ABI passes the 0x60-byte QuadObj in a0; mirror verification compares
-// this body with gen_func_800D6F94 on live title state.
+// this body with the original Lightrec path on live title state.
 void initializeWhiteLogoQuad(Core *core);
 
-// Installs the retained-super ownership triple only in the shipping substrate target.
-void registerOverride();
+void registerOverride(Core &core);
 
 } // namespace x4::title_quad

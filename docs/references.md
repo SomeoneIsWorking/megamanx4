@@ -62,7 +62,7 @@ automated.
 PSY-Q 4.0 headers, `(C) Copyright 1993-1995 Sony Corporation … All Rights Reserved`. Treat that subtree
 as not-ours-to-take whatever the repo's own LICENSE says. We redistribute zero bytes of it — a submodule
 is a gitlink, so nothing of mmx4 enters this repo's object database. psxport has **no PSY-Q header story
-at all**, by design (address-keyed HLE in `runtime/recomp/platform_hle.h`), so there is never a
+at all**, by design (address-keyed HLE in `runtime/psx/platform_hle.h`), so there is never a
 legitimate reason to lift one. Details and the sparse-checkout recipe: `LICENSING.md`.
 
 ## What it does NOT buy
@@ -79,8 +79,7 @@ legitimate reason to lift one. Details and the sparse-checkout recipe: `LICENSIN
   rule is therefore currently vacuous in the good sense: there is nothing to contain yet.
 - **Do not `--recurse-submodules`.** mmx4 declares three nested submodules of its own —
   `tools/maspsx`, `tools/psximager`, `tools/asm-differ` — which are its *build* toolchain. We consume it
-  as source-and-symbols and never build it, and this workspace's `sync-submodules.sh` is a known defect
-  that certifies pins it never checked, so adding three more pins is a real cost. Use
+  as source-and-symbols and never build it, so adding three more pins is a real cost. Use
   `git submodule update --init external/mmx4`. **The tradeoff, stated:** anyone who ever wants to
   regenerate a symbol map or run `asm-differ` must init those by hand. If that turns out to be a regular
   part of the X4 workflow, revisit this.

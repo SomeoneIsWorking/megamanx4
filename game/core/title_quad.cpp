@@ -3,15 +3,12 @@
 // re-measured by tools/re_title_quad.py from SLUS_005.61.
 #include "title_quad.h"
 
+#include "title_layout.h"
+
 #include "core.h"
-#include "override_registry.h"
+#include "guest_execution.h"
 
 #include <lucent/log.h>
-
-#ifdef MMX4_HAVE_SUBSTRATE
-extern void gen_func_800D6F94(Core *);
-extern void shard_set_override(std::uint32_t, void (*)(Core *));
-#endif
 
 namespace x4::title_quad {
 
@@ -57,16 +54,9 @@ void initializeWhiteLogoQuad(Core *core) {
   core->r[5] = kVertexPresets;
 }
 
-void registerOverride() {
-#ifdef MMX4_HAVE_SUBSTRATE
-  overrides::install(kInitializeWhiteLogoQuad,
-                     "title::initializeWhiteLogoQuad",
-                     initializeWhiteLogoQuad,
-                     gen_func_800D6F94,
-                     shard_set_override);
-#else
-  lucent::debug("x4-title", "title-quad ownership registration deferred: no generated substrate");
-#endif
+void registerOverride(Core &core) {
+  guest::install(core, kInitializeWhiteLogoQuad, "title::initializeWhiteLogoQuad", initializeWhiteLogoQuad);
+  title_layout::registerOverride(core);
 }
 
 } // namespace x4::title_quad

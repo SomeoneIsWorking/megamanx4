@@ -23,8 +23,8 @@ tools/run.py launch environment changes, tools/test_run.py stops exercising the 
 
 ## Re-confirmed 2026-08-24 23:07:44
 
-tools/test_run.py executes the shipping run_launcher through an injected host: 13 tests assert default PSXPORT_VK_WINDOW=1, explicit NOWINDOW -> PSXPORT_VK_HEADLESS=1, the frozen interpreter passed through provisioning and CMake, isolated scratch/build/player configuration with BUILD_TESTING=OFF, a megamanx4_port-only build, no CTest command, and actionable dependency/provision/build refusals. The direct frozen bootstrap prepare-only path built the player against clean psxport 9c2e3f1c without launching it.
+tools/test_run.py executes the shipping run_launcher through an injected host: 13 tests assert default PSXPORT_VK_WINDOW=1, explicit NOWINDOW -> PSXPORT_VK_HEADLESS=1, the locked Python executable passed through provisioning and CMake, isolated scratch/build/player configuration with BUILD_TESTING=OFF, a megamanx4_port-only build, no CTest command, and actionable dependency/provision/build refusals. The direct frozen bootstrap prepare-only path built the player against clean psxport 9c2e3f1c without launching it.
 
 ## Re-confirmed 2026-08-24 23:09:47
 
-On commit a53c255, tools/test_run.py passed 13/13 through the shipping run_launcher implementation: default window, explicit NOWINDOW headless sink, frozen interpreter propagation, isolated scratch/build/player with BUILD_TESTING=OFF, megamanx4_port-only build, no CTest command, and actionable failure paths. Direct frozen bootstrap --prepare-only built against clean psxport 9c2e3f1c without launching.
+On commit a53c255, tools/test_run.py passed 13/13 through the shipping run_launcher implementation: default window, explicit NOWINDOW headless sink, locked Python propagation, isolated scratch/build/player with BUILD_TESTING=OFF, megamanx4_port-only build, no CTest command, and actionable failure paths. Direct frozen bootstrap --prepare-only built against clean psxport 9c2e3f1c without launching.

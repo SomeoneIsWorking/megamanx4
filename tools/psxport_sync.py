@@ -8,7 +8,7 @@ in one day came directly from that mechanism:
     compile — the game's hook table named a field the pinned framework did not have. Nothing noticed,
     because a submodule working tree and its recorded gitlink drift silently.
   * "Fixing" that drift by syncing to the recorded pin is what pulled a broken beetle GTE commit into
-    the working build, which had already broken PSXPORT_ORACLE=1 in every 3D scene for two days. That
+    the working build, which had already broken comparison-run rendering in every 3D scene for two days. That
     commit had been made on a DETACHED HEAD inside the submodule — which is the default state of a
     submodule checkout, and is how it was never reviewed.
 
@@ -37,6 +37,7 @@ because the tool could not assert anything.
 import argparse
 import os
 import re
+import shutil
 import subprocess
 import sys
 
@@ -166,7 +167,7 @@ def do_link(args):
                       f"anything unpushed in it. Inspect it, then re-run with --force.")
                 return 2
             if kind in ("clone", "plain-dir"):
-                subprocess.run(["rm", "-rf", LINK], check=True)
+                shutil.rmtree(LINK)
             elif kind == "symlink":
                 os.unlink(LINK)
             os.makedirs(os.path.dirname(LINK), exist_ok=True)

@@ -23,9 +23,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PSXPORT = Path(os.environ.get("PSXPORT_DIR", ROOT / "external/psxport"))
-sys.path.insert(0, str(PSXPORT / "tools/recomp"))
+sys.path.insert(0, str(PSXPORT))
 
-import psexe  # resolved through PSXPORT exactly as the build resolves the framework
+from tools.formats import psx_exe as psexe  # resolved exactly as the build resolves psxport
 
 DEFAULT_EXE = ROOT / "scratch/bin/megamanx4/SLUS_005.61"
 EXPECTED_SHA1 = "213733031136d095ca275d6957695aa25011cfa5"

@@ -10,13 +10,14 @@
 //   * handler 0x800E56FC increments the counter once, then calls each non-null entry in that exact
 //     eight-slot table.
 //
-// A static recomp has no asynchronous IRQ-0 producer. The native frame driver therefore advances the
-// current handler once at the field boundary, then services host peripherals and presentation. Full
-// libetc VSync is separately declared as a fail-fast trap: guest code owns neither waits nor queries.
+// The native frame driver owns the host field boundary. It advances the current handler once at that
+// boundary, then services host peripherals and presentation. Guest code owns neither host waits nor
+// presentation cadence.
 #include "vsync_sync.h"
 
 #include "core.h"
 #include "game.h"
+#include "guest_execution.h"
 #include "snapshot.h"
 #include <cstdlib>
 #include <lucent/log.h>
@@ -59,7 +60,7 @@ void deliverField(Core &core) {
     std::abort();
   }
   const R3000 saved = *static_cast<R3000 *>(c);
-  rec_dispatch(c, vblankHandler);
+  guest::call(c, vblankHandler);
   *static_cast<R3000 *>(c) = saved;
 
   const uint32_t after = c->mem_r32(kVblankCounter);
@@ -78,14 +79,9 @@ void deliverField(Core &core) {
   // VBlank drives the per-field peripheral work alongside the IRQ-0 callbacks: libpad's SIO read
   // fills the InitPAD packet buffers (RE-06 measured them: 0x80166D68 / 0x8012F46C, capacity 0x22),
   // and the SPU mixes exactly one field of samples in real time. The native X4FrameDriver owns this
-  // seam and calls it once before the preserved retail frame body. SBS feeds both cores' masks
-  // itself and shares the one output device, so its audio advances logic-only.
+  // seam and calls it once before the preserved retail frame body.
   c->game->pad.serviceFrame();
-  if (c->game->diff_mode) {
-    c->game->spu_audio.frameLogic();
-  } else {
-    c->game->spu_audio.frame();
-  }
+  c->game->spu_audio.frame();
 
   // The neutral presenter owns capture, present, pacing and ledger rotation without constructing
   // interpolation history. The measured loop advances one display field per native step, so pass

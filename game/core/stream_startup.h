@@ -30,11 +30,11 @@ void installReadCallbacks(Core &core, std::uint32_t readMode);
 void awaitField(Core &core);
 void awaitField(Core &core, bios_threads::Service &threads);
 
-// Finite native owner of SLUS_005.61's STR/MDEC startup. The generated body remains the retained
-// super. The injected services keep hardware synchronization outside guest libcd/libetc while the
-// native frame shell remains the sole field/presentation owner.
+// Finite native owner of SLUS_005.61's STR/MDEC startup. The authenticated guest executable remains
+// the source for ordinary calls. The injected services keep hardware synchronization outside guest
+// libcd/libetc while the native frame shell remains the sole field/presentation owner.
 void run(Core &core, GuestDispatch dispatch, FieldService serviceField, CdTransaction startCdStream);
 void run(Core *core);
-void registerOverride();
+void registerOverride(Core &core);
 
 } // namespace x4::stream_startup

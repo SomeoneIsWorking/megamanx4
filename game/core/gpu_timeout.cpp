@@ -2,15 +2,11 @@
 
 #include "cfg.h"
 #include "core.h"
-#include "override_registry.h"
+#include "execution_services.h"
+#include "guest_execution.h"
 
 #include <cstdlib>
 #include <lucent/log.h>
-
-#ifdef MMX4_HAVE_SUBSTRATE
-extern void gen_func_800ECB38(Core *);
-extern void shard_set_override(std::uint32_t, void (*)(Core *));
-#endif
 
 namespace x4::gpu_timeout {
 namespace {
@@ -31,14 +27,14 @@ void setAlarm(Core *core) {
     std::abort();
   }
 
-  // Transcribe gen_func_800ECB38 and the negative-query branch of gen_func_800E4DB0. Keeping the
-  // original tick boundaries and volatile-register results makes the retained generated super a
-  // meaningful A/B control; only the guest VSync dispatch itself is absent.
+  // Preserve the authenticated 0x800ECB38 body and the negative-query branch of 0x800E4DB0.
+  // The original tick boundaries and volatile-register results keep this native override faithful;
+  // only the guest VSync dispatch itself is absent.
   core->r[29] -= 24u;
   core->mem_w32(core->r[29] + 16u, core->r[31]);
   core->r[31] = 0x800ECB48u;
   core->r[4] = UINT32_MAX;
-  rec_guest_instruction_ticks(core, 4u);
+  psx::cpu::accountGuestInstructions(*core, 4u);
 
   core->r[2] = core->mem_r32(0x8011CB84u);
   core->r[3] = core->mem_r32(0x8011CB88u);
@@ -50,17 +46,17 @@ void setAlarm(Core *core) {
   core->r[2] = core->mem_r32(core->r[3]);
   core->r[3] = core->mem_r32(kGpuStatusPointerPointer);
   core->r[17] = (core->r[2] - core->mem_r32(core->r[3])) & 0xFFFFu;
-  rec_guest_instruction_ticks(core, 16u);
+  psx::cpu::accountGuestInstructions(*core, 16u);
   core->r[2] = core->mem_r32(kVblankCounter);
-  rec_guest_instruction_ticks(core, 4u);
+  psx::cpu::accountGuestInstructions(*core, 4u);
 
   // VSync's callee-saved register and stack restoration. r3/r4 deliberately retain the same
-  // volatile values as the generated negative-query path.
+  // volatile values as the authenticated negative-query path.
   core->r[31] = core->mem_r32(core->r[29] + 24u);
   core->r[17] = core->mem_r32(core->r[29] + 20u);
   core->r[16] = core->mem_r32(core->r[29] + 16u);
   core->r[29] += 32u;
-  rec_guest_instruction_ticks(core, 6u);
+  psx::cpu::accountGuestInstructions(*core, 6u);
 
   core->r[2] += kAlarmFields;
   core->r[1] = 0x80120000u;
@@ -68,15 +64,11 @@ void setAlarm(Core *core) {
   core->mem_w32(kAlarmPollCount, 0u);
   core->r[31] = core->mem_r32(core->r[29] + 16u);
   core->r[29] += 24u;
-  rec_guest_instruction_ticks(core, 9u);
+  psx::cpu::accountGuestInstructions(*core, 9u);
 }
 
-void registerOverride() {
-#ifdef MMX4_HAVE_SUBSTRATE
-  overrides::install(kSetAlarmEntry, "gpu_timeout::setAlarm", setAlarm, gen_func_800ECB38, shard_set_override);
-#else
-  lucent::debug("x4-gpu-timeout", "GPU timeout ownership registration deferred: no generated substrate");
-#endif
+void registerOverride(Core &core) {
+  guest::install(core, kSetAlarmEntry, "gpu_timeout::setAlarm", setAlarm);
 }
 
 } // namespace x4::gpu_timeout

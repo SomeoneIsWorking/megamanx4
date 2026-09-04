@@ -4,6 +4,7 @@
 #include "enhancements.h"
 #include "game.h"
 #include "gpu_vk.h"
+#include "x4_context.h"
 
 #include <cstdlib>
 #include <limits>
@@ -24,7 +25,7 @@ PresentationAspect WidescreenPolicy::presentationAspect(const Core &core) const 
   // title-owned GTE projection that makes gameplay genuinely wider, so widening their presentation
   // extent would crop the pre-rendered picture. CdControl Pause/Stop clears stream_active and the
   // native frame owner restores the requested 16:9 presentation plan.
-  if (core.game && core.game->cd.stream_active != 0) {
+  if (core.game && (core.game->cd.stream_active != 0 || context(core).movieCleanup.pending())) {
     return PresentationAspect::Standard4x3;
   }
   return enh(cv_widescreen) ? PresentationAspect::Wide16x9 : PresentationAspect::Standard4x3;

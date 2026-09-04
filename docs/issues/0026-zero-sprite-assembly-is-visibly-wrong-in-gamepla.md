@@ -36,8 +36,8 @@ ordering, or earlier asset-load state.
 - Widescreen OFX diagnosis: rejected for sprite assembly. OFX affects GTE-projected geometry, while
   `0x80024334` publishes direct screen-space sprite positions. The separate 320-of-428 left-anchoring
   defect remains issue #19/S006 and must not be conflated with this issue.
-- Frame-loop call-order suspicion: the title's `X4FrameDriver` currently transcribes the generated
-  `0x80012024` loop order exactly. That static equality is not an oracle for sprite state, so a fresh
+- Frame-loop call-order suspicion: the title's `X4FrameDriver` currently transcribes the measured
+  `0x80012024` loop order exactly. That structural equality is not an oracle for sprite state, so a fresh
   live reference comparison remains required.
 
 ## Next falsifier

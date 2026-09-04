@@ -6,9 +6,9 @@ in this repo goes through it rather than through a second implementation, so "wh
 ONE answer.
 
 WHICH framework checkout it is built from is the same decision CMake makes: $PSXPORT_DIR, defaulting
-to the pinned submodule, so a bare clone works standalone. $PSXPORT_DISCDUMP overrides with a
-prebuilt binary. When it must build, it builds into this repo's gitignored scratch/build/ keyed by the
-checkout — never into `<PSXPORT_DIR>/build`, because the submodule is a READ-ONLY pinned consumer.
+to the pin-resolved private checkout. $PSXPORT_DISCDUMP overrides with a prebuilt binary. When it
+must build, it builds into this repo's gitignored build/tools/ keyed by the checkout — never into
+`<PSXPORT_DIR>/build`, because a framework dependency is a read-only consumer.
 
 Nothing here caches a file list: a stale listing is a silent trap, and the reads are cheap.
 """
@@ -40,17 +40,17 @@ def find(build_if_missing=True):
     if not os.path.isfile(os.path.join(px, "cmake", "psxport.cmake")):
         print(
             f"[discdump] PSXPORT_DIR={px} is not a psxport checkout — run "
-            "`git submodule update --init external/psxport`, or set PSXPORT_DIR.",
+            "`python3 tools/psxport_sync.py --auto`, or set PSXPORT_DIR.",
             file=sys.stderr,
         )
         raise SystemExit(2)
 
     # An ALREADY-BUILT binary wins over building one, and the build directory is this repo's
-    # gitignored scratch/ — NOT `<submodule>/build`. `external/psxport` is a READ-ONLY pinned
-    # consumer, and a plain `discdump.py list` used to write a whole cmake build tree into it. The
+    # gitignored build/tools/ — NOT `<dependency>/build`. `external/psxport` is a read-only
+    # consumer, and a plain `discdump.py list` used to write a whole CMake build tree into it. The
     # directory is keyed by the checkout it was built from, so pointing PSXPORT_DIR at a dev clone
-    # does not silently reuse the submodule's binary.
-    build_dir = os.path.join(ROOT, "scratch", "build",
+    # does not silently reuse another checkout's binary.
+    build_dir = os.path.join(ROOT, "build", "tools",
                              "discdump-" + hashlib.sha1(os.path.realpath(px).encode()).hexdigest()[:12])
     searched = []
     for base in (build_dir, os.path.join(px, "build")):
@@ -78,8 +78,8 @@ def find(build_if_missing=True):
                   + ".\n"
                   "[discdump] the usual cause is psxport's OWN submodules being unpopulated — "
                   "initialising external/psxport does NOT reach them, `--recursive` aborts on "
-                  "beetle-psx's url-less deps/lightning/gnulib, and sync-submodules.sh certifies "
-                  "pins it never checked. Fix it per path:\n"
+                  "beetle-psx's url-less deps/lightning/gnulib. The checked Python synchronizer "
+                  "refuses to certify that partial inventory. Fix it per path:\n"
                   f"    git -C {px} submodule update --init vendor/lucent vendor/beetle-psx\n"
                   "[discdump] or set PSXPORT_DIR at a working checkout, or $PSXPORT_DISCDUMP at a "
                   "prebuilt binary.", file=sys.stderr)
@@ -130,8 +130,8 @@ def get(disc, path_on_disc, outdir, dd=None):
 
 # ---------------------------------------------------------------------------------------------------
 # CLI. `list` exists because this repo's overlay/module inventory has to be ENUMERATED before anything
-# in docs/re-frontier.md RE-03 or game/recomp_seeds.json may be written, and enumerating it must not
-# require a second implementation of the disc reader.
+# in docs/re-frontier.md RE-03 may be advanced, and enumerating it must not require a second
+# implementation of the disc reader.
 #
 # It REFUSES (exit 2) rather than printing an empty listing: `discdump` missing, the disc unresolvable,
 # or a read that yields zero entries each exit non-zero naming which. "0 files" is never printed as a

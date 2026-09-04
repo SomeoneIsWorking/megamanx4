@@ -1,22 +1,44 @@
 # Mega Man X4 — working rules for THIS repo
 
 A PC-native **enhancement port** of **Mega Man X4 (PS1, USA, `SLUS_005.61` / SLUS-00561)** built on the
-[psxport](https://github.com/SomeoneIsWorking/psxport) static-recompilation framework
-(`external/psxport`). psxport recompiles the game's MIPS code to C and supplies the PSX platform layer;
-this repo supplies the game — the seam, the RE, and the three deliberate enhancements.
+[psxport](https://github.com/SomeoneIsWorking/psxport) native/Lightrec runtime framework
+(`external/psxport`). The authenticated executable remains runtime data: native overrides own
+selected verified functions, Lightrec dynamically executes every other guest instruction, and
+psxport supplies the PSX platform layer. This repo supplies the title seam, RE, native ownership,
+and the three deliberate enhancements.
 
 **The framework rules are NOT restated here. Read `external/psxport/CLAUDE.md`** — it is the authority
-for how a game consumes psxport: the CVar ladder, the seam, `generated/` being sacrosanct, RE-first,
-diagnostics through `lucent`, the registries, never editing `external/psxport`, and the standing USER
+for how a game consumes psxport: the CVar ladder, the seam, RE-first, diagnostics through `lucent`,
+the registries, never editing `external/psxport`, and the standing USER
 directive that **`./run.sh` is the user's and agents must never invoke it**. The workspace map is
-`external/psxport/docs/workspace/WORKSPACE.md`; the multi-agent protocol is `…/PROTOCOL.md`; the
-methodology is `…/docs/porting-a-new-psx-game.md`.
+`external/psxport/docs/workspace/WORKSPACE.md`; the multi-agent protocol is `…/PROTOCOL.md`.
 
-## THE STATE OF THIS PORT: resident substrate boots through the retail task handoff
+## Product execution contract
 
-Created 2026-08-12. RE-01 and RE-06 are verified; RE-02 is a measured static/runtime bootstrap with an
-honest remaining gap for future indirect-only targets. The retail executable emits 6,192 binary roots
-to 7,533 functions, links `megamanx4_port`, and boots through InitHeap into guest `gameMain`. CD IRQ2
+The gameplay product contains a per-Core pinned Lightrec executor and image-and-address-keyed native
+overrides. A native override's original call suppresses only that override for one call and executes
+the original guest body through Lightrec. psxport owns machine-state synchronization, HLE/device
+callbacks, executable-memory and override invalidation, and bounded exits; Lightrec owns its code
+cache and executable memory.
+
+Guest execution always enters through the Lightrec owner and the dynarec is the gameplay default.
+Lightrec may automatically interpret only a bounded block that it refuses to compile because the
+block is unsupported, unsafe to fetch, self-modifying, or failed compilation. That fallback is a
+backend detail, never a player mode: every reason and instruction is counted, a release threshold
+must fail loudly, and forced interpretation remains diagnostic/test-only. Provisioning validates
+runtime data and never emits executable code.
+
+The first implementation discriminator is the existing 4,000-field front-end/movie frontier with
+nonzero Lightrec execution and runtime-authenticated VSync interception. Movie bodies remain original
+guest code; they are not rewritten to manufacture suspension or progress. The same shipping
+dispatcher must prove a native override plus its scoped original call, and product inspection must
+prove there is no selectable interpreter gameplay engine. Next, drive representative interactive gameplay and verify rendering,
+input, audio, timing, relevant invalidation, and released-host performance.
+
+## Measured native evidence baseline: the prior product reached the retail task handoff
+
+Created 2026-08-12. RE-01 and RE-06 are verified; a historical product run provides a measured
+bootstrap baseline. It booted through InitHeap into guest `gameMain`. CD IRQ2
 delivery reaches the measured callback, and the retail scheduler now transfers through distinct BIOS
 TCB handles into task entry `0x8001D064`. `X4Runtime` owns a per-Core BIOS-thread service beneath the
 untouched retail scheduler: OpenTh captures entry/SP/GP, ChangeTh preserves both C stacks across
@@ -45,22 +67,24 @@ compatibility views while generic algorithms migrate; they are not a behavior-be
 This direct boundary removed the complete `Fps60` implementation from the shipping link. Framework
 the recorded pin also includes 7bd24f2b's split of temporal-only game/GPU helpers from neutral translation units, and the
 shipping binary dependency gate rejects any regression.
-**RE-01, the crt0 boot group, is verified and wired:** `tools/verify_crt0.py --check` derives the
-group from `SLUS_005.61`, compares 21 shipping/range facts, and confirms the current framework implements
-all 15 required mechanisms. Its 26-case selftest proves both answers; claim C006 and issue #5 record
-the now-fixed framework defect that originally blocked this step.
+**RE-01, the crt0 boot group, has retained binary evidence and is wired:** claim C005 records the
+derivation from `SLUS_005.61`; the typed runtime-image and boot configuration own the measured values.
+Boot conformance must exercise the native/Lightrec execution boundary on the authenticated runtime
+image.
 **RE-06 is verified from the retail InitPAD call:** slot 0 is `0x80166D68`, slot 1 is `0x8012F46C`,
 and both capacities are `0x22`; `tools/verify_pad.py --check` scans all 294,400 loaded words and diffs
 the unique call's four arguments against the `GameConfig` that ships. Every other guest-address group
 remains zero with its open step named in `docs/re-frontier.md`.
 **RE-08 is implemented but runtime-partial:** `tools/verify_projection.py --check` proves the only
-OFX/OFY/H writes are the one boot setup chain (160/120/512). `WidescreenController`, owned by
-`X4Context`, wraps those measured retail publications through the generated super-call seam: it sets
+OFX/OFY/H writes are the one boot setup chain (160/120/512). The pre-migration
+`WidescreenController`, owned by `X4Context`, wraps those measured retail publications through the
+former address-override seam: it sets
 only OFX before SetGeomOffset and only RECT.w after SetDefDrawEnv. The recorded framework gives 16:9
 OFX/width 214/428 and exact 4:3 identity. Unit/Clang gates passed before the next framework-policy
 migration; old integrated pixels exposed issue #19 instead of completing the step: the all-2D title
 remains authored as a 320-wide composition and becomes left-anchored when the guest clip widens.
-Fresh matched title/gameplay captures remain mandatory.
+Fresh matched title/gameplay captures remain mandatory. The dynamic product preserves the same
+measured publications through scoped original guest calls.
 
 **RE-10 has one selected native body in progress:** the title state-0 white-logo quad initializer
 `0x800D6F94`, derived from `external/mmx4/src/main/title_quad.c` and independently gated against all
@@ -71,21 +95,12 @@ deliberate live mismatch discriminator remains open. The same run's sampled pres
 dark title field, so they do not prove visible title composition. This body changes no pixels and is
 not a fix for widescreen issue #19.
 
-The direct development build/gate is:
-
-```sh
-uv run --frozen python tools/psxport_sync.py --auto                    # resolve external/psxport (symlink to the shared clone, or a private clone at psxport.pin)
-git submodule update --init external/mmx4                              # once (the AGPL reference decomp, not needed to build)
-uv run --frozen python tools/extract_exe.py
-uv run --frozen python tools/ensure_recomp.py
-cmake -S . -B build -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DPython3_EXECUTABLE="$(uv run --frozen which python)"
-cmake --build build --target megamanx4_port -j$(nproc)
-ctest --test-dir build --output-on-failure
-```
+There is no static development build/run command. Product execution resumes only through the
+native/Lightrec target; historical measurements below remain evidence, not an executable fallback.
 
 The normal CTest gate calls psxport's shared C++ policy checker: every tracked first-party C/C++ file
 is checked with this repository's `.clang-format`, the 1,200-line ownership cap is enforced, and
-`.clang-tidy` runs against `build/compile_commands.json`. It excludes `external/` and `generated/`;
+`.clang-tidy` runs against `build/compile_commands.json`. It excludes `external/`;
 there is no copied checker and no pre-commit hook. CTest also runs `tools/test_run.py`: the shipping
 launcher enters the frozen `uv.lock` environment through `bootstrap.py`, while `run.sh` is only its
 stable exec wrapper. It performs no compiler-identity filtering; explicit `CC`/`CXX` pass through
@@ -98,18 +113,12 @@ shared framework clone when one exists, or a private clone at this repo's `psxpo
 machine; `tools/psxport_sync.py --auto` establishes whichever applies. The framework's own nested
 vendors (`vendor/lucent`, `vendor/beetle-psx/deps/libchdr`) are the SHARED clone's concern — initialized
 once there, never per-port (`--recursive` aborts on beetle-psx's url-less `deps/lightning/gnulib`, and
-`sync-submodules.sh` prints "all at recorded gitlinks" over vendors it never reached —
-`external/psxport/docs/workspace/KNOWN-DEFECT-sync-submodules.md`). `CMakeLists.txt` fails with a clear
+`scripts/sync_submodules.py` refuses to certify an incomplete nested inventory). `CMakeLists.txt` fails with a clear
 message if they are missing in the shared clone, and `tools/discdump.py` says the same when its build
 fails.
 
-`megamanx4_seam` remains the clean-clone compile database for every first-party `game/core/*.cpp` TU.
-`tools/ensure_recomp.py` hashes the retail executable, game seed file, and real recompiler sources,
-then emits `generated/`; CMake configures `megamanx4_port` only when that manifest exists.
-
-The user play launcher has no CTest path or option. `run.sh` provisions, builds only the product in
-isolated `scratch/build/player` with `BUILD_TESTING=OFF`, and launches it; maintainer verification
-remains the explicit Clang/CTest gate above.
+The CMake/product composition accepts only the authenticated runtime image and native/Lightrec target.
+The user play launcher has no test path or option and builds under top-level `build/`.
 
 ## Start here, every task
 
@@ -117,7 +126,7 @@ remains the explicit Clang/CTest gate above.
 python3 tools/re_frontier.py next            # which RE step is actually ready to work
 python3 tools/info.py brief <words>          # what's already proven — and does it still hold?
 python3 tools/catalog.py search <symptom>    # has this been hit (or ruled out) before?
-python3 tools/behavior.py check              # X4-SPECIFIC: are the pc_enh gates still ORACLE/SBS-suppressed?
+python3 tools/behavior.py check              # X4-SPECIFIC: are pc_enh gates comparison-suppressed?
 ```
 
 Believe these over your instinct about what is known. End the task by writing back what you proved,
@@ -155,8 +164,8 @@ The consequence, in framework vocabulary:
   the fence into this repo or replace it with raw present plus a separate pacer.
 - All three deliverables are the **`pc_enh` behaviour class with `affect: full`** — they deliberately
   change canon guest state. So the RE target of this port is the **PLAYER-OBJECT SYSTEM**, not the
-  renderer, and every one of them must be **force-suppressed under `PSXPORT_ORACLE` / `PSXPORT_SBS` /
-  `PSXPORT_SBS_MODE`** so byte-compares stay enhancement-free *by construction*.
+  renderer, and every one of them must be **force-suppressed by the typed comparison-run role** so
+  byte-compares stay enhancement-free *by construction*.
 - **The SBS oracle is only meaningful with co-op OFF.** A clean compare with co-op ON means the
   suppression fired, not that co-op is correct. Co-op needs its own evidence, and what that evidence
   is remains an open question — see `docs/plans/enhancements.md`, which says so rather than inventing
@@ -176,12 +185,12 @@ Calling `.get()` at a feature call site is the bug that chokepoint exists to pre
 - **Job B — the loading coroutine itself:** LANDED 2026-08-24 per the USER directive. The measured
   direct/archive issuers (0x80013890/0x80013AD8) now own one synchronous operation
   (`game/core/fast_wait.cpp`, `PSXPORT_X4_FASTWAIT`, default on): each runs its untouched setup once,
-  feeds table-derived raw sectors through the generated ready callback, drains archive postprocess
+  feeds table-derived raw sectors through the original ready callback via Lightrec, drains archive postprocess
   after every callback, requires terminal state 2, and returns. The unchanged wait bodies therefore
   run zero yield/draw iterations and loading-presentation wait 0x80013530 is omitted. The discarded
   presentation-withholding experiment and its equal-field RAM dumps are not evidence for this
   implementation. The game's OTHER scripted waits/fade ramps (non-load fades, 21/34 call sites) are
-  still unclassified. `pc_enh`, `affect: full`, suppressed under ORACLE/SBS —
+  still unclassified. `pc_enh`, `affect: full`, suppressed in comparison roles —
   docs/behavior-map.md `fastwait`.
 
 A single "load time" figure that mixes the two is unusable. Estimate them separately.
@@ -227,7 +236,7 @@ supply of addresses sitting in `external/mmx4`, which is precisely why the rule 
 - **`SYSTEM.CNF`**: `BOOT = cdrom:\SLUS_005.61;1`, `TCB = 4`, `EVENT = 16`, `STACK = 801FFF00`. One
   boot executable, no boot stub — psxport's stub stage is unused.
 - **The crt0 at `pc0 = 0x800DAE8C`, disassembled and symbolically executed to its `break`** (RE-01,
-  claim C005, `tools/verify_crt0.py`): `.bss` clear `[0x8012F418, 0x80175F38)` = `0x46B20`; `sp = fp =
+  claim C005): `.bss` clear `[0x8012F418, 0x80175F38)` = `0x46B20`; `sp = fp =
   0x80200000` from `mem[0x800DAF3C]` with **no bias**; heap `0x80175F3C` size `0x820C8` (532,680 B) from
   `stackTop - mem[0x8011CB74] - maskedBase`, handed to **BIOS `A(39h) InitHeap`** at `0x800EDCDC` in
   `a0`/`a1`; `gp = 0x8012F418`; game-main `0x80012024`. **This crt0 stores the heap base/size in NO
@@ -252,9 +261,8 @@ wait-state timers — is **unknown**. Do not let a plausible-sounding sentence e
 
 **Never guess a guest address.** While the compatibility adapter exists, an un-RE'd `GameConfig`
 field stays `0` with a TODO naming the frontier step. Zero is honest and psxport fails fast on it; a plausible wrong value breaks boot in a
-way that reads as a framework bug. Never copy another game's recompiler seeds — a foreign seed landing
-inside your text SPLITS a real function at an arbitrary offset, the emit SUCCEEDS, and the recomp is
-silently corrupt.
+way that reads as a framework bug. Native override addresses must be derived from this exact image
+identity and installed only for that identity.
 
 **`X4Runtime` is the title authority.** `main.cpp` constructs and installs one process-lifetime
 instance; runtime behavior moves there through virtual overrides, not new `GameHooks` callbacks.
@@ -291,11 +299,7 @@ push framework work in `psxport/`, never here. `psxport.pin` records the framewo
 was built and VERIFIED against; `tools/psxport_sync.py --bump` updates it, and the gate's `--check`
 fails when the framework you built against is not the recorded one.
 
-Build against in-progress framework work:
-
-```sh
-cmake -S . -B build -DPSXPORT_DIR=/path/to/psxport      # or just ./run.sh — it resolves external/psxport
-```
-
-`PSXPORT_DIR` defaults to `external/psxport`, so a bare clone of this repo builds standalone — keep it
-that way, and never re-spell `external/psxport` at a call site in cmake or in a tool.
+`PSXPORT_DIR` defaults to `external/psxport`, so the replacement native/Lightrec target must keep a
+bare clone standalone. Maintainer verification may select an in-progress shared psxport checkout
+through that one CMake setting after the dynamic target exists; it never uses `run.sh`, and it never
+re-spells `external/psxport` at another CMake or tool call site.

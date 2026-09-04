@@ -281,7 +281,7 @@ bool verify_synchronous_loader_leaves(Core &core) {
   g_retailBodyCalls = 0;
   x4::fast_wait::cd_ready(&core, mark_retail_body);
   if (g_retailBodyCalls != 1 || core.r[2] != 0xC0DEC0DEu) {
-    std::fprintf(stderr, "inactive synchronous-loader leaf did not super-call retail\n");
+    std::fprintf(stderr, "inactive synchronous-loader leaf did not call the original retail body\n");
     return false;
   }
 
@@ -352,7 +352,7 @@ bool verify_synchronous_loader_leaves(Core &core) {
   x4::fast_wait::loading_presentation_wait(&core, mark_retail_body);
   x4::cv_fastwait.clear(psx::config::Layer::Runtime);
   if (g_retailBodyCalls != 1) {
-    std::fprintf(stderr, "disabled fast loading did not super-call the retail presentation task\n");
+    std::fprintf(stderr, "disabled fast loading did not call the original retail presentation task\n");
     return false;
   }
   return true;
@@ -446,12 +446,13 @@ int main() {
     std::fprintf(stderr, "widescreen gameplay did not resume after the STR stream stopped\n");
     return 1;
   }
-  psx::config::cv_oracle.set(psx::config::Layer::Runtime, true);
-  if (runtime.guestWidescreenProjection()->presentationAspect(*core) != PresentationAspect::Standard4x3) {
-    std::fprintf(stderr, "oracle run did not suppress the guest-state widescreen enhancement\n");
-    return 1;
+  {
+    psx::config::ScopedDiagnosticRun comparison(psx::config::DiagnosticRunMode::CompareCandidate);
+    if (runtime.guestWidescreenProjection()->presentationAspect(*core) != PresentationAspect::Standard4x3) {
+      std::fprintf(stderr, "comparison run did not suppress the guest-state widescreen enhancement\n");
+      return 1;
+    }
   }
-  psx::config::cv_oracle.clear(psx::config::Layer::Runtime);
   x4::cv_widescreen.clear(psx::config::Layer::Runtime);
 
   if (!verify_widescreen_controller(*core)) {
@@ -469,6 +470,15 @@ int main() {
   if (!verify_synchronous_loader_leaves(*core)) {
     return 1;
   }
+
+  x4::context(*core).movieCleanup.begin();
+  x4::cv_widescreen.set(psx::config::Layer::Runtime, true);
+  if (!runtime.guestVramIsPicture(*game) || !game_guest_vram_is_picture(*game) ||
+      runtime.guestWidescreenProjection()->presentationAspect(*core) != PresentationAspect::Standard4x3) {
+    std::fprintf(stderr, "movie cleanup dropped or widened the final STR picture during its retained fields\n");
+    return 1;
+  }
+  x4::cv_widescreen.clear(psx::config::Layer::Runtime);
 
   std::puts("X4Runtime: derived install, retail BIOS threads, synchronous loading leaves, widescreen-only policy, no "
             "temporal pipeline");

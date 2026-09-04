@@ -27,7 +27,7 @@ table 0x800F24A4 by id).
 docs/re-player-object.md carries the per-item table (source × fact). Denominators: binary
 scan floors are 123 xrefs for 0x801418C8, 9 for 0x80175D58, 77 for controller_state
 0x80166C0C, 128/112 sites for the camera scroll halfwords; function boundaries attributed
-against our generated manifest (7,531 entries). The typed lens over these blocks is pinned by
+against the recovered executable function inventory (7,531 entries). The typed lens over these blocks is pinned by
 ctest `x4_player_object` (positive planted-state reads through every accessor plus
 non-aliasing negative classes); 9/9 ctest green and the boot gate reproduces frames
 67/67/67/82/83 with ABI violations 0 after the change (scratch/logs/re07-postchange-bootgate.log).

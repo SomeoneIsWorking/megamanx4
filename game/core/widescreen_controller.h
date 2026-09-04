@@ -22,7 +22,7 @@ public:
   explicit WidescreenController(ProjectionLatch latch);
 
   // These are the production transformations as well as the narrow falsifier seam. The injected
-  // body is always the untouched recompiled retail function.
+  // body is always the authenticated original guest function executed through Lightrec.
   void publishProjection(Core &core, GuestBody retailBody);
   void publishDrawEnvironment(Core &core, GuestBody retailBody);
   void synchronizePresentation(Core &core);

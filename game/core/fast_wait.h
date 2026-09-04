@@ -75,13 +75,15 @@ void direct_cd_setup(Core *core,
                      GuestBody cdControl,
                      GuestBody publishReadyCallback);
 
-// Scoped SDK leaves. Outside State::Preparing/Delivering every function super-calls retail.
+// Scoped SDK leaves. Outside State::Preparing/Delivering every function calls the authenticated
+// original guest body through Lightrec.
 void cd_ready(Core *core, GuestBody retailBody);
 void cd_control(Core *core, GuestBody retailBody, bool blocking);
 void cd_get_sector(Core *core, GuestBody retailBody);
 
 // 0x80013530 exists solely to run and draw the loading transition task. With fast loading active it
-// is removed; with the enhancement neutralized the exact generated body remains the authority.
+// is removed; with the enhancement neutralized the authenticated original guest body remains the
+// authority.
 void loading_presentation_wait(Core *core, GuestBody retailBody);
 
 } // namespace x4::fast_wait

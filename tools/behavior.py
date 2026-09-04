@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-# behavior.py — the BEHAVIOR-DIFFERENCE map: every INTENTIONAL divergence from recomp_path.
+# behavior.py — the BEHAVIOR-DIFFERENCE map: every INTENTIONAL divergence from the retail game.
 #
-# WHY THIS EXISTS: pc_faithful is meant to be byte-exact to recomp_path (Job #1). But the port also
+# WHY THIS EXISTS: the faithful path is meant to preserve retail guest behavior. But the port also
 # does things ON PURPOSE that the original PSX game does not — draw natively (pc_render), interpolate
 # to 60fps, widen the FOV, collapse multi-step loads (pc_skip), and (planned) change what the game
 # actually does (pc_enh: faster transitions, expanded load range). Those are NOT bugs and NOT Job-#1
 # divergences — they are sanctioned deviations. This registry is their durable ledger, so a byte diff
-# under SBS can be triaged instantly: is this an unsanctioned bug, or a known intentional change?
+# from a comparison run can be triaged instantly: is this an unsanctioned bug, or a known intentional change?
 # It is the FOURTH axis of this repo's tracking stack:
 #     docs/codemap.md      = WHAT EXISTS, per subsystem
 #     docs/issues/         = WHAT HAS BEEN TRIED (catalog.py)
@@ -16,31 +16,31 @@
 # IN THIS REPO IT IS NOT AN OPTIONAL FOURTH AXIS. Mega Man X4 is an ENHANCEMENT port: all three of its
 # deliverables (widescreen, drop-in co-op, scripted-wait collapse) are `class: pc_enh` / `affect: full`,
 # i.e. deliberate canon guest-state changes, so `behavior.py check` is the ONLY automated gate that they
-# stay force-suppressed under ORACLE/SBS. See ../CLAUDE.md and ../docs/plans/enhancements.md.
+# stay force-suppressed under the typed comparison-run role. See ../CLAUDE.md and ../docs/plans/enhancements.md.
 #
 # THE PRIMARY AXIS IS GUEST-MEMORY AFFECT (`affect`) — how much a deviation touches CANON guest state,
 # because that is exactly what governs whether it can coexist with the byte-exact reference:
 #   none       — writes NO guest memory; a pure host-side overlay (pc_render, fps60, widescreen, ires).
-#                INVARIANT: any guest write is a BUG (SBS catches it). The overlay reads guest+engine
+#                INVARIANT: any guest write is a BUG (the comparison catches it). The overlay reads guest+engine
 #                state and draws; it never writes guest RAM.
 #   non-canon  — writes guest memory, but only to reach the SAME end-state faster (pc_skip's multi-step
 #                collapse). INVARIANT: at every skip-fork rendezvous the canon state byte-matches
-#                recomp_path; SBS runs the faithful branch (mPcSkip=false) so the shortcut is off there.
+#                the retail path; comparison mode runs the faithful branch so the shortcut is off there.
 #   full       — DELIBERATELY changes canon guest state — the game does something different (pc_enh:
 #                faster transitions, expanded load range). INVARIANT: force-suppressed under
-#                PSXPORT_ORACLE / SBS (cfg.c), so byte-compares stay enhancement-free BY CONSTRUCTION.
+#                the shared typed diagnostic-run gate, so comparisons stay enhancement-free BY CONSTRUCTION.
 #                An `affect: full` entry MUST cite that suppression in `guard` or `check` FAILS.
 #
 # THE LOOP:
 #   tools/behavior.py                     # session view: deviations grouped by guest-memory affect
-#   tools/behavior.py check               # gate: exit 1 if a canon-affecting change isn't SBS-suppressed
+#   tools/behavior.py check               # gate: exit 1 if a canon-affecting change is not comparison-suppressed
 #   ... add/land an intentional deviation ...
 #   tools/behavior.py set faster-transitions --class pc_enh --affect full --status planned \
-#       --flag 'cfg_enh("faster-transitions")' --guard 'force-suppressed under ORACLE/SBS (cfg.c)'
+#       --flag 'cfg_enh("faster-transitions")' --guard 'force-suppressed in typed comparison runs'
 #
 # STATUS values:
 #   verified     — implemented AND confirmed working (USER-eyeballed for a visual change; measured for
-#                  a timing change). For affect!=none, also confirmed SBS stays clean when it's OFF.
+#                  a timing change). For affect!=none, also confirmed comparison mode stays clean when it is off.
 #   implemented  — code exists behind its gate; not yet confirmed on real data.
 #   planned      — designed / named, not yet implemented.
 #   reverted     — tried and removed (kept as a dead-end record so it isn't re-attempted blindly).
@@ -51,10 +51,10 @@
 #   - **affect:** none | non-canon | full        (guest-memory affect — the primary axis)
 #   - **status:** verified | implemented | planned | reverted
 #   - **flag:** how it's toggled (settings.ini key / cfg_enh("name") / Game::mPcSkip / default)
-#   - **original:** what recomp_path / the unmodified game does
+#   - **original:** what the unmodified retail game does
 #   - **altered:** what the port does instead when this is enabled
 #   - **guard:** the invariant that keeps Job #1 honest (read-only overlay / rendezvous byte-match /
-#                force-suppressed under ORACLE+SBS). REQUIRED for affect=full.
+#                force-suppressed in typed comparison runs). REQUIRED for affect=full.
 #   - **owner:** game/.../file.cpp[:line]  (or "-" if unimplemented)
 #   - **notes:** rationale / caveats / refs / death condition
 import os, re, sys, argparse
@@ -65,16 +65,16 @@ FIELDS = ("class", "affect", "status", "flag", "original", "altered", "guard", "
 AFFECTS = ("none", "non-canon", "full")          # primary axis, ordered safest-first
 CLASSES = ("pc_render", "widescreen", "fps60", "ires", "pc_skip", "pc_enh")
 STATUSES = ("verified", "implemented", "planned", "reverted")
-HEADER = "# Behavior-difference map — every INTENTIONAL divergence from recomp_path (managed by tools/behavior.py)\n"
+HEADER = "# Behavior-difference map — every INTENTIONAL divergence from the retail game (managed by tools/behavior.py)\n"
 
 # One-line invariant banner per affect group — regenerated on every render.
 AFFECT_BANNER = {
     "none": "**affect: none** — pure host-side overlay, writes NO guest memory. Any guest write is a BUG "
-            "(SBS catches it).",
+            "(comparison catches it).",
     "non-canon": "**affect: non-canon** — writes guest memory only to reach the SAME end-state faster. "
-                 "Must byte-match recomp_path at every rendezvous; SBS runs the faithful branch.",
+                 "Must byte-match the retail path at every rendezvous; comparison mode runs the faithful branch.",
     "full": "**affect: full** — DELIBERATELY changes canon guest state. MUST be force-suppressed under "
-            "PSXPORT_ORACLE / SBS (`guard` required) so byte-compares stay clean by construction.",
+            "the typed comparison-run role (`guard` required) so byte-compares stay clean by construction.",
 }
 
 
@@ -92,10 +92,10 @@ def parse(text):
 def load(refuse_if_missing=True):
     # FIXED HERE (docs/issues/0002, docs/info/instruments/003). The copy this was taken from did
     # `if not os.path.exists(DOC): return []`, and cmd_check over that empty list then printed
-    # "[behavior] ok — 0 deviations, 0 canon-affecting (all SBS-suppressed)" and exited 0 — a certified
+    # "[behavior] ok — 0 deviations, 0 canon-affecting (all comparison-suppressed)" and exited 0 — a certified
     # clean bill of health over a corpus that does not exist. In THIS repo behavior.py check is the only
     # automated gate that the port's three canon-affecting enhancements are force-suppressed under
-    # ORACLE/SBS, so a green over nothing is the worst possible failure mode.
+    # comparison mode, so a green over nothing is the worst possible failure mode.
     #
     # `set` legitimately runs before the map exists (it creates it), which is the one caller that passes
     # refuse_if_missing=False.
@@ -123,7 +123,7 @@ def render(entries):
            "Durable ledger of SANCTIONED deviations from the byte-exact reference. Primary axis = "
            "GUEST-MEMORY AFFECT (how much canon guest state a deviation touches). One `## ` block per",
            "deviation, grouped by affect. `tools/behavior.py` = view · `... <words>` = search · "
-           "`... check` = gate (a canon-affecting change must be SBS-suppressed).",
+           "`... check` = gate (a canon-affecting change must be comparison-suppressed).",
            ""]
     # summary line: counts by affect, then by status
     acount, scount = {}, {}
@@ -203,13 +203,13 @@ def cmd_check(args, entries=None):
             continue
         if f.get("status") not in STATUSES:
             warns.append(f"{n}: missing/invalid status")
-        # THE load-bearing invariant: a canon-affecting change with no SBS/oracle suppression breaks
+        # THE load-bearing invariant: a canon-affecting change with no comparison suppression breaks
         # Job #1 the moment it's enabled in a compare. Require the guard to name that suppression.
         if aff == "full":
             g = (f.get("guard") or "").lower()
-            if not re.search(r"oracle|sbs|suppress", g):
-                fails.append(f"{n}: affect=full but `guard` doesn't cite ORACLE/SBS force-suppression "
-                             f"— a canon change that isn't suppressed under SBS breaks Job #1")
+            if not re.search(r"comparison|diagnostic.run|suppress", g):
+                fails.append(f"{n}: affect=full but `guard` doesn't cite typed comparison-run suppression "
+                             f"— a canon change that is not suppressed breaks Job #1")
         elif aff == "none":
             if not f.get("guard"):
                 warns.append(f"{n}: affect=none should state the read-only invariant in `guard`")
@@ -228,7 +228,7 @@ def cmd_check(args, entries=None):
               f"{len(fails)} invariant violation(s).")
         return 1
     print(f"[behavior] ok — checked {len(entries)} deviations, {n_full} canon-affecting (each cites "
-          f"ORACLE/SBS force-suppression in `guard`), {len(warns)} warning(s). "
+          f"typed comparison-run suppression in `guard`), {len(warns)} warning(s). "
           f"BLIND SPOT: this gate reads the MAP, not the code — it cannot see whether the suppression "
           f"`guard` describes is actually implemented at the call site.")
     return 0
@@ -239,7 +239,7 @@ def cmd_selftest(_args=None):
     the same entry with that clause removed MUST fail. A gate nobody has watched fail is not a gate."""
     good = [("synthetic-enh", {"class": "pc_enh", "affect": "full", "status": "planned",
                                "flag": "PSXPORT_X4_SELFTEST",
-                               "guard": "force-suppressed under PSXPORT_ORACLE / PSXPORT_SBS",
+                               "guard": "force-suppressed in typed comparison runs",
                                "owner": "-"})]
     bad = [("synthetic-enh", dict(good[0][1], guard="gated behind a CVar the user sets"))]
     empty = []
@@ -301,7 +301,7 @@ def main():
     for k in FIELDS:
         s.add_argument("--" + k)
     s.set_defaults(func=cmd_set)
-    sub.add_parser("check", help="gate: exit 1 if a canon-affecting change isn't SBS-suppressed"
+    sub.add_parser("check", help="gate: exit 1 if a canon-affecting change is not comparison-suppressed"
                    ).set_defaults(func=lambda a: sys.exit(cmd_check(a)))
     sub.add_parser("selftest", help="prove the gate can say BOTH yes and no (and refuse on nothing)"
                    ).set_defaults(func=lambda a: sys.exit(cmd_selftest(a)))

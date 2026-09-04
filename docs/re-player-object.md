@@ -5,7 +5,7 @@ Every fact below was verified against BOTH sources: the AGPL reference decomp
 `SLUS_005.61` SHA-1 `213733031136d095ca275d6957695aa25011cfa5`, so its addresses need no
 translation) AND our own binary bytes — either a raw instruction scan of the extracted
 executable or a Ghidra headless decompilation of a resident-code RAM dump
-(`scratch/raw/miss_ram.bin`, imported at 0x80000000 via `tools/decomp.sh`; output under
+(`scratch/raw/miss_ram.bin`, imported at 0x80000000 through the shared headless Ghidra workflow; output under
 `scratch/decomp/x4_*.c`). A fact carried by only one source is labelled as such. Anything
 not listed here stays UNKNOWN — a plausible-sounding sentence elsewhere does not stand in
 for it.
@@ -16,8 +16,8 @@ Method notes and denominators:
   immediate equals the low half (`addiu`/`ori` requiring the same `rt`; loads/stores counted
   on any base). **Blind spot:** accesses that reach an address through an already-materialised
   base register plus a different offset are not counted, so each count is a FLOOR, not a total.
-- Function boundaries come from OUR generated substrate manifest
-  (`generated/rec_decls.h`, 7,531 entries) via nearest-preceding-entry attribution.
+- Function boundaries came from the 7,531-entry recovered executable function map used for this
+  measurement, via nearest-preceding-entry attribution.
 - Ghidra output is unmodified decompiler text; field semantics were then cross-read against
   mmx4's `include/common.h` struct comments. Where the two disagree, the measurement wins and
   mmx4's guess is recorded as a guess.
@@ -107,8 +107,7 @@ the actual co-op work.
 
 ## 4. The spawn path
 
-All measured on our binary via Ghidra; caller attribution via jal scan against the generated
-manifest.
+All measured on our binary via Ghidra; caller attribution via a JAL scan against the executable.
 
 1. **Player init/spawn: `func_80035240`.** Sets `active=1`, takes the character byte from
    engine state `engine_obj_43 @ 0x80172203` (writers: `sb` at `0x8001C224` in
@@ -148,5 +147,5 @@ yet attributed); the checkpoint/respawn writer (`engine_obj_checkpoint @ 0x80172
   no behavior change ships from this step.
 - Byte-match gate prerequisite (RE-10): ANY native body transplanted from mmx4 must first
   have a byte-gate proving the substrate body it replaces matches. Nothing here imports one.
-- Co-op remains force-suppressed under ORACLE/SBS (`tools/behavior.py check`); the co-op
+- Co-op remains force-suppressed in typed comparison roles (`tools/behavior.py check`); the co-op
   evidence question is still OPEN and unchanged by this doc.

@@ -5,14 +5,18 @@ durable product outcomes; factual delivery coverage lives in `docs/project-state
 
 ## G001 — Playable faithful PC product
 
-Deliver the retail game as a portable desktop product built from user-supplied disc data, with its
-guest GTE picture, input, audio, saves, timing, and game behavior intact.
+Deliver the retail game as one native/Lightrec psxport product built from user-supplied disc data,
+with its guest GTE picture, input, audio, saves, timing, and game behavior intact. The authenticated
+executable remains runtime data: native overrides own selected verified functions and Lightrec
+dynamically executes every remaining guest instruction.
 
 Success means the default launcher provisions and starts the actual product, and representative
 front-end and gameplay sessions are inspected as well as tested. Supported player choices are
-truthful: the port does not expose modes it does not implement.
+truthful: the port does not expose modes it does not implement. The gameplay product executes
+nonzero Lightrec blocks and routes native overrides and scoped original calls through its shipping
+dispatcher. The dynarec remains the default; the product has no player-selectable interpreter mode.
 
-Contributing state: S001, S002, S003, S004, S005.
+Contributing state: S001, S002, S003, S004, S005, S009, S010.
 
 ## G002 — True widescreen
 
@@ -54,3 +58,9 @@ Contributing state: S003, S008.
   may remain an explicit maintainer path; it is not a player renderer choice.
 - Widescreen, fast loading, and co-op remain suppressed under oracle/SBS comparison.
 - AGPL-derived Mega Man X4 code stays inside this repository and never enters psxport.
+- Provisioning validates runtime data and never emits executable code. Runtime JIT output is
+  disposable user data, never an install input.
+- Forced interpretation may exist only in a separately built test/diagnostic target. Lightrec may
+  use its bounded automatic interpreter fallback only for a JIT-refused block. Per-reason and
+  instruction telemetry plus an enforced release threshold must keep fallback exceptional rather
+  than becoming a disguised gameplay engine.

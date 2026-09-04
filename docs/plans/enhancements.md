@@ -21,10 +21,16 @@ player controls, refuses to activate `PSXPORT_FPS60`/persisted `fps60=1`, and re
 diagnostic renderer without selecting an empty native-producer path. This policy does not alter or cap
 the retail game's own 60 Hz cadence.
 
+The execution foundation is the native/Lightrec product defined in `CLAUDE.md` and
+`docs/re-frontier.md`. These enhancement plans bind to image-and-address-keyed native overrides and
+scoped original calls through the dynarec; they do not depend on offline-derived executable code.
+Lightrec's bounded automatic fallback for a JIT-refused block remains a backend detail and never an
+enhancement or selectable gameplay mode.
+
 All three are the framework's `pc_enh` class with `affect: full` — they deliberately change canon guest
 state — and all three are read through the single chokepoint `x4::enh()`
-(`game/core/enhancements.{h,cpp}`), which force-suppresses them under `PSXPORT_ORACLE`, `PSXPORT_SBS` and
-a non-empty `PSXPORT_SBS_MODE`. That is what keeps byte-compares enhancement-free *by construction*
+(`game/core/enhancements.{h,cpp}`), which delegates force-suppression to the shared typed
+`PSXPORT_DIAGNOSTIC_RUN` role. That is what keeps comparisons enhancement-free *by construction*
 rather than by per-call-site discipline. Knob table: `docs/config.md`. Ledger and gate:
 `docs/behavior-map.md` + `tools/behavior.py check`.
 
@@ -37,13 +43,13 @@ stretched present.
 
 **Follow the framework's model, do not reinvent it.** psxport already has an `aspect` selector
 (0 = Vanilla 4:3, 1 = 16:9, 2 = 21:9, 3 = Auto) and it is a real FOV widening: the engine shifts the
-projection centre OFX to `nw/2` rather than scaling the framebuffer, and it is forced OFF under
-`PSXPORT_ORACLE` and in the SBS legs. Read that first.
+projection centre OFX to `nw/2` rather than scaling the framebuffer, and comparison roles force it
+off. Read that first.
 
 **THE SINGLE MOST IMPORTANT SENTENCE IN THIS FILE — the reclassification.** psxport's widescreen is
 `affect: none`: a host-side, read-only overlay driven by a NATIVE renderer, and the standing framework
 rule is that the picture comes from GAME STATE, never from what the GTE produced. **X4 has no native
-renderer** — the guest draws, on the substrate — so a widescreen change here has nowhere to live except
+renderer** — the guest draws through Lightrec — so a widescreen change here has nowhere to live except
 the **guest's own projection setup**. That makes it `affect: full`, which is why it is a suppressed
 `pc_enh` and not a render overlay. Misfiling it as `affect: none` would skip both the suppression
 requirement and `behavior.py check`'s only real assertion.
@@ -59,8 +65,8 @@ The typed framework candidate resolves the explicit 16:9 request from the retail
 width 428, horizontal margin 54 and OFX 214; 4:3 is exact 320/160 identity. The title's per-Core
 `WidescreenController` latches that plan at the measured SetGeomOffset, changes only OFX before the
 untouched retail body, and changes only RECT.w after untouched SetDefDrawEnv. OFY=120 and H=512 remain
-retail-owned. The host consumes the same latched plan for clipping/margin coverage/presentation; Psx,
-ORACLE and SBS resolve 4:3. Do not replace any part with a stretch, forced-native path, or local
+retail-owned. The host consumes the same latched plan for clipping/margin coverage/presentation;
+both typed comparison roles resolve 4:3. Do not replace any part with a stretch, forced-native path, or local
 renderer exception.
 
 Temporal camera/object capture, interpolated replay, native depth, and PC-native producers are not
@@ -84,7 +90,7 @@ loader's yielded VSync fields starve time and cause its real 601-poll timeout af
 field-aware emulated-time candidate fixes that clock owner and reaches the title screen on the stock
 path. The optional fast-loading enhancement now deliberately takes a different route: it owns the two
 measured title issuers and reads their table-bounded sectors synchronously, bypassing CDC deadlines and
-deliberate I/O latency while retaining the generated title callbacks. The boot exe holds a
+deliberate I/O latency while retaining the original title callbacks through the dynarec. The boot exe holds a
 161-entry literal path table (138 ARC + 11 STR + 11 XA + the build's own EXE) at file offset `0xDED4E`,
 and its 138 ARC names match the disc's 138 ARC files exactly in both directions — so the complete asset
 manifest is already in the binary, which is a ready-made index if a prefetch design is ever wanted.
@@ -128,7 +134,7 @@ of those is a separate piece of RE and a separate design decision.
 port turns on, and it is the most invasive `pc_enh` in the workspace.
 
 **THE ONE PIECE OF GOOD NEWS THAT IS MEASURED.** The framework already reads two pad slots —
-`external/psxport/runtime/recomp/pad_input.cpp:550`:
+`external/psxport/runtime/psx/pad_input.cpp:550`:
 
 ```cpp
 uint32_t bufs[2] = { c->cfg->padSlot0Buf, c->cfg->padSlot1Buf };
@@ -178,14 +184,14 @@ mid-stage spawn, second-camera ownership, P2 routing, and what evidence proves c
 
 ### The verification consequence, stated explicitly rather than glossed
 
-**With co-op ON the run is not byte-comparable to the oracle by design.** A clean SBS compare with co-op
+**With co-op ON the run is not byte-comparable to the retail reference by design.** A clean comparison with co-op
 ON means *the suppression fired*, not that co-op is correct — that is a third fake-green trap on top of
 the two the framework's porting doc already names. Therefore:
 
-- the SBS gate runs with **all enhancements OFF**, and that is what `x4::enh()` guarantees;
+- the comparison gate runs with **all enhancements OFF**, and that is what `x4::enh()` guarantees;
 - **the co-op path needs its own evidence, and what that evidence is, is an OPEN QUESTION (❓).** It is
   not a differential byte-compare, because there is nothing to compare against. It is probably some
-  combination of "single-player play with co-op compiled in but off is still byte-exact" (which the SBS
+  combination of "single-player play with co-op compiled in but off is still byte-exact" (which the comparison
   gate gives for free) plus a behavioural assertion on the co-op path that nobody has designed yet.
   **This file will not invent that gate.** Design it when RE-07 has made it designable, and record it
   here and in `docs/behavior-map.md` when it exists.

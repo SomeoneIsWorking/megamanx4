@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import TextIO
 
 ROOT = Path(__file__).resolve().parents[1]
-PLAYER_BUILD_DIR = "scratch/build/player"
+PLAYER_BUILD_DIR = "build/player"
 CYAN = "\033[1;36m"
 RED = "\033[1;31m"
 RESET = "\033[0m"
@@ -275,15 +275,7 @@ def run_launcher(
             root=root,
             env=provision_env,
         )
-        run_stage(
-            machine,
-            [python_executable, "-B", "tools/ensure_recomp.py"],
-            "recompiled substrate generation failed",
-            root=root,
-            env=provision_env,
-        )
-
-        say("building the native port…", stdout)
+        say("building the native/Lightrec port…", stdout)
         configure = [
             "cmake",
             "-S",
@@ -324,7 +316,7 @@ def run_launcher(
     say("launching Mega Man X4…", stdout)
     try:
         result = machine.run(
-            [str(root / "scratch" / "bin" / "megamanx4_port")],
+            [str(root / PLAYER_BUILD_DIR / "bin" / "megamanx4_port")],
             cwd=root,
             env=launch_env,
             check=False,

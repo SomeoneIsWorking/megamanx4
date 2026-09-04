@@ -1,12 +1,7 @@
 // main.cpp — the Mega Man X4 port's process entry point.
 //
-// Installs X4Runtime + RecompRegistry, brings up the framework's PSX
-// hardware backends, loads the retail executable, and enters the native boot. After the install
-// nothing here names anything but framework symbols.
-//
-// RE-01, RE-02's static bootstrap, and RE-06 are measured (docs/re-frontier.md). The sequence below
-// boots the generated resident substrate; RE-11 returns from the finite gameMain prefix, then the
-// shared shell drives X4FrameDriver one field at a time while full libetc VSync remains trapped.
+// Installs X4Runtime, loads the authenticated retail executable, brings up the framework's PSX
+// hardware backends, and enters the native/Lightrec runtime.
 #include "cfg.h"
 #include "command_line.h"
 #include "core.h"
@@ -14,7 +9,6 @@
 #include "enhancements.h"
 #include "fs_util.h"
 #include "game.h"
-#include "recomp_register.h"
 #include "x4_runtime.h"
 #include <stdio.h>
 
@@ -24,10 +18,9 @@ void mdec_init(void);
 void spu_init(void);
 }
 
-void load_exe(const char *path, Core *c); // runtime/recomp/boot.cpp (framework)
-void native_boot_run(Core *c);            // runtime/recomp/native_boot.cpp (framework)
+void load_exe(const char *path, Core *c); // runtime/psx/boot.cpp (framework)
+void native_boot_run(Core *c);            // runtime/psx/native_boot.cpp (framework)
 void gte_init(void);
-int selftest_run(const char *path); // runtime/recomp/selftest.cpp (framework harness)
 
 // The retail US executable, as it is named on the disc. SYSTEM.CNF boots it directly
 // (`BOOT = cdrom:\SLUS_005.61;1` — measured 2026-08-12), so there is no SCEA boot stub LoadExec'ing a
@@ -42,16 +35,14 @@ int main(int argc, char **argv) {
     return 0;
   }
   if (options.action == x4::cli::Action::Error) {
-    std::fprintf(stderr, "megamanx4_port: %s\n", options.error);
-    x4::cli::printUsage(stderr, argv[0]);
+    cfg_loge("cli", "megamanx4_port: %s", options.error);
+    x4::cli::printUsage(stdout, argv[0]);
     return 2;
   }
 
   // Process-lifetime derived owner. Installation must precede the first Core, which snapshots it.
   static x4::X4Runtime runtime;
   psxport_install_game(runtime);
-  x4_install_recomp();
-
   // Say out loud which enhancement knobs this run will do NOTHING with. Co-op and fast-wait remain
   // `planned` (docs/re-frontier.md RE-07/09), so a user who sets PSXPORT_X4_COOP=1 today would
   // otherwise see a completely clean startup and a clean exit audit — registering them as CVars is
@@ -73,14 +64,6 @@ int main(int argc, char **argv) {
                "extraction failed: provide a disc (PSXPORT_X4_DISC, .env, or a *.chd in "
                "the working directory), or run `python3 tools/extract_exe.py`");
       return 1;
-    }
-  }
-
-  // PSXPORT_SELFTEST=<name>: run the framework's headless selftest harness instead of booting.
-  {
-    const char *st = cfg_str("PSXPORT_SELFTEST");
-    if (st && *st) {
-      return selftest_run(path);
     }
   }
 
