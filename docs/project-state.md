@@ -15,7 +15,7 @@ binary evidence in `docs/re-frontier.md`.
 | S007 | Measured loading operations complete without loading-only waits or presentation | partial | S004 | G003 |
 | S008 | A second player can join as the other hunter | missing | S003, S004 | G004 |
 | S009 | Representative gameplay is verified playable end to end | missing | S003, S004 | G001 |
-| S010 | Asset-free hosted verification builds and checks the real supported host product boundary | partial | S002 | G001 |
+| S010 | Asset-free hosted verification builds and checks the real supported host product boundary | verified | S002 | G001 |
 
 ## Current focus
 
@@ -36,7 +36,7 @@ clang-tidy, and inspects the linked execution boundary. The consumer pins PSXPor
 `eb5f23a8b3506f8853b3cfadcedc024cd90818a0`; CI checks out Lightrec
 `b1457137c31cedff5f440d59da29401d021ba2da`. It contains no disc, executable, BIOS, or runtime
 translation cache and therefore claims no gameplay evidence. The same canonical Python gate passes
-locally; the first hosted run remains pending.
+locally and in the hosted run recorded in S010.
 
 Windows x86_64 is an applicable future PC host but currently unsupported: psxport still exports GNU
 linker `--wrap` options and has no MSVC/clang-cl product contract. macOS arm64 is likewise unsupported
@@ -61,7 +61,8 @@ Lightrec owns translated-code memory and its cache. psxport owns CPU/machine syn
 HLE/device callbacks, bounded executor exits, override-aware original calls, and
 executable-memory invalidation.
 
-Gap: the target is wired to psxport's per-Core Lightrec execution boundary, including shared
+Missing capability: verified native/Lightrec gameplay. The target is wired to psxport's per-Core
+Lightrec execution boundary, including shared
 per-reason fallback telemetry and the bounded fallback threshold. Historical product runs establish
 the 4,000-field native/device frontier but predate this executor and do not satisfy the current
 execution contract. The next product evidence must contain nonzero Lightrec execution, a complete
@@ -161,7 +162,7 @@ The existing migration evidence reaches guest `gameMain`, crosses the BIOS-threa
 front-end archive requests, and renders the Mega Man X title image through the GTE path. Native
 selection is not a picture source because this title has no native graphics producers.
 
-Gap: none of that frontier has been reproduced through the native/Lightrec product. Its first bounded
+Missing capability: the front-end frontier reproduced through the native/Lightrec product. Its first bounded
 gate is 4,000 fields with runtime-authenticated VSync interception; sampled title state also remains
 nondeterministic, representative gameplay has not been reached and inspected, and the open
 title-composition defect affects wide output.
@@ -214,5 +215,8 @@ together on each released host architecture.
 ### S010 — asset-free hosted verification
 
 The Linux workflow and `tools/verify.py` own one reproducible asset-free gate over the shipping
-product boundary, title contracts, formatting, lint, and linked execution policy. The remaining gap
-is a successful hosted run of the landed workflow; unsupported host products are recorded above.
+product boundary, title contracts, formatting, lint, and linked execution policy.
+Evidence: the Linux x86_64 asset-free product composition gate passed on main commit
+`4cbdfd3e75ed87e9166d1a2711d270f3a8a2d320` in
+[run 33960101702](https://github.com/SomeoneIsWorking/megamanx4/actions/runs/33960101702).
+This verifies composition only; gameplay and unsupported host gaps remain as recorded above.
