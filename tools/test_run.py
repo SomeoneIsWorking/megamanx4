@@ -153,6 +153,40 @@ class LauncherTest(unittest.TestCase):
             )
         )
 
+    def test_explicit_disc_remains_selected_for_runtime(self) -> None:
+        host = FakeHost()
+        selected = "discs/Mega Man X4.chd"
+        code, _, stderr = self.invoke(
+            host,
+            selected,
+            environment={"PSXPORT_X4_DISC": "other.chd", "PSXPORT_DISC": "generic.chd"},
+        )
+
+        self.assertEqual(code, 0)
+        self.assertEqual(stderr, "")
+        provision = next(
+            kwargs for command, kwargs in host.commands if "tools/extract_exe.py" in command
+        )
+        launch = host.commands[-1][1]
+        self.assertEqual(provision["env"]["PSXPORT_X4_DISC"], selected)
+        self.assertEqual(launch["env"]["PSXPORT_X4_DISC"], selected)
+        self.assertEqual(provision["cwd"], launch["cwd"])
+
+    def test_implicit_disc_preserves_configured_resolution(self) -> None:
+        for environment in (
+            {"PSXPORT_X4_DISC": "configured.chd"},
+            {"PSXPORT_DISC": "generic.chd"},
+            {},
+        ):
+            with self.subTest(environment=environment):
+                host = FakeHost()
+                code, _, stderr = self.invoke(host, environment=environment)
+                self.assertEqual(code, 0)
+                self.assertEqual(stderr, "")
+                launch_env = host.commands[-1][1]["env"]
+                for key in ("PSXPORT_X4_DISC", "PSXPORT_DISC"):
+                    self.assertEqual(launch_env.get(key), environment.get(key))
+
     def test_player_exec_strips_ambient_agent_policy(self) -> None:
         host = FakeHost()
         code, _, stderr = self.invoke(

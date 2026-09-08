@@ -56,6 +56,10 @@ generated implementation or static selector in the product.
 
 `PSXPORT_X4_DISC` is spelled identically in exactly three places and they must not diverge:
 `.env.example`, `GameConfig::discEnvVar`, and `tools/resolve_disc.py`'s `ENV_KEY`.
+The launcher imports that key and publishes an explicit disc argument into the environment used by
+both executable extraction and the running CD backend. A command-line disc therefore takes precedence
+over an existing title or generic disc setting for the whole session, including relative paths and
+paths containing spaces. Without an argument, environment, `.env`, and drop-in resolution are preserved.
 
 The three enhancement knobs are `persistable = true` deliberately: they are USER PREFERENCES, which is
 the class the Value layer exists for (cf. the framework's `cv_fps60`, whose Value layer is the `fps60=`

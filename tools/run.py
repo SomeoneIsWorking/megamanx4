@@ -14,6 +14,11 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import TextIO
 
+if __package__:
+    from .resolve_disc import ENV_KEY
+else:
+    from resolve_disc import ENV_KEY
+
 ROOT = Path(__file__).resolve().parents[1]
 PLAYER_BUILD_DIR = "build/player"
 CYAN = "\033[1;36m"
@@ -229,6 +234,10 @@ def run_launcher(
     machine = host or Host()
     try:
         options = parse_args(argv)
+        # Extraction and the running CD backend must consume the same explicit selection.
+        # Both processes use root as their working directory, including for relative paths.
+        if options.disc:
+            environment[ENV_KEY] = options.disc
         require_tool(machine, "cmake")
         require_tool(machine, "git")
         require_tool(machine, "pkg-config")
