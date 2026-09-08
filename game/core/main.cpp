@@ -9,6 +9,8 @@
 #include "enhancements.h"
 #include "fs_util.h"
 #include "game.h"
+#include "hw_bind.h"
+#include "psx_exe_image.h"
 #include "x4_runtime.h"
 #include <stdio.h>
 
@@ -18,9 +20,7 @@ void mdec_init(void);
 void spu_init(void);
 }
 
-void load_exe(const char *path, Core *c); // runtime/psx/boot.cpp (framework)
-void native_boot_run(Core *c);            // runtime/psx/native_boot.cpp (framework)
-void gte_init(void);
+void native_boot_run(Core *c); // runtime/psx/native_boot.cpp (framework)
 
 // The retail US executable, as it is named on the disc. SYSTEM.CNF boots it directly
 // (`BOOT = cdrom:\SLUS_005.61;1` — measured 2026-08-12), so there is no SCEA boot stub LoadExec'ing a

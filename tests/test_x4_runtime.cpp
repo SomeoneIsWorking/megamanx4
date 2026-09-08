@@ -22,8 +22,6 @@
 #include <memory>
 #include <type_traits>
 
-void gte_init();
-
 namespace {
 
 GuestProjectionPlan g_projectionPlan;
