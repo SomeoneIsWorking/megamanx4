@@ -105,9 +105,11 @@ not evidence for this gate.
 - where: target shared psxport per-Core Lightrec executor and authenticated `GuestProgramImage`; target title image-and-address-keyed override/original-call registry; retained identity and control-flow verifiers under `tools/`
 - gap: The native/Lightrec product enters the authenticated title, but has not yet produced a translated-
   block execution and fallback report or crossed the 4,000-field front-end/movie discriminator above.
-  The first current-product run faults at `0x8000E884` before field one. Issue #27 derives that
-  address from retail InitPAD/StartPAD and the shared HLE's B0[0x5B] work-area publication; the shared
-  BIOS/pad callback contract is the next execution boundary.
+  Shared psxport `b3fbe300` crosses the former `0x8000E884` fault (issue #27), completes
+  the boot prefix and two CD requests, then the first frame aborts at the title's protected libetc
+  VSync `0x800E4DB0` after a typed `FrameBoundary` reaches a required-return guest call. Issue #25
+  owns caller-RA capture and the exact title timing/transaction boundary. The abort has no JIT/fallback
+  counters; the title has not completed a first field.
 - notes: `0x800E5194` is not guessed: live HookEntryInt recorded it in jmp_buf `0x8011CBCC`, and retail startIntr proves it is the non-zero setjmp continuation into trapIntr. Dynamic execution discovers runtime targets directly; no seed list is part of the target product.
 
 ## overlays

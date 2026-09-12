@@ -65,6 +65,13 @@ repository.
 All named PIDs exited and were confirmed absent. These observations predate the native/Lightrec
 migration and remain ownership evidence, not current dynamic-execution or gameplay proof.
 
+The 2026-09-12 native/Lightrec product run with the shared BIOS pad callback candidate reached
+VSync `0x800E4DB0` in its first frame after archive/direct CD requests 64/65. The configured
+`PlatformHle` full-entry trap returned `FrameBoundary`; `x4::guest::call` required a completed
+return and aborted. The log records 706 cycles in that call but no caller RA or completed field.
+The next discriminator must capture that RA and enclosing guest transaction before assigning its
+semantic owner. This run does not establish a safe VSync exception or successful frame continuation.
+
 ## Open work and falsifier
 
 State 6/5/1, Setfilter, SeekL, ReadS, GetlocP/Sub-Q, memory-card waits, and any other live VSync caller
