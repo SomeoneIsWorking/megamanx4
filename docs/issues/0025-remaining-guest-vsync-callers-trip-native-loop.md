@@ -5,7 +5,7 @@ status: open
 symptom: Setup, loading, CD, movie, memory-card, or alarm code can reach protected VSync 0x800E4DB0
 tags: frame-loop,vsync,timing,RE-09,RE-11
 created: 2026-08-27
-updated: 2026-09-04
+updated: 2026-09-12
 ---
 
 ## Ownership rule
@@ -71,6 +71,22 @@ VSync `0x800E4DB0` in its first frame after archive/direct CD requests 64/65. Th
 return and aborted. The log records 706 cycles in that call but no caller RA or completed field.
 The next discriminator must capture that RA and enclosing guest transaction before assigning its
 semantic owner. This run does not establish a safe VSync exception or successful frame continuation.
+
+The next one-field Lightrec probe, after the shared BIOS pad callback landed, authenticated the same
+`SLUS_005.61` image (SHA-1 `213733031136d095ca275d6957695aa25011cfa5`). It completed CD requests
+64/65, then `guest::call` entered `UpdateTasks` `0x80012600` and returned `FrameBoundary` at full
+VSync `0x800E4DB0` before a completed field. The post-exit Core registers were `ra=0x80012050`,
+`a0=0`, `sp=0x801FFFE0`. The authenticated EXE has 42 direct `jal VSync` instructions, including
+the outer cadence `jal` at `0x80012048` whose return is `0x80012050`. That address alone does not
+identify the reached call: `ChangeTh` can restore the main Core register file while unwinding a
+nested task. The immediate VSync RA must be captured at the trap, before any BIOS-thread restoration.
+
+The shipping dispatch order also resolves `PlatformHle` before image-keyed native overrides. X4
+registers `movie::fieldBoundary` at the same VSync entry, but the full-entry `PlatformHle` trap
+shadows it. The movie test calls `yieldField` directly and does not exercise this dispatch collision.
+Neither replacing the trap with a successful VSync exception nor treating this `FrameBoundary` as a
+completed `UpdateTasks` call preserves the task's guest continuation. No timing or dispatch policy
+changed; the temporary title call-boundary diagnostic was removed after the probe.
 
 ## Open work and falsifier
 
