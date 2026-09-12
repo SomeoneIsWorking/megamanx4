@@ -103,10 +103,11 @@ not evidence for this gate.
 - deps: RE-01
 - evidence: Retail SLUS_005.61 has SHA-1 `213733031136d095ca275d6957695aa25011cfa5`, resident range `[0x80010000,0x80130000)`, crt0 `0x800DAE8C`, gameMain `0x80012024`, and no code overlays. A recorded pre-migration measurement found 6,193 binary roots and 7,534 functions, including live HookEntryInt continuation `0x800E5194`; FNTRACE reached it through shared BIOS delivery and then CD callback `0x800E7944`. `tools/verify_cd_irq.py` independently proves from retail bytes that setjmp saves this mid-function continuation. These are retained binary/runtime facts.
 - where: target shared psxport per-Core Lightrec executor and authenticated `GuestProgramImage`; target title image-and-address-keyed override/original-call registry; retained identity and control-flow verifiers under `tools/`
-- gap: The native/Lightrec product has not executed a guest block from the real title input. Exercise
-  the wired executor and authenticated image through the 4,000-field front-end/movie discriminator
-  above. The low BIOS/ROM address `0x8000E884` observed during pad setup remains to classify before
-  that path is called fully owned.
+- gap: The native/Lightrec product enters the authenticated title, but has not yet produced a translated-
+  block execution and fallback report or crossed the 4,000-field front-end/movie discriminator above.
+  The first current-product run faults at `0x8000E884` before field one. Issue #27 derives that
+  address from retail InitPAD/StartPAD and the shared HLE's B0[0x5B] work-area publication; the shared
+  BIOS/pad callback contract is the next execution boundary.
 - notes: `0x800E5194` is not guessed: live HookEntryInt recorded it in jmp_buf `0x8011CBCC`, and retail startIntr proves it is the non-zero setjmp continuation into trapIntr. Dynamic execution discovers runtime targets directly; no seed list is part of the target product.
 
 ## overlays

@@ -75,8 +75,11 @@ Missing capability: verified native/Lightrec gameplay. The target is wired to ps
 Lightrec execution boundary, including shared
 per-reason fallback telemetry and the bounded fallback threshold. Historical product runs establish
 the 4,000-field native/device frontier but predate this executor and do not satisfy the current
-execution contract. The next product evidence must contain nonzero Lightrec execution, a complete
-fallback report, and a passing threshold.
+execution contract. A current Clang product run against shared psxport `161cb132` loads the authenticated
+executable and publishes the wide guest projection, then faults before field one at the BIOS pad work-area
+callback `0x8000E884` (issue #27). Its 72,620 Lightrec cycles are not a translated-block or fallback
+report. The next product evidence must cross that callback, contain nonzero translated Lightrec execution,
+a complete fallback report, and a passing threshold.
 
 ### S003 — Guest field service
 
