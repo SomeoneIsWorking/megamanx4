@@ -9,8 +9,7 @@ and the three deliberate enhancements.
 
 **The framework rules are NOT restated here. Read `external/psxport/CLAUDE.md`** — it is the authority
 for how a game consumes psxport: the CVar ladder, the seam, RE-first, diagnostics through `lucent`,
-the registries, never editing `external/psxport`, and the standing USER
-directive that **`./run.sh` is the user's and agents must never invoke it**. The workspace map is
+the registries, and never editing `external/psxport`. The workspace map is
 `external/psxport/docs/workspace/WORKSPACE.md`; the multi-agent protocol is `…/PROTOCOL.md`.
 
 ## Product execution contract
@@ -135,13 +134,8 @@ engine in `external/psxport/tools/port/`; do not grow a local copy of it.
 
 ## THIS PORT IS AN ENHANCEMENT PORT, NOT A NATIVE-ENGINE REBUILD
 
-USER decision, 2026-08-12, verbatim:
-
-> "Mega Man doesn't need native producers or lerp or native depth, it's already 60fps. It just needs
-> widescreen patches (still hard work) and loading removals (again hard work). And I want to add co-op
-> to it, drop-in, if I'm playing with X for example then second player can spawn as Zero."
-
-The consequence, in framework vocabulary:
+The intended enhancements are widescreen, loading removal, and drop-in X/Zero co-op. X4 already
+runs at 60 fps; it does not need frame interpolation or native depth.
 
 - The whole **native-producer / `ProducerScope` / frame-interpolation (`fps60`, lerp) / native-depth**
   apparatus is **➖ not-applicable** here, not ⬜ todo. psxport's hardest constraint — the picture must
@@ -150,7 +144,7 @@ The consequence, in framework vocabulary:
   owns the one-step retail loop and timing through `X4FrameDriver`; native loop ownership does not
   imply native rendering. The legacy `GameHooks::frameUpdate` stays fail-fast because it is not this
   title's typed driver seam. Marking native producers/interpolation ⬜ would put those steps on the
-  roadmap the USER has ruled out.
+  roadmap despite being out of scope.
 
   **The neutral presenter, exact field-rate SPU cadence, and field-aware CD time are recorded at
   the recorded 9c2e3f1c pin (introduced at 7bd24f2b).** X4 schedules no
@@ -182,7 +176,7 @@ Calling `.get()` at a feature call site is the bug that chokepoint exists to pre
 - **Job A — raw I/O latency:** RESOLVED at the recorded pin (issue #13): the shared emulated-time
   candidate services the retail asynchronous ReadN/callback route onward from LBA 225 and reaches the
   title. The raw WALL-CLOCK load-time number is still unmeasured — quote nothing until it is.
-- **Job B — the loading coroutine itself:** LANDED 2026-08-24 per the USER directive. The measured
+- **Job B — the loading coroutine itself:** LANDED 2026-08-24. The measured
   direct/archive issuers (0x80013890/0x80013AD8) now own one synchronous operation
   (`game/core/fast_wait.cpp`, `PSXPORT_X4_FASTWAIT`, default on): each runs its untouched setup once,
   feeds table-derived raw sectors through the original ready callback via Lightrec, drains archive postprocess
@@ -198,7 +192,7 @@ A single "load time" figure that mixes the two is unusable. Estimate them separa
 ## The AGPL firewall — the highest-cost mistake available in this tree
 
 `external/mmx4` ([sozud/mmx4](https://github.com/sozud/mmx4), **AGPL-3.0**) is a matching decomp of
-this exact executable. Licensing is not a constraint on THIS repo (USER, 2026-08-12) — it may be used
+this exact executable. Licensing is not a constraint on THIS repo; it may be used
 for code **and** ideas, and this repo is AGPL-3.0-or-later (`LICENSE`, `LICENSING.md`) because of it.
 
 **AGPL-derived code stays inside THIS repo and NEVER enters `psxport`.** The framework is vendored by
