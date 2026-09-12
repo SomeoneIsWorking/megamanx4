@@ -33,14 +33,19 @@ Linux x86_64 is the only currently supported host product boundary. The tracked 
 uses full history, disables persisted credentials and caches, installs pinned Python tooling, builds
 the actual asset-free `megamanx4_port`, runs every asset-free title contract plus clang-format and
 clang-tidy, and inspects the linked execution boundary. The consumer pins PSXPort
-`a5a796521668cf078e150808cc1fc4616d1f31d6`; CI checks out Lightrec
+`9e104d9fe7d04043d98fe451732596d68e45022c`; CI checks out Lightrec
 `b1457137c31cedff5f440d59da29401d021ba2da`. It contains no disc, executable, BIOS, or runtime
 translation cache and therefore claims no gameplay evidence. The same canonical Python gate passes
 locally and in the historical hosted run recorded in S010. The loader/GTE header migration was
-compiled and linted locally against the current pin. Its first hosted run
+compiled and linted locally against the corrected pin. The previous hosted run
 [34222192563](https://github.com/SomeoneIsWorking/megamanx4/actions/runs/34222192563) instead fetched
 the stale `eb5f23a8` pin and failed because that revision lacks the authoritative declarations.
-The corrected pin still requires a passing hosted rerun; the focused local checks do not establish
+The immediately preceding run
+[34684883795](https://github.com/SomeoneIsWorking/megamanx4/actions/runs/34684883795) used the
+consumer's then-recorded `a5a79652` pin and failed in framework `runtime/psx/repl.cpp`: the callback
+had migrated to `std::span<char>` but the pinned source still passed a raw `char*`. Framework commit
+`9e104d9f` constructs the span at that boundary; this repo now records that commit. A hosted rerun
+is required before S010 can be re-verified at this pin; focused local checks do not establish
 whole-product verification at this revision.
 
 Windows x86_64 is an applicable future PC host but currently unsupported: psxport still exports GNU
