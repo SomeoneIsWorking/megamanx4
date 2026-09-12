@@ -4,4 +4,4 @@
 # off the shared framework clone via the external/psxport symlink. Ports are deliberately
 # not all on framework HEAD — see the module docstring for why.
 url = https://github.com/SomeoneIsWorking/psxport.git
-commit = b3fbe300a99e29ef3d30f2838d9c0f7b29720bfb
+commit = e747e9d3f4783e0bc22fb4265ca834aa98b622a3
