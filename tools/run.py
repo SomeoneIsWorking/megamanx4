@@ -320,7 +320,7 @@ def run_launcher(
         return 0
 
     policy = runpy.run_path(str(psxport_path / "tools/port/launch_environment.py"))
-    launch_env = policy["player_environment"](environment)
+    launch_env = policy["player_environment"](environment, product="megamanx4")
     launch_env.setdefault("PSXPORT_ASSET_DIR", str(psxport_path))
     say("launching Mega Man X4…", stdout)
     try:
