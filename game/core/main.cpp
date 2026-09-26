@@ -9,6 +9,7 @@
 #include "enhancements.h"
 #include "fs_util.h"
 #include "game.h"
+#include "guest_execution.h"
 #include "hw_bind.h"
 #include "psx_exe_image.h"
 #include "x4_runtime.h"
@@ -85,6 +86,12 @@ int main(int argc, char **argv) {
 
   c->runtime->registerOverrides(*game);
   native_boot_run(c);
+  // The frame loop has returned, so this is the title's run-end path. The guest-call census lives
+  // with the owner that made the calls: it reports how many completed, how many had to be RESUMED
+  // past the one-display-field host turn, and the deepest one, so a run is never described only by
+  // what it drew. (X4Runtime::bootInit is not the run end — native_boot_run calls it to enter the
+  // loop.)
+  x4::guest::reportGuestCallCensus("after native boot");
   cfg_logi("boot", "native boot returned");
   return 0;
 }
