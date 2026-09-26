@@ -11,6 +11,7 @@ set(SEAM_SRC
   game/core/cd_control_boundary.cpp
   game/core/cd_controller.cpp
   game/core/command_line.cpp
+  game/core/cull_overrides.cpp
   game/core/display_init.cpp
   game/core/fast_wait.cpp
   game/core/game_config.cpp
@@ -29,6 +30,7 @@ set(SEAM_SRC
   game/core/stream_startup.cpp
   game/core/title_layout.cpp
   game/core/title_quad.cpp
+  game/core/visibility_cull.cpp
   game/core/vsync_sync.cpp
   game/core/widescreen_controller.cpp
   game/core/x4_context.cpp
@@ -120,6 +122,8 @@ if(BUILD_TESTING)
     ${CMAKE_SOURCE_DIR}/game/core/stream_startup.cpp
     ${CMAKE_SOURCE_DIR}/game/core/title_layout.cpp
     ${CMAKE_SOURCE_DIR}/game/core/title_quad.cpp
+    ${CMAKE_SOURCE_DIR}/game/core/cull_overrides.cpp
+    ${CMAKE_SOURCE_DIR}/game/core/visibility_cull.cpp
     ${CMAKE_SOURCE_DIR}/game/core/vsync_sync.cpp
     ${CMAKE_SOURCE_DIR}/game/core/widescreen_controller.cpp
     ${CMAKE_SOURCE_DIR}/game/core/x4_context.cpp
@@ -296,6 +300,23 @@ if(BUILD_TESTING)
     CXX_STANDARD_REQUIRED ON
   )
   add_test(NAME x4_title_layout COMMAND mmx4_title_layout_test)
+  # The predicate only. It deliberately does NOT link the guest dispatcher (cull_overrides.cpp does),
+  # which is what keeps the exhaustive 4:3 identity sweep a hermetic test.
+  add_executable(mmx4_visibility_cull_test
+    ${CMAKE_SOURCE_DIR}/game/core/visibility_cull.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_x4_visibility_cull.cpp
+  )
+  target_include_directories(mmx4_visibility_cull_test PRIVATE game game/core)
+  target_link_libraries(mmx4_visibility_cull_test PRIVATE psxport)
+  set_target_properties(mmx4_visibility_cull_test PROPERTIES
+    CXX_STANDARD 20
+    CXX_STANDARD_REQUIRED ON
+  )
+  add_test(NAME x4_visibility_cull COMMAND mmx4_visibility_cull_test)
+  add_test(
+    NAME cull_evidence
+    COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/tools/verify_cull.py --check --selftest
+  )
 endif()
 
 add_executable(megamanx4_port ${SEAM_SRC})

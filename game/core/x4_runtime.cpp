@@ -3,6 +3,7 @@
 #include "bios_threads.h"
 #include "cfg.h"
 #include "core.h"
+#include "cull_overrides.h"
 #include "display_init.h"
 #include "game.h"
 #include "gpu_timeout.h"
@@ -59,6 +60,9 @@ void X4Runtime::registerOverrides(Game &game) {
   stream_interrupt::registerOverride(game.core);
   stream_startup::registerOverride(game.core);
   title_quad::registerOverride(game.core);
+  // The visibility cull (RE cull census): seven measured retail owners, one recovered predicate in
+  // visibility_cull.cpp, bound to the seam by cull_overrides.cpp.
+  cull::registerOverrides(game.core);
   // The loading-coroutine conversion (RE-09 job B): the measured retail owners are registered by
   // authenticated image/address and retain scoped Lightrec original calls where required.
   native_overrides::install(game.core);
