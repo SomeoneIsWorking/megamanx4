@@ -221,6 +221,17 @@ def verify(inputs: Inputs, *, check_digest: bool = True) -> list[str]:
         raise VerificationError(
             "shipping full-VSync trap constants disagree with the retail entry"
         )
+    # WHY `spu_audio.frameLogic()` IS NOT AMONG THESE. The framework's own header
+    # (runtime/psx/spu_audio.h) documents it as the SBS/dual-core variant — "advance XA for game logic
+    # only, no output" — and lists it as called from game_tomba2.cpp's frame body, which is a
+    # two-Game title. This list used to require BOTH frameLogic() and frame(), which is Tomba! 2's call
+    # pattern asserted at a single-core title: X4 owns one Game, mixes one field of samples per
+    # display field, and has no second core to advance XA for. The expectation was red on the shipping
+    # source and nobody had looked at whether the SOURCE or the EXPECTATION was wrong.
+    #
+    # The ordering below is the real content and it is unchanged: the pad is serviced, then the SPU
+    # mixes its field, then the presentation commits that field. Requiring frameLogic() as well would
+    # assert another title's architecture, not a stronger audio contract.
     for token in (
         "kVblankCounter = 0x8011DC50u",
         "kVblankHandler = 0x800E56FCu",
@@ -228,7 +239,6 @@ def verify(inputs: Inputs, *, check_digest: bool = True) -> list[str]:
         "const uint32_t vblankHandler = c->mem_r32",
         "guest::call(c, vblankHandler)",
         "c->game->pad.serviceFrame()",
-        "c->game->spu_audio.frameLogic()",
         "c->game->spu_audio.frame()",
         "c->game->presentation.commit(c, 1)",
     ):
@@ -236,6 +246,15 @@ def verify(inputs: Inputs, *, check_digest: bool = True) -> list[str]:
             raise VerificationError(
                 f"shipping synchronization source is missing {token!r}"
             )
+    # ...and the field order itself, which is what the token list cannot express.
+    ordered = ("c->game->pad.serviceFrame()", "c->game->spu_audio.frame()",
+               "c->game->presentation.commit(c, 1)")
+    positions = [inputs.source.find(token) for token in ordered]
+    if any(position < 0 for position in positions) or positions != sorted(positions):
+        raise VerificationError(
+            "the shipping field order is not pad.serviceFrame() -> spu_audio.frame() -> "
+            f"presentation.commit(): {list(zip(ordered, positions))}"
+        )
     try:
         window_lo, window_hi = platform_hle_windows(inputs.config)
     except ValueError as exc:
