@@ -101,6 +101,31 @@ if(BUILD_TESTING)
     NAME thread_evidence
     COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/tools/verify_threads.py --check --selftest
   )
+  # music_cd's measured step table, diffed against the authenticated SLUS_005.61. Added because
+  # tests/test_x4_music_cd.cpp CANNOT catch a wrong address: it sets core.r[31] from
+  # x4::music_cd::kSteps and then asserts the lookup returns that step, so its only copy of the
+  # numbers is the table it is testing. State 1's CdControl return shipped as the `jal`'s own address
+  # rather than the address it leaves, the owner silently declined the one CdlReadS edge it claimed,
+  # and the product aborted in x4::guest::callOriginal on a CD poll this port cannot complete. The
+  # C++ test was green throughout. This tool PARSES the shipping header and diffs it against the bytes.
+  add_test(
+    NAME music_cd_table_evidence
+    COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/tools/verify_music_cd.py --check --selftest
+  )
+  # The live-play apparatus: the front-end state model and the transport that reads it. Both selftests
+  # drive NOTHING and launch no product, so they are hermetic — but they are in the gate because a
+  # census that cannot say "the park is still the park", or a differencer that cannot say "nothing
+  # changed", makes every future live run's verdict unreadable rather than wrong. The address-owner
+  # check inside title_prompts is what makes the model refuse to run against an address the owning
+  # source no longer declares.
+  add_test(
+    NAME live_play_prompt_model_selftest
+    COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/tools/title_prompts.py --selftest
+  )
+  add_test(
+    NAME live_play_client_selftest
+    COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/tools/live_play.py --selftest
+  )
   add_executable(mmx4_runtime_test
     ${CMAKE_SOURCE_DIR}/game/core/bios_threads.cpp
     ${CMAKE_SOURCE_DIR}/game/core/cd_control_boundary.cpp
