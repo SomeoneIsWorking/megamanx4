@@ -21,6 +21,7 @@ set(SEAM_SRC
   game/core/enhancements.cpp
   game/core/main.cpp
   game/core/movie_cleanup.cpp
+  game/core/music_cd.cpp
   game/core/music_stream.cpp
   game/core/native_overrides.cpp
   game/core/startup_cd.cpp
@@ -112,6 +113,7 @@ if(BUILD_TESTING)
     ${CMAKE_SOURCE_DIR}/game/core/game_hooks.cpp
     ${CMAKE_SOURCE_DIR}/game/core/gpu_timeout.cpp
     ${CMAKE_SOURCE_DIR}/game/core/movie_cleanup.cpp
+    ${CMAKE_SOURCE_DIR}/game/core/music_cd.cpp
     ${CMAKE_SOURCE_DIR}/game/core/music_stream.cpp
     ${CMAKE_SOURCE_DIR}/game/core/native_overrides.cpp
     ${CMAKE_SOURCE_DIR}/game/core/startup_cd.cpp
@@ -200,6 +202,17 @@ if(BUILD_TESTING)
     CXX_STANDARD_REQUIRED ON
   )
   add_test(NAME x4_music_stream COMMAND mmx4_music_stream_test)
+  add_executable(mmx4_music_cd_test
+    ${CMAKE_SOURCE_DIR}/game/core/music_cd.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_x4_music_cd.cpp
+  )
+  target_include_directories(mmx4_music_cd_test PRIVATE game game/core)
+  target_link_libraries(mmx4_music_cd_test PRIVATE x4_guest_execution)
+  set_target_properties(mmx4_music_cd_test PROPERTIES
+    CXX_STANDARD 20
+    CXX_STANDARD_REQUIRED ON
+  )
+  add_test(NAME x4_music_cd COMMAND mmx4_music_cd_test)
   add_executable(mmx4_startup_cd_test
     ${CMAKE_SOURCE_DIR}/game/core/cd_controller.cpp
     ${CMAKE_SOURCE_DIR}/game/core/startup_cd.cpp

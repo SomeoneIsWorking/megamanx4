@@ -6,6 +6,7 @@
 #include "core.h"
 #include "fast_wait.h"
 #include "guest_execution.h"
+#include "music_cd.h"
 #include "stream_interrupt.h"
 #include "x4_context.h"
 
@@ -140,6 +141,11 @@ void originalCdControl(Core *core) {
 }
 
 void synchronousCdControl(Core *core) {
+  // The XA/BGM state machine's own command steps are the first thing asked for and they own this
+  // same entry; everything else, including the state-7 Setmode edge below, keeps the existing policy.
+  if (music_cd::serveCdControl(core, cd_control_sync)) {
+    return;
+  }
   cd_control_boundary::control(core, originalCdControl, fast_wait::cd_control, cd_controller::setMode);
 }
 
@@ -174,6 +180,7 @@ void install(Core &core) {
   guest::install(core, fast_wait::kCdControl, "fast_wait::CdControl", synchronousCdControl);
   guest::install(core, fast_wait::kCdControlBlocking, "fast_wait::CdControlB", synchronousCdControlBlocking);
   guest::install(core, fast_wait::kCdGetSector, "fast_wait::CdGetSector", synchronousCdGetSector);
+  music_cd::registerOverrides(core);
 }
 
 } // namespace x4::native_overrides
