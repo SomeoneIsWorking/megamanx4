@@ -113,6 +113,16 @@ if(BUILD_TESTING)
     NAME music_cd_table_evidence
     COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/tools/verify_music_cd.py --check --selftest
   )
+  # The stage-load fault of docs/issues/0032, read out of the authenticated SLUS_005.61. It is in
+  # the gate because the product's own fatal report names a bare address (0x26010006) and nothing
+  # else: which table slot it is, that the table has eight entries, that the index is a signed byte
+  # of a record the guest itself overwrote, and that the array doing the overwriting is bounded by
+  # the image at eight 12-byte entries ending exactly at that record array. None of that is visible
+  # from a log line, and every one of it is a claim that could be re-derived wrongly.
+  add_test(
+    NAME stage_fault_evidence
+    COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/tools/verify_stage_fault.py --check --selftest
+  )
   # The live-play apparatus: the front-end state model and the transport that reads it. Both selftests
   # drive NOTHING and launch no product, so they are hermetic — but they are in the gate because a
   # census that cannot say "the park is still the park", or a differencer that cannot say "nothing

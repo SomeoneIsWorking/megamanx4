@@ -190,6 +190,104 @@ void run_guest_entry(Core &core, uint32_t entry) {
       continue;
     }
     if (result.reason != psx::cpu::ExecutionExitReason::FrameBoundary) {
+      // WHY THE REGISTER FILE IS IN THIS REPORT. `result.guestPc` is where the executor stopped, and
+      // for a bad indirect branch that is the BRANCH TARGET, not the instruction that branched — so the
+      // existing one line named a data value and said nothing about which instruction produced it or
+      // what the guest's own `r[31]` was. Two things follow from that and neither is a guess: `r[31]`
+      // is the caller's own return address, so it names the `jalr`/`j` site the guest came from, and a
+      // register holding the stop address names the pointer that was followed. The whole file is
+      // printed because a partial file cannot distinguish "the pointer was in a callee-saved
+      // register" from "the pointer was in a caller-saved one and the callee is the caller".
+      lucent::error("x4-thread",
+                    "guest task 0x{:08X} faulted: pc=0x{:08X} r31=0x{:08X} vblank=0x{:08X} — the r31 "
+                    "value is the guest's OWN link register, so it names the branch site that reached "
+                    "this address; it is read from the committed task state, not reconstructed",
+                    entry,
+                    core.pc,
+                    core.r[31],
+                    core.mem_r32(kVblankCounter));
+      lucent::error("x4-thread",
+                    "guest task 0x{:08X} register file at the fault: r0=0x{:08X} r1=0x{:08X} r2=0x{:08X} "
+                    "r3=0x{:08X} r4=0x{:08X} r5=0x{:08X} r6=0x{:08X} r7=0x{:08X}",
+                    entry,
+                    core.r[0],
+                    core.r[1],
+                    core.r[2],
+                    core.r[3],
+                    core.r[4],
+                    core.r[5],
+                    core.r[6],
+                    core.r[7]);
+      lucent::error("x4-thread",
+                    "guest task 0x{:08X} register file at the fault: r8=0x{:08X} r9=0x{:08X} "
+                    "r10=0x{:08X} r11=0x{:08X} r12=0x{:08X} r13=0x{:08X} r14=0x{:08X} r15=0x{:08X}",
+                    entry,
+                    core.r[8],
+                    core.r[9],
+                    core.r[10],
+                    core.r[11],
+                    core.r[12],
+                    core.r[13],
+                    core.r[14],
+                    core.r[15]);
+      lucent::error("x4-thread",
+                    "guest task 0x{:08X} register file at the fault: r16=0x{:08X} r17=0x{:08X} "
+                    "r18=0x{:08X} r19=0x{:08X} r20=0x{:08X} r21=0x{:08X} r22=0x{:08X} r23=0x{:08X}",
+                    entry,
+                    core.r[16],
+                    core.r[17],
+                    core.r[18],
+                    core.r[19],
+                    core.r[20],
+                    core.r[21],
+                    core.r[22],
+                    core.r[23]);
+      lucent::error("x4-thread",
+                    "guest task 0x{:08X} register file at the fault: r24=0x{:08X} r25=0x{:08X} "
+                    "r26=0x{:08X} r27=0x{:08X} r28=0x{:08X} r29=0x{:08X} r30=0x{:08X} hi=0x{:08X} "
+                    "lo=0x{:08X}",
+                    entry,
+                    core.r[24],
+                    core.r[25],
+                    core.r[26],
+                    core.r[27],
+                    core.r[28],
+                    core.r[29],
+                    core.r[30],
+                    core.hi,
+                    core.lo);
+      // The guest reached this stop through an indirect call, so the only state that can say WHY is
+      // the record it was called with. `$a0` is printed as the guest's own argument, in BYTES as well
+      // as words: the byte lanes are what a sub-type/index field is, and a word-only print hides a
+      // single wrong byte inside an otherwise plausible record — which is the whole shape of an
+      // out-of-range table index.
+      lucent::error("x4-thread",
+                    "guest task 0x{:08X} argument record at a0=0x{:08X}, first 0x10 byte(s) as words: "
+                    "w0=0x{:08X} w1=0x{:08X} w2=0x{:08X} w3=0x{:08X} | bytes: "
+                    "{:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} "
+                    "{:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X} {:02X}",
+                    entry,
+                    core.r[4],
+                    core.mem_r32(core.r[4]),
+                    core.mem_r32(core.r[4] + 4u),
+                    core.mem_r32(core.r[4] + 8u),
+                    core.mem_r32(core.r[4] + 12u),
+                    core.mem_r8(core.r[4] + 0u),
+                    core.mem_r8(core.r[4] + 1u),
+                    core.mem_r8(core.r[4] + 2u),
+                    core.mem_r8(core.r[4] + 3u),
+                    core.mem_r8(core.r[4] + 4u),
+                    core.mem_r8(core.r[4] + 5u),
+                    core.mem_r8(core.r[4] + 6u),
+                    core.mem_r8(core.r[4] + 7u),
+                    core.mem_r8(core.r[4] + 8u),
+                    core.mem_r8(core.r[4] + 9u),
+                    core.mem_r8(core.r[4] + 10u),
+                    core.mem_r8(core.r[4] + 11u),
+                    core.mem_r8(core.r[4] + 12u),
+                    core.mem_r8(core.r[4] + 13u),
+                    core.mem_r8(core.r[4] + 14u),
+                    core.mem_r8(core.r[4] + 15u));
       lucent::error("x4-thread",
                     "guest task stopped at 0x{:08X} with unexpected {} boundary: {}",
                     result.guestPc,
