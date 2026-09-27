@@ -106,13 +106,21 @@ not evidence for this gate.
 - gap: The native/Lightrec product enters the authenticated title and now completes it: both STR movies
   finish (completion owner `0x80018E50` at display field 974 and 13,153), `cd.stream_active` releases,
   the guest's own field counter `0x80141BD8` leaves its movie-frozen 7 and reaches 351, and
-  `render_width=428` is the steady state. **The next frontier is issue #28**: the post-movie picture is
-  one flat clear colour, frozen from field ~13,500 to at least 19,900, because the retail task
-  `0x8001DAF8` waits at `0x80021858` — a DPCR write plus a 6,144-byte DMA chain walk at `0x80173CA0`
-  polling the flag byte `0x801721D7` — for a DMA completion the host never raises. Until that is
-  delivered there is no post-movie picture, and therefore no product evidence for the seven widened
-  cull owners (issue #19) and no obtainable `widescreen_pair.py` verdict.
-- notes: `0x800E5194` is not guessed: live HookEntryInt recorded it in jmp_buf `0x8011CBCC`, and retail startIntr proves it is the non-zero setjmp continuation into trapIntr. Dynamic execution discovers runtime targets directly; no seed list is part of the target product.
+  `render_width=428` is the steady state on the wide leg. **The next frontier is issue #28**, and its
+  earlier mechanism is RETIRED as measured-wrong: `0x80021858` is the decomp's `update_misc_objects`,
+  its cursor is scratchpad `0x1F800064` (not a peripheral at `0x1F801064`), `0x80173CA0` is
+  `misc_objects` (96 × 0x60, the decomp's own `size:0x1800`), and `0x801721D7` is `engine_obj_17`, a
+  guest struct field with four guest store sites and no product writer. What is measured instead is
+  that the guest **parks in its own state machine**: `game_info` `0x80173C70` = `0x00000201` (game
+  state 1, sub-state 2) is byte-identical at presents 15,006 / 20,023 / 23,218; sub-state 2 is
+  `0x8001DDB0` and returns immediately unless `[0x80173C84] == 2`; that byte is raised only at
+  `0x80016BB8`, behind a `CdControl(0x1B, 0, $16)` that must be accepted, while the per-iteration
+  `CD_cw(0x1B, 0x7F, 0xFF000000)` from `0x800127C8` keeps streaming. The CD path is alive and never
+  completes. **Until the host completes the guest's streaming `CD_cw(0x1B)` read there is no
+  post-movie picture**, and therefore no product evidence for the seven widened cull owners (issue
+  #19) and no obtainable `widescreen_pair.py` verdict.
+- notes: `0x800E5194` is not guessed: live HookEntryInt recorded it in jmp_buf `0x8011CBCC`, and retail startIntr proves it is the non-zero setjmp continuation into trapIntr. Dynamic execution discovers runtime targets directly; no seed list is part of the target product. A second, independent defect measured with the live endpoint's own `step` (8/8 steps advanced `0x8011DC50` by exactly 2, and a 200-present run emits exactly 200 `deliverField` calls): the guest's display-field clock runs at 2× the presented cadence, because the framework's `Timing::raiseVBlank` also delivers class 0 and X4 does not leave I_MASK bit 0 masked. The framework's own comment on that function says a title that owns vblank natively sees no change — so this is a title/framework contract gap, recorded in issue #28, not fixed there.
+- toolchain note: Ghidra 12.0.4's `MIPS:BE:32:default` decodes this image INCORRECTLY, measured: the program memory holds `0xD8FFBD27` at `0x80021858` (which is `addiu $sp,$sp,-0x28`) and Ghidra renders it as `ldc2 ra,-0x42d9(a3)`, with `lui` rendered as `bne` at the next address. Setting the `RELP` context register to 0 or 1 does not change it, and the language's `mips32.pspec` defaults `RELP=1` ("mips16e"). Decompilation of this image is therefore not available from that build; every disassembly quoted in this repository comes from `llvm-objdump` over `scratch/ghidra_import/x4_text.bin` and was checked word-by-word against the raw executable bytes.
 
 ## overlays
 

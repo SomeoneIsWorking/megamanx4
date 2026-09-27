@@ -216,20 +216,48 @@ archive CD requests 113 and 51 complete, and the display-mode init's own `GP1(08
 switch and its `VSync(-1)` at `0x800E68F4` are both passed. The `[wide]` change log's last line is
 `render_width=428` (printed on change only, so the tail IS the steady state).
 
-**And the post-movie picture is still not a gameplay picture, so the pair still cannot be judged.**
-Every post-movie checkpoint measured — 13,500 / 15,000 / 17,000 / 19,900 — is byte-identical and one
-flat colour, RGB(8,8,16): 572,166/924,480 (61.89%) "non-black" in the 1284x720 wide sink, of which
-233,280 pixels are the literal-black wide margins; 686,169/691,200 (99.27%) in the 960x720 4:3 sink,
-because (8,8,16) is not (0,0,0). `widescreen_pair.py` therefore REFUSES, and its reason is the
-finding: both 162-column margins are `0.0% non-black, 1 colours, 161/161 repeated columns` — NOT SCENE.
-The guest is also not animating: it waits at `0x80021858`, which writes DPCR and walks a 6,144-byte
-DMA chain at `0x80173CA0` polling the flag byte `0x801721D7`. That is issue 0028.
+**And the post-movie picture is still not a gameplay picture, so the pair still cannot be judged —
+but the reason is now a different, measured one, and the previous reason was wrong.** Issue 0028's
+earlier reading ("the guest waits at `0x80021858`, which writes DPCR and walks a 6,144-byte DMA chain
+at `0x80173CA0` polling the flag byte `0x801721D7`") is **retired as factually wrong**:
+`0x80021858` is the decomp's `update_misc_objects`, its walk cursor is **scratchpad `0x1F800064`**
+(`lui $1,0x1f80` is 0x1F800000, not 0x1F801000), `0x80173CA0` is `misc_objects` — 96 records of 0x60
+bytes, `size:0x1800` in the decomp — and `0x801721D7` is `engine_obj_17`, a guest struct field with
+four guest store sites and no product writer.
+
+What is measured instead: the guest **parks**, and it parks in its own state machine at game state 1 /
+sub-state 2 (`game_info` `0x80173C70` = `0x00000201`, byte-identical at presents 15,006 / 20,023 /
+23,218). Sub-state 2 is `0x8001DDB0`, which returns immediately unless `[0x80173C84] == 2`, and that
+byte is raised in exactly one place (`0x80016BB8`) behind a `CdControl(0x1B, 0, $16)` that must be
+**accepted** while the CD stream from `0x800127C8`'s per-iteration `CD_cw(0x1B, 0x7F, 0xFF000000)` is
+still running. The CD path is alive (129,513 register accesses in 14,000 presents, `CdSync` status
+0x19, data-ready `0x800E7944`, CD IRQ `0xE0`/`0xE1`) and never completes. **The host must complete the
+guest's streaming `CD_cw(0x1B)` read**, which is a modelling gap in the CD owner, not a flag to raise.
+
+Motion, measured on CONSECUTIVE presents with denominators by the new
+`tools/probe_post_movie_motion.py`: every post-movie frame is **2 distinct colours** (`#080810`,
+`#000000`), and every consecutive pair **DIFFERS** by 2,394/924,480 pixels (0.259% wide) inside a
+**798×3 band at y=717**, mean |delta| 10.67/255. So the earlier "byte-identical across four
+checkpoints" reading is falsified — the picture is not frozen — but the guest still **does not animate
+a scene**: it submits 2 prims per frame (a full-screen black `GP0(0x60)` rect and a full-screen
+`GP0(0x28)` Gouraud triangle), and `misc_objects` is 1/96 populated. `widescreen_pair.py` therefore
+still REFUSES with the same two `NOT SCENE` margins. Steady-state `render_width` is **428** on the 16:9
+leg and **320** on the 4:3 leg, and on the wide leg every `render_width` transition is 1:1 correlated
+(within 1–13 ms) with the guest's own `GP1(08)` display-depth switch — the guest's last act in the run
+is to leave 24-bit mode, so the tail is 428 and the plan is a re-latch from the guest's display mode,
+not a half-duty latch.
+
+One further defect was found and is recorded in issue 0028: **the guest's display-field clock runs at
+2× the presented cadence** (8/8 `step 1` calls advanced `0x8011DC50` by exactly 2; a 200-present run
+emits exactly 200 `deliverField` calls, so the extra increment arrives from the framework's
+`Timing::raiseVBlank` path, which X4 does not opt out of). It is not established as the cause of the
+empty object list and is reported rather than guessed at.
 
 So: the projection owner and the seven widened culling owners are implemented, their 4:3 identity is
-pinned, `render_width=428` now persists past the movie, and the seven owners still have **no product
-evidence** — not a negative result, an absent measurement. Their first product evidence requires a
-post-movie frame with scene in it, which is issue 0028. The same shape holds for Tomba! 1, whose only
-present also lands inside its STR movie.
+pinned, `render_width=428` is the steady state on the wide leg, and the seven owners still have **no
+product evidence** — not a negative result, an absent measurement. Their first product evidence
+requires a post-movie frame with scene in it, which is issue 0028. The same shape holds for Tomba! 1,
+whose only present also lands inside its STR movie.
 
 <details>
 <summary>The earlier 600-field reading, kept because it explains the shape of the gap</summary>
@@ -277,3 +305,41 @@ Evidence: the Linux x86_64 asset-free product composition gate passed on main co
 `4cbdfd3e75ed87e9166d1a2711d270f3a8a2d320` in
 [run 33960101702](https://github.com/SomeoneIsWorking/megamanx4/actions/runs/33960101702).
 This verifies composition only; gameplay and unsupported host gaps remain as recorded above.
+
+## The tracked `psxport_settings.ini` `aspect` key is INERT for this title — read this before trusting it
+
+Measured 2026-09-27 by reading the title, not by inference: **nothing under `game/` or `titles/`
+references the ini's `aspect` key at all.** This title's presentation aspect comes from exactly one
+place, `game/core/widescreen_controller.cpp`:
+
+```cpp
+PresentationAspect WidescreenPolicy::presentationAspect(const Core &core) {
+  ...
+  return enh(cv_widescreen) ? PresentationAspect::Wide16x9 : PresentationAspect::Standard4x3;
+}
+```
+
+and `cv_widescreen` is `PSXPORT_X4_WIDESCREEN`, declared in `game/core/enhancements.cpp` and
+**defaulting to `true`**. So Mega Man X4's widescreen is on by default through its own CVar, and the
+ini key can neither enable nor disable it.
+
+**This matters because the value looks authoritative and is not.** `aspect=0` is `ASPECT_4_3` and
+`aspect=3` is `ASPECT_AUTO`, and `ASPECT_AUTO` resolves to the SINK's aspect — the trap that made
+Spyro 1's shipping build silently 4:3 while every measurement said 16:9. A reader who opens this ini,
+sees `aspect=0`, and concludes "Mega Man X4 is not widescreen" would be wrong; a reader who changes it to
+`1` or `3` would change nothing at all. Both values are inert here, and this file is left at the value
+it was verified at rather than edited to look intentional.
+
+The framework side is already correct and needs nothing: `classifyWide` takes BOTH the host `aspect`
+and the title's own `guestAspect` from `GuestWidescreenProjection::presentationAspect` (see
+`runtime/psx/picture_announce.h`), specifically so that a title which widens through its own projection
+is not reported as "nobody asked". Mega Man X4's `[wide]` lines therefore reflect `PSXPORT_X4_WIDESCREEN`,
+not the ini — the diagnostic reads the right source even though the ini beside it is inert.
+
+The comparative pair in `tools/probe_post_movie_motion.py` sets the same knob explicitly for this
+reason: `LEG_NARROW = ("0", "960x720")`, `LEG_WIDE = ("1", "1284x720")`, and `1284 / 960 = 4/3` exactly.
+
+**STILL OUTSTANDING, and not claimed here:** that Mega Man X4's 16:9 leg renders a wider picture with
+real scene content rather than a stretched or cropped one, measured on both legs of that pair. That
+needs a product run, and the one product slot was held by the Spyro 1 level-dispatch investigation for
+this session, so no leg was run and no widescreen claim is made for this title.

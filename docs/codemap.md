@@ -87,3 +87,5 @@ enters psxport.
 | Co-op state and policy | new cohesive title modules composed by `X4Runtime`, not the renderer or psxport |
 | Framework-generic behavior | `external/psxport` (the shared workspace checkout); no per-game framework copy |
 | AGPL-derived X4 implementation | this repository only; never psxport |
+| A post-movie motion / picture measurement | `tools/probe_post_movie_motion.py` — it launches each widescreen leg in its own process and reports per-frame colours plus frame-to-frame difference; the frame driver never answers this |
+| A guest disassembly or address reading | `llvm-objdump` over the text bytes `tools/probe_elfwrap.py` extracts, plus `external/mmx4/config/symbols.us.txt` for names. **Not Ghidra**: its `MIPS:BE:32:default` sleigh decodes this image wrong (measured in `docs/re-frontier.md` RE-02), so an instrument built on it would render `addiu` as `ldc2` |

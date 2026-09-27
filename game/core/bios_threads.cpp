@@ -25,15 +25,34 @@ namespace {
 //   * the movie path, which is the one that works, needed 2: retail `DecDCTvlc` (0x800ED574) measures
 //     610,746 cycles = 1.082 fields, and the movie's own task ended a turn on a field boundary in
 //     11,860 of its 13,128 turns. So the bound is nowhere near a field wait.
-//   * the POST-MOVIE path needs more than 8, and the place it waits is not a loop: 0x80021858 writes
-//     DPCR (0x1F801064) and then walks a 6,144-byte DMA chain at 0x80173CA0, polling the guest flag
-//     byte 0x801721D7. That is the guest waiting for a DMA completion the host has not delivered, so
-//     its turns legitimately do not end while it waits. At 8 the bound fired at display field ~13,121
-//     and hid the whole post-movie phase; at 512 the same wait ran to display field 47,762 before the
-//     line printed.
+//   * the POST-MOVIE path needs more than 8. At 8 the bound fired at display field ~13,121 and hid
+//     the whole post-movie phase; at 512 the same task runs to display field 47,762 before the line
+//     prints, which is the measured end of every run at this bound.
 //
-// 512 is therefore "long enough that reporting it means something happened", not "long enough". The
-// defect this line REPORTS is the undelivered DMA completion above; see docs/issues/0028.
+// 512 is therefore "long enough that reporting it means something happened", not "long enough".
+//
+// WHAT THE POST-MOVIE TURN IS DOING, measured 2026-09-27, because the previous version of this
+// comment asserted a mechanism the image does not contain, now retired (see docs/issues/0028). The
+// task is NOT parked in a wait: it burns exactly one host turn of guest CPU per turn and its
+// budget-exhaustion PC keeps moving, which is the signature of work rather than of a wait.
+// Histogrammed over a 16,000-present run (tools/probe_post_movie_motion.py and scratch/motion/), the
+// resume PC is:
+//     turns 1..1,200       inside `DecDCTvlc` 0x800ED574..0x800ED8D8 — the stage's MDEC decode
+//     turns 1,200..1,765   the object-update set 0x800216EC / 0x80021858 / 0x80023F7C..0x80027704
+// and 0x80021858 is `update_misc_objects` in the matching decomp's config/symbols.us.txt. Its walk
+// cursor is SCRATCHPAD 0x1F800064 — `lui $1,0x1f80` builds 0x1F800000, so the `sw`/`lw 0x64($1)` pair
+// is scratchpad+0x64, NOT a peripheral at 0x1F801064 — and it walks `misc_objects` 0x80173CA0, which
+// is the decomp's own `misc_objects = 0x80173CA0; // size:0x1800`: 96 records of 0x60 bytes, each
+// dispatched through the handler table at 0x800F2980. No DMA is involved.
+// The byte it tests, 0x801721D7, is `engine_obj_17`: offset 0x17 of the engine-object struct the
+// decomp names `engine_obj = 0x801721C0; // size:0x64`. It has FOUR store sites in the whole text
+// image (0x800311B8, 0x80035B20, 0x80035BCC, 0x800C03F8), one load site (0x80021898), and no code in
+// this product writes it. The host neither owns that byte nor is missing it.
+//
+// So the defect this line REPORTS is NOT an undelivered DMA completion. It is that the post-movie
+// guest stops ending its turns at a field boundary at all — turn 11,860 is the last that does — while
+// the game's own state machine sits at game state 1 / sub-state 2 (0x80173C70 = 0x00000201) waiting
+// for a CD read transaction to finish. See docs/issues/0028.
 constexpr uint32_t kMaxTurnFields = 512u;
 // The measured libetc VBlank counter, so a report of "how far did it get" is a guest address and a
 // field number rather than a PC alone. game/core/vsync_sync.h owns the boundary this word counts.
