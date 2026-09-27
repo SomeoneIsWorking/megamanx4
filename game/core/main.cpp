@@ -5,6 +5,7 @@
 #include "cfg.h"
 #include "command_line.h"
 #include "core.h"
+#include "dbg_server.h" // debug_server_live + DbgServer::attach — the live control channel
 #include "disc.h"
 #include "enhancements.h"
 #include "fs_util.h"
@@ -85,6 +86,17 @@ int main(int argc, char **argv) {
   c->r[5] = 0; // a0/a1 as the BIOS leaves them
 
   c->runtime->registerOverrides(*game);
+  // PSXPORT_DEBUG_SERVER: the live control channel, attached BEFORE the frame loop so a client-driven
+  // run is uncapped and a `pause` can be honoured per field. This title had NO live endpoint at all —
+  // `grep -rn dbg_server game/` returned nothing — so it could not be driven, observed or captured over
+  // the channel, which is the only way this workspace accepts evidence about a running product. The
+  // framework's own boot path calls `dbg_server.start` for the same reason; a title-owned spine has to
+  // attach it itself, which is what `attach` is for (it also answers the frame cap).
+  const int clientFrameCap = game->dbg_server.attach(c, cfg_int("PSXPORT_NATIVE_FRAMES", 0));
+  lucent::info("boot",
+               "live control channel {} (client frame cap {})",
+               debug_server_live() ? "attached" : "not requested",
+               clientFrameCap);
   native_boot_run(c);
   // The frame loop has returned, so this is the title's run-end path. The guest-call census lives
   // with the owner that made the calls: it reports how many completed, how many had to be RESUMED
