@@ -13,6 +13,7 @@
 #include "guest_execution.h"
 #include "hw_bind.h"
 #include "psx_exe_image.h"
+#include "store_observe.h" // store_observe_attach — PSXPORT_STORE_OBSERVE on a title-owned spine
 #include "x4_runtime.h"
 #include <stdio.h>
 
@@ -93,6 +94,13 @@ int main(int argc, char **argv) {
   // framework's own boot path calls `dbg_server.start` for the same reason; a title-owned spine has to
   // attach it itself, which is what `attach` is for (it also answers the frame cap).
   const int clientFrameCap = game->dbg_server.attach(c, cfg_int("PSXPORT_NATIVE_FRAMES", 0));
+  // PSXPORT_STORE_OBSERVE: this is a TITLE-OWNED spine, so it never reaches the framework's
+  // `native_boot_run` line that arms the dynarec store observer, and would be silently unarmed while
+  // the boot audit printed the variable as `[env]`. Measured on Spyro 1, where `nm -C` showed the
+  // symbol linked in and the audit showed the variable set, yet a run with
+  // `PSXPORT_STORE_OBSERVE=nothex` printed not one line — not even the parse refusal that a bad token
+  // emits unconditionally. Same class of opt-in diagnostic as the live endpoint, same spine.
+  store_observe_attach(*c);
   lucent::info("boot",
                "live control channel {} (client frame cap {})",
                debug_server_live() ? "attached" : "not requested",
