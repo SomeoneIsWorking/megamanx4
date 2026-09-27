@@ -27,6 +27,7 @@
 #include "execution_control.h"
 #include "game.h"
 #include "guest_execution.h"
+#include "input_path.h"
 #include "snapshot.h"
 #include <cstdlib>
 #include <lucent/log.h>
@@ -116,7 +117,11 @@ void deliverField(Core &core) {
   // fills the InitPAD packet buffers (RE-06 measured them: 0x80166D68 / 0x8012F46C, capacity 0x22),
   // and the SPU mixes exactly one field of samples in real time. The native X4FrameDriver owns this
   // seam and calls it once before the preserved retail frame body.
+  // The input-path observer brackets the pad service, so every stage of an input edge is sampled
+  // at the resolution the edge happens at. It reads and never writes: see game/core/input_path.h.
+  input_path::observeField(*c, "pre-service");
   c->game->pad.serviceFrame();
+  input_path::observeField(*c, "post-service");
   c->game->spu_audio.frame();
 
   // The neutral presenter owns capture, present, pacing and ledger rotation without constructing

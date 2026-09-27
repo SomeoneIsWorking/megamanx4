@@ -19,6 +19,7 @@ set(SEAM_SRC
   game/core/gpu_timeout.cpp
   game/core/guest_execution.cpp
   game/core/enhancements.cpp
+  game/core/input_path.cpp
   game/core/main.cpp
   game/core/movie_cleanup.cpp
   game/core/music_cd.cpp
@@ -150,6 +151,7 @@ if(BUILD_TESTING)
     ${CMAKE_SOURCE_DIR}/game/core/cull_overrides.cpp
     ${CMAKE_SOURCE_DIR}/game/core/visibility_cull.cpp
     ${CMAKE_SOURCE_DIR}/game/core/vsync_sync.cpp
+    ${CMAKE_SOURCE_DIR}/game/core/input_path.cpp
     ${CMAKE_SOURCE_DIR}/game/core/widescreen_controller.cpp
     ${CMAKE_SOURCE_DIR}/game/core/x4_context.cpp
     ${CMAKE_SOURCE_DIR}/game/core/x4_frame_driver.cpp
@@ -206,6 +208,7 @@ if(BUILD_TESTING)
     ${CMAKE_SOURCE_DIR}/game/core/x4_context.cpp
     ${CMAKE_SOURCE_DIR}/game/core/x4_frame_driver.cpp
     ${CMAKE_SOURCE_DIR}/game/core/vsync_sync.cpp
+    ${CMAKE_SOURCE_DIR}/game/core/input_path.cpp
     ${CMAKE_SOURCE_DIR}/tests/test_x4_frame_driver.cpp
   )
   target_include_directories(mmx4_frame_driver_test PRIVATE game game/core)
@@ -278,6 +281,7 @@ if(BUILD_TESTING)
     ${CMAKE_SOURCE_DIR}/game/core/stream_field.cpp
     ${CMAKE_SOURCE_DIR}/game/core/stream_startup.cpp
     ${CMAKE_SOURCE_DIR}/game/core/vsync_sync.cpp
+    ${CMAKE_SOURCE_DIR}/game/core/input_path.cpp
     ${CMAKE_SOURCE_DIR}/game/core/x4_context.cpp
     ${CMAKE_SOURCE_DIR}/tests/test_x4_stream_startup.cpp
   )

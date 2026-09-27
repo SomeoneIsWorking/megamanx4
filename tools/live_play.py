@@ -87,6 +87,15 @@ SHOT_DIR = OUT / "shots"
 # call, so a run without the channel can observe the state word but NOT the owner being reached — and
 # "the state word did not move" and "the owner was never offered the leaf" are different findings.
 MUSIC_CD_CHANNEL = "x4-music-cd"
+# The per-field, read-only input-path observer in game/core/input_path.cpp. It prints one line per
+# DELIVERED FIELD (two: one either side of Pad::serviceFrame), naming every stage of the path from
+# the REPL mask through the framework's BIOS-pad gate to the guest's own libpad packet buffer. Without
+# it this tool can only read the LAST stage from outside, which is a symptom and not a defect.
+#
+# It is opt-in (`--input-path-trace`) because it is O(fields) lines, and a run that leaves it off must
+# SAY it is off: a report with no observer lines then means "not measured", which is the difference
+# between a broken input path and an unasked question.
+INPUT_PATH_CHANNEL = "x4-input-path"
 SERVER_TIMEOUT_PREFIX = "(debug server:"
 # The libpad packet's button halfword when nothing is pressed. ACTIVE LOW, so an untouched pad reads
 # 0xFFFF and a held button is that word with the button's bit CLEARED. This is the value the tap
@@ -138,6 +147,226 @@ def scene_prims(reply: str) -> tuple[int, str]:
 
 class Refusal(SystemExit):
     """A run that cannot honestly report the thing it was asked to report."""
+
+
+# ── the per-field input-path observer, parsed ────────────────────────────────────────────────
+#
+# game/core/input_path.cpp prints one line per delivered field, one either side of
+# Pad::serviceFrame, in exactly this shape. The PRE-service line is not a duplicate: the tap
+# countdown is decremented INSIDE serviceFrame, so the pre-service `tap_n` is the only reading of
+# "did this field consume a tap count", and the post-service `buttons` is this field's resolved
+# mask. Pairing the two is what makes a per-field verdict correct instead of off by one — reading
+# only the post-service line would call the field that consumed the LAST count an idle field and
+# silently drop the final frame of every edge.
+#
+# Every stage is compared against the value the PREVIOUS stage produced, so the verdict names the
+# FIRST stage that disagrees rather than the first stage that looks wrong. A stage that cannot be
+# evaluated is reported as NOT COMPARED, never folded into "correct".
+#
+# Deliberately NOT anchored at the start of the line: lucent prefixes each record with its channel
+# name, and the reader is selected by the channel being present in the line. Anchoring would make
+# every real record a "skipped" line, which is the silent-drop failure this parser counts against.
+# SELECT BY THE LOG'S CHANNEL TAG, not by the channel name appearing anywhere in the line. The first
+# reader used a substring test, and it counted the framework's own config echo — two lines of
+# "[cfg] active: PSXPORT_DEBUG=x4-music-cd,x4-input-path ..." — as observer records it could not parse,
+# which put a phantom "2 line(s) skipped" into a report about the input path. A channel tag is a
+# bracketed field the logger owns, so this matches records and not prose about them.
+INPUT_PATH_TAG = re.compile(rf"(?:^|\]\s)\[{re.escape(INPUT_PATH_CHANNEL)}\]\s")
+
+INPUT_PATH_LINE = re.compile(
+    r"(?P<phase>pre-service|post-service): "
+    r"vbl=(?P<vbl>\d+) "
+    r"repl\(on=(?P<on>\w+) tap=0x(?P<tap>[0-9A-Fa-f]{4}) tap_n=(?P<tap_n>-?\d+) "
+    r"hold=0x(?P<hold>[0-9A-Fa-f]{4})\) "
+    r"resolved\(buttons=0x(?P<buttons>[0-9A-Fa-f]{4})\) "
+    r"gate\(initialized=(?P<init>\w+) irq_started=(?P<irq>\w+) shouldService=(?P<gate>\w+)\) "
+    r"guest\(slot0_bytes=0x(?P<slot0_bytes>[0-9A-Fa-f]{8}) "
+    r"slot0_buttons=0x(?P<slot0_buttons>[0-9A-Fa-f]{4}) "
+    r"slot1_bytes=0x(?P<slot1_bytes>[0-9A-Fa-f]{8}) "
+    r"slot1_buttons=0x(?P<slot1_buttons>[0-9A-Fa-f]{4}) "
+    r"held=0x(?P<held>[0-9A-Fa-f]{4}) pressed=0x(?P<pressed>[0-9A-Fa-f]{4})\)$"
+)
+
+# The stages of the path, in the order the edge travels them, as the PER-FIELD observer can compare
+# them. `endpoint` is NOT here: it is measured by this tool from the reply to `tap`, once per
+# command, and has no per-field reading. Folding it into this list would make it compare `False`
+# against every field (there is no per-field value to compare) and report it as the broken stage of
+# every run, which is how a reader that cannot answer becomes a reader that always answers wrongly.
+FIELD_STAGES = ("repl", "resolved", "gate", "guest")
+# What a break at the FIRST per-field stage means for the stage before it: the endpoint accepted the
+# command and the mask existed, so `endpoint` is genuinely the last correct stage in that case.
+STAGE_BEFORE = {"repl": "endpoint", "resolved": "repl", "gate": "resolved", "guest": "gate"}
+
+
+def truthy(token: str) -> bool:
+    """A boolean as the product PRINTS it, which is not one spelling.
+
+    The observer's line mixes two host types, and the product formats each by its own type: `Pad`/`Hle`
+    members that are declared `int` print as `1`/`0`, and the ones declared `bool` print as
+    `true`/`false`. Reading either as the other's spelling is a reader that silently answers "no" for
+    every true value, and it is exactly the failure this function exists to prevent: the first live
+    reading of this observer was compared with `== "true"` against a `repl(on=1)` field, every edge
+    field came back "broken at repl", and the run published "the last stage correct is endpoint" for
+    a product that had in fact written the tap into the guest's own packet buffer. The fixture in
+    `--selftest` is pinned to the SHIPPING spelling of each field, and both spellings are exercised,
+    so a change to either the formatter or the parser is caught here rather than in a run.
+    """
+    return token.strip().lower() in {"1", "true"}
+
+
+def parse_input_path_counts(log: Path) -> tuple[list[dict], int, int]:
+    """Every observer line, how many did not match, and how many disagreed with themselves.
+
+    A line that does not match is counted, never dropped in silence: a log format change would
+    otherwise show up as "the observer reported nothing", which is the same shape as "the input path
+    produced no edge" — the exact confusion this whole measurement exists to remove.
+    """
+    parsed: list[dict] = []
+    skipped = 0
+    refused = 0
+    if not log.is_file():
+        # An absent LOG is not an empty answer. It is reported as a log this reader could not open, so
+        # a caller cannot tell "the run wrote no observer lines" from "there was no log to read" by
+        # looking at a zero — the report distinguishes them by the channel state it also carries.
+        return parsed, skipped, refused
+    for line in log.read_text(errors="replace").splitlines():
+        if not INPUT_PATH_TAG.search(line):
+            continue
+        match = INPUT_PATH_LINE.search(line.strip())
+        if not match:
+            skipped += 1
+            continue
+        row = match.groupdict()
+        # The line carries the packet's four bytes AND the button halfword read back out of them.
+        # Slice the bytes here and compare: if the two disagree the line is not a packet record this
+        # reader can interpret, and a reader that picks one of them would be choosing a byte order
+        # rather than measuring one. That disagreement is counted as a line this reader REFUSED, and
+        # it is the exact error the frontier probe shipped in both directions.
+        bytes0 = int(row["slot0_bytes"], 16)
+        sliced = (bytes0 >> 16) & 0xFFFF
+        if sliced != int(row["slot0_buttons"], 16):
+            refused += 1
+            continue
+        parsed.append({
+            "phase": row["phase"],
+            "vbl": int(row["vbl"]),
+            "on": truthy(row["on"]),
+            "tap": int(row["tap"], 16),
+            "tap_n": int(row["tap_n"]),
+            "hold": int(row["hold"], 16),
+            "buttons": int(row["buttons"], 16),
+            "initialized": truthy(row["init"]),
+            "irq_started": truthy(row["irq"]),
+            "gate": truthy(row["gate"]),
+            "slot0_bytes": bytes0,
+            "slot0_buttons": int(row["slot0_buttons"], 16),
+            "slot1_buttons": int(row["slot1_buttons"], 16),
+            "held": int(row["held"], 16),
+            "pressed": int(row["pressed"], 16),
+        })
+    return parsed, skipped, refused
+
+
+def parse_input_path_log(log: Path) -> tuple[list[dict], int]:
+    """Every observer line, and how many lines this reader would not or could not use."""
+    parsed, skipped, refused = parse_input_path_counts(log)
+    return parsed, skipped + refused
+
+
+def input_path_verdict(rows: list[dict], endpoint_taps: int) -> dict:
+    """Where the edge died: the LAST stage at which it was still correct, over every field of every
+    edge the observer saw.
+
+    Pairing is by consecutive pre/post lines, and an UNPAIRED line is counted and reported rather
+    than treated as a passing field — a half-printed run must not read as a delivered edge.
+
+    For each field whose PRE-service `tap_n` was above zero (that is the field the tap countdown
+    decided), the expected mask for that field is `repl_tap`, and the stages are compared in order:
+
+        repl      the drive was armed at all (`on`) and carried a mask that is not the idle word
+        resolved  post-service `buttons` == the mask the pre-service line says this field used
+        gate      the framework's own BIOS-pad gate says the write is permitted
+        guest     the guest's slot-0 packet button halfword == the resolved mask
+
+    A field whose LAST stage is `guest` is an edge that reached guest memory. A field that never
+    gets there reports the first stage that disagreed, and the run's answer is the EARLIEST such
+    stage across all edge fields — the first broken link is the one that explains the rest.
+    """
+    fields: list[dict] = []
+    unpaired = 0
+    pending: dict | None = None
+    for row in rows:
+        if row["phase"] == "pre-service":
+            if pending is not None:
+                unpaired += 1
+            pending = row
+            continue
+        if pending is None:
+            unpaired += 1
+            continue
+        pre, post = pending, row
+        pending = None
+        if pre["tap_n"] > 0:
+            fields.append({"pre": pre, "post": post, "expected": pre["tap"], "stages": {}})
+    # A run that stopped between the two halves of a field left a pre-service line with no partner.
+    # That is a HOLE, and a hole that was silently dropped is a field nobody compared — so it is
+    # counted here rather than forgotten at the end of the loop.
+    if pending is not None:
+        unpaired += 1
+
+    for entry in fields:
+        pre, post, expected = entry["pre"], entry["post"], entry["expected"]
+        stages = entry["stages"]
+        stages["repl"] = bool(pre["on"] and expected != IDLE_ACTIVE_LOW)
+        stages["resolved"] = post["buttons"] == expected
+        stages["gate"] = post["gate"]
+        # The guest's own slot-0 button halfword, taken from the value the observer read back with
+        # mem_r16 at +2 — the guest's own read of the same four bytes, not this tool's slice of them.
+        stages["guest"] = post["slot0_buttons"] == post["buttons"]
+
+    broken_at: str | None = None
+    for stage in FIELD_STAGES:
+        if any(not entry["stages"].get(stage, False) for entry in fields):
+            broken_at = stage
+            break
+    last_correct = None
+    if broken_at is not None:
+        last_correct = STAGE_BEFORE[broken_at]
+
+    delivered = [entry for entry in fields if entry["stages"].get("guest")]
+    # The guest's OWN decoded words across the edge, in the convention the guest itself uses. The
+    # packet word is ACTIVE LOW (idle 0xFFFF, a pressed bit CLEARED); the guest's router converts it
+    # to its own pressed-bit convention, so a non-zero `pressed` here is the guest acknowledging an
+    # edge, and it is the deepest level this surface can reach without asking the guest a question.
+    pressed_values = sorted({entry["post"]["pressed"] for entry in fields})
+    held_values = sorted({entry["post"]["held"] for entry in fields})
+    return {
+        "edge_fields": len(fields),
+        "unpaired_lines": unpaired,
+        "endpoint_taps": endpoint_taps,
+        "broken_at": broken_at,
+        "last_correct_stage": last_correct,
+        "delivered_fields": len(delivered),
+        "gate_open_fields": sum(1 for entry in fields if entry["post"]["gate"]),
+        "initialized": sorted({entry["post"]["initialized"] for entry in fields}),
+        "irq_started": sorted({entry["post"]["irq_started"] for entry in fields}),
+        "guest_pressed_values": pressed_values,
+        "guest_held_values": held_values,
+        "edge_field_span": ([fields[0]["pre"]["vbl"], fields[-1]["post"]["vbl"]] if fields else None),
+        "sample": [
+            {
+                "vbl": entry["pre"]["vbl"],
+                "expected": f"0x{entry['expected']:04X}",
+                "resolved": f"0x{entry['post']['buttons']:04X}",
+                "gate": entry["post"]["gate"],
+                "guest_packet_bytes": f"0x{entry['post']['slot0_bytes']:08X}",
+                "guest_packet": f"0x{entry['post']['slot0_buttons']:04X}",
+                "guest_held": f"0x{entry['post']['held']:04X}",
+                "guest_pressed": f"0x{entry['post']['pressed']:04X}",
+            }
+            for entry in fields[:4]
+        ],
+    }
 
 
 def ask(client: LiveClient, line: str, *, retries: int = 3) -> str:
@@ -442,7 +671,8 @@ def running_instances() -> list[str]:
             if "megamanx4_port" in line and "ps -eo" not in line]
 
 
-def launch(port: int, sink: str, wide: str, log: Path, wav: Path) -> subprocess.Popen:
+def launch(port: int, sink: str, wide: str, log: Path, wav: Path,
+           input_path_trace: bool = False) -> subprocess.Popen:
     """The product: headless, silent, unpaced, live endpoint on this run's own port.
 
     `agent_environment` is the framework's one policy and it REFUSES without a named settings file,
@@ -455,7 +685,9 @@ def launch(port: int, sink: str, wide: str, log: Path, wav: Path) -> subprocess.
       (native_boot.cpp), which is what lets a driven run last as long as it needs.
     * PSXPORT_DEBUG carries the channel names, and this run's is the `x4-music-cd` channel the falsifier
       needs. The endpoint's `debug` command could set it mid-run, which would leave the movie phase
-      unobserved by the very channel the falsifier reads.
+      unobserved by the very channel the falsifier reads. `--input-path-trace` adds the title's
+      per-field input-path observer channel to the same list, so the stages between the endpoint and
+      the guest's own packet buffer are sampled once per DELIVERED FIELD rather than once per poll.
     * PSXPORT_PRESENT_SINK fixes the readback size. Headless has no window, so without it there is no
       drawable to present into; 1284x720 is the 4/3 multiple of this title's measured 428-wide widescreen
       projection (960x720 is the same ratio on the 4:3 leg), so both legs are 4:3-scaled.
@@ -471,7 +703,8 @@ def launch(port: int, sink: str, wide: str, log: Path, wav: Path) -> subprocess.
     environment.pop("PSXPORT_NATIVE_FRAMES", None)
     environment.update({
         "PSXPORT_DEBUG_SERVER": str(port),
-        "PSXPORT_DEBUG": MUSIC_CD_CHANNEL,
+        "PSXPORT_DEBUG": (f"{MUSIC_CD_CHANNEL},{INPUT_PATH_CHANNEL}" if input_path_trace
+                          else MUSIC_CD_CHANNEL),
         "PSXPORT_PRESENT_SINK": sink,
         "PSXPORT_WAV": str(wav),
         "PSXPORT_X4_WIDESCREEN": wide,
@@ -525,6 +758,19 @@ class Session:
         self.pad_words_seen: dict[str, set[int]] = {}
         self.tap_unwitnessed = 0
         self.tap_witnessed = 0
+        # Whether the run asked for the per-field input-path observer. Recorded here, not inferred
+        # from the log, so a run whose channel was off cannot be read as a run that measured nothing
+        # and found nothing wrong.
+        self.input_path_trace = False
+        # The tap length this run issues, and what one endpoint read costs in presented frames. Both
+        # are denominators: a read that costs more presented frames than a tap spans fields cannot
+        # witness that tap, and the report has to be able to say so.
+        self.tap_fields = 4
+        self.read_cost_samples = 0
+        self.read_cost_frames = 0
+        # Read-back samples actually taken, so the report can divide the commands it issued by the
+        # samples it drew rather than implying one sample per command.
+        self.tap_probes = 0
         # What the product said about ITSELF, sampled the moment the endpoint answered and kept. A run
         # whose subject then dies still has these; asking again at the end would find a closed socket,
         # and a driver that reports nothing because its subject crashed has thrown away the census it
@@ -621,18 +867,33 @@ class Session:
         And then it is WITNESSED, because the alternative is measuring a 4-frame edge with a poll that
         samples every ~100 presented frames and reporting "the pad never changed" — which is what the
         first three runs of this tool did, and it is indistinguishable from a tap that was never
-        delivered. The endpoint services one command per presented frame, so immediately after issuing
-        the tap this reads the guest's own pad words back, once per frame, for longer than the edge
-        lasts, and records every DISTINCT value it saw. A tap that is delivered must show up in
-        `packet`; a tap that is delivered AND decoded must also show up in `pressed`.
+        delivered. Immediately after issuing the tap this reads the guest's own pad words back and
+        records every DISTINCT value it saw. A tap that is delivered must show up in `packet`; a tap
+        that is delivered AND decoded must also show up in `pressed`.
 
-        This costs `frames + 6` round trips, which at one command per frame is frames of real
-        presented frames — the same frames the game is playing."""
+        WHAT IT NOW ALSO MEASURES is what one of those reads COSTS. "The endpoint services one command
+        per presented frame" is an upper bound on how OFTEN it is served, not a lower bound on how long
+        a read takes: MEASURED 2026-09-27 on this title, 16 packet reads cost 287 presented frames, so
+        one read spans ~18 fields and a 4-field tap is over before the first read can land. That is why
+        the `INPUT VERDICT` this tool used to print was not a conclusion its own surface could support,
+        and why `measure_read_cost` now reports the ratio and the delivery verdict comes from the
+        per-field observer instead.
+
+        This costs `frames + 6` round trips, which is presented frames of real presented frames — the
+        same frames the game is playing."""
         ask(self.client, f"tap {button} {frames}")
         self.answers += 1
         self.pad_commands += 1
         seen: dict[str, set[int]] = {"packet": set(), "held": set(), "pressed": set()}
-        for _ in range(frames + 6):
+        # The read-back does NOT have to span the edge — it has to LAND IN it. One read costs ~13
+        # presented frames on this title, so a 40-field edge needs about three reads to be sampled and
+        # a `frames + 6` probe loop would spend 46 of them — which is more presented frames than the
+        # whole route budget, and in the 2026-09-28 measurement it walked the run straight into the
+        # stage-load fault. So the probe count is bounded and the bound is a number, not a formula on
+        # the edge: enough samples to land inside an edge several reads wide, and counted either way.
+        probes = min(frames + 2, 8)
+        self.tap_probes += probes
+        for _ in range(probes):
             probe = self.verify_tap_landed()
             for key in seen:
                 if probe.get(key) is not None:
@@ -643,7 +904,8 @@ class Session:
         self.tap_log.append(
             f"{button} x{frames} at presented frame {self.frames[-1] if self.frames else '?'}"
             f" with unkD={screen.accept_input} game_info={screen.game_state}/{screen.sub_state};"
-            f" over the {frames + 6} frames the edge spanned, the guest's own words took these values:"
+            f" over {probes} read-back sample(s) of the {frames}-field edge, the guest's own words "
+            f"took these values:"
             f" packet(active-low)={sorted(seen['packet'])} held={sorted(seen['held'])}"
             f" pressed={sorted(seen['pressed'])}")
         # IDLE, not merely "empty": the packet word is read every frame of the edge, so a set holding
@@ -654,6 +916,33 @@ class Session:
             self.tap_unwitnessed += 1
         else:
             self.tap_witnessed += 1
+
+    def measure_read_cost(self, samples: int = 12) -> float | None:
+        """How many PRESENTED FRAMES one endpoint read costs, or None if it could not be measured.
+
+        This is the denominator the tap witness needs and did not have. The witness reads the guest's
+        own words back over the span of an edge and concludes from what it sees, which is only sound
+        if a read is FINER than the edge. It is not: MEASURED 2026-09-27 on this title, 16 packet
+        reads cost 287 presented frames — 17.9 frames per read — while a 4-field tap spans 4. The
+        read-back therefore samples the edge at roughly a fifth of its own duration and reports "idle"
+        for a tap that was delivered, which is exactly the false negative issue 0030 published.
+
+        So the cost is measured rather than assumed, and the report states whether a read COULD have
+        landed inside the edge it was watching. A witness that cannot say this is a witness whose
+        negative is meaningless.
+        """
+        try:
+            before = frame_of(self.client)
+            for _ in range(samples):
+                read_bytes(self.client, prompts.PAD_BUFFER, 4, tolerate_hole=True)
+            after = frame_of(self.client)
+        except (OSError, Refusal):
+            return None
+        if samples <= 0:
+            return None
+        self.read_cost_samples = samples
+        self.read_cost_frames = after - before
+        return self.read_cost_frames / samples
 
     def verify_tap_landed(self) -> dict:
         """Did the edge reach the guest's own words, and at which of the two levels?
@@ -688,7 +977,34 @@ class Session:
         number rather than an assumption.
 
         The pad words are sampled BEFORE the press as well, so a run that proves the held word never
-        changed has proved the edge did not arrive rather than merely failing to move the player."""
+        changed has proved the edge did not arrive rather than merely failing to move the player.
+
+        A product that dies INSIDE the window is a recorded outcome, not an exception. This window is
+        by far the longest unbroken stretch of endpoint traffic in a run — one `frame` poll per
+        50 ms for the whole hold — and this title's measured 0x26010006 stage-load fault lands at
+        presented field ~1200-2800, which is exactly where a hold that follows a 2000-frame route
+        happens. Measured 2026-09-28: the exception escaped `main`, and the run printed no report at
+        all, losing the census, the legs, the taps and the captures it had already measured."""
+        try:
+            return self._hold_window(buttons, seconds)
+        except (OSError, Refusal) as error:
+            self.stopped = (f"the product stopped answering the endpoint during the hold window "
+                            f"({type(error).__name__}: {str(error).splitlines()[0][:140]})")
+            self.stopped_at_frame = self.frames[-1] if self.frames else None
+            print(f"[live] {self.stopped} after presented frame {self.stopped_at_frame}. The census, "
+                  f"the legs reached, the taps and the captures so far are still reported below, and "
+                  f"this hold window is a SKIP rather than a zero: no held input was ever delivered.")
+            skipped = {"buttons": buttons, "skipped": True, "moved": False, "player_before": {},
+                       "player_after": {}, "seconds": 0.0, "presented_frames": 0,
+                       "pad_before": None, "pad_during": {}, "pad_after": {},
+                       "guest_before": {}, "guest_after": {}}
+            # A skipped window is still a window the run attempted, so it is RECORDED and the report
+            # prints it as a skip. A hold the run never mentions is a hold a reader cannot tell from
+            # one that was never asked for.
+            self.hold_log.append(skipped)
+            return skipped
+
+    def _hold_window(self, buttons: list[str], seconds: float) -> dict:
         before_pad = read_bytes(self.client, prompts.PAD_HELD, prompts.PAD_PROBE_BYTES,
                                 tolerate_hole=True)
         for button in buttons:
@@ -704,10 +1020,19 @@ class Session:
             frame_of(self.client)
         after_guest, _ = guest_execution(self.client)
         after = self.player_view()
-        after_pad = self.verify_tap_landed()
         for button in buttons:
             ask(self.client, f"release {button}")
             self.pad_commands += 1
+        # The post-release sample is taken AFTER A SETTLE, not on the next round trip. The release
+        # commands above are only ACCEPTED at the endpoint; the guest's own router has not run yet,
+        # so a sample taken immediately still reads the held state and the report's "after the
+        # release" would name a moment the guest has not reached. Measured 2026-09-28: the immediate
+        # sample came back `held=0x2000`, identical to the held sample, which reads as "the release
+        # did nothing" and is a property of WHEN the sample was taken rather than of the input path.
+        # A few endpoint reads is a few presented frames of the guest actually running.
+        for _ in range(4):
+            frame_of(self.client)
+        settled = self.verify_tap_landed()
         held = {
             "buttons": buttons,
             "seconds": round(time.monotonic() - started, 2),
@@ -716,7 +1041,7 @@ class Session:
             "player_after": after,
             "pad_before": int.from_bytes(before_pad[0:2], "little") if len(before_pad) >= 2 else None,
             "pad_during": mid_pad,
-            "pad_after": after_pad,
+            "pad_after": settled,
             "guest_before": before_guest.get("guest", {}),
             "guest_after": after_guest.get("guest", {}),
         }
@@ -762,13 +1087,23 @@ class Session:
 
     # ---- the route ------------------------------------------------------------------------------
     def run_route(self, budget_frames: int, budget_seconds: float, poll_seconds: float,
-                  shot_every: int) -> None:
+                  shot_every: int, tap_frames: int = 4) -> None:
         """Poll the census across the whole window, photograph it, and offer a pad edge only where the
         front end's own code reads one. The route has no fixed list of screens to walk: this title's
         post-movie state IS a state machine, and the route is "watch it and answer it when it asks"."""
         print(f"[live] route: watching the front end for up to {budget_frames} presented frames / "
               f"{budget_seconds:.0f}s, censusing every {poll_seconds:.2f}s, photographing every "
-              f"{shot_every or 'no'} frame(s)")
+              f"{shot_every or 'no'} frame(s), tapping over {tap_frames} field(s) per edge")
+        # What one read of the guest's own words costs, measured BEFORE any tap is offered, so the
+        # report can say whether the read-back could have witnessed the edges it is about to watch.
+        cost = self.measure_read_cost()
+        if cost is None:
+            print("[live]   read-back cost: NOT MEASURED (the endpoint did not answer the calibration "
+                  "reads), so no negative from the read-back below carries weight")
+        else:
+            print(f"[live]   read-back cost: {cost:.1f} presented frame(s) per read, against a "
+                  f"{tap_frames}-field tap — a read "
+                  f"{'CAN' if cost <= tap_frames else 'CANNOT'} land inside the edge")
         started = time.monotonic()
         first = frame_of(self.client)
         last_shot_frame = -1
@@ -802,6 +1137,38 @@ class Session:
                           f"({self.timeouts} so far)")
                     continue
                 self.record(screen, frame_after)
+                # EVERYTHING below this line is inside the same guard, deliberately. The guard used to
+                # close right after the census, and the tap witness — which reads the guest's own words
+                # back over the edge's whole span — sat outside it, so a product that died DURING a tap
+                # (this title's measured 0x26010006 stage-load fault, presented field ~1300-3600
+                # depending on the run) raised out of the route and the run reported NOTHING: no census,
+                # no taps, no captures. Measured 2026-09-28. Same class as the census escape the tool
+                # already fixed, one call site away from the fix.
+                key = (screen.game_state, screen.sub_state, screen.machine_state, screen.handshake)
+                if key != previous_key:
+                    settled_since = 0
+                    previous_key = key
+                    if frame_after - last_shot_frame > 200:
+                        shot = self.try_capture(frame_after, screen)
+                        if shot:
+                            last_shot_frame = frame_after
+                else:
+                    settled_since += 1
+                self.check_legs(screen, frame_after)
+                # A pad edge, but only where the front end's own code reads one and only once the
+                # screen has been still for a poll. Both are census decisions; neither is a cadence.
+                if (prompts.wants_start(screen) and settled_since >= 1
+                        and frame_after - last_tap_frame >= 12):
+                    self.tap("start", tap_frames, screen)
+                    last_tap_frame = frame_after
+                    settled_since = 0
+                if shot_every and frame_after - last_shot_frame >= shot_every:
+                    shot = self.try_capture(frame_after, screen)
+                    if shot:
+                        last_shot_frame = frame_after
+                if self.stopped:
+                    break
+                time.sleep(poll_seconds)
             except (OSError, Refusal) as error:
                 # The product is GONE. That is a RESULT, not a reason to abandon the run: the census,
                 # the leg arrivals, the taps and the captures taken up to here are all still real, and
@@ -812,33 +1179,9 @@ class Session:
                                 f"({type(error).__name__}: {str(error).splitlines()[0][:140]})")
                 self.stopped_at_frame = self.frames[-1] if self.frames else None
                 print(f"[live] {self.stopped} after presented frame {self.stopped_at_frame}. The "
-                      f"census, the legs reached and the captures so far are still reported below.")
+                      f"census, the legs reached, the taps and the captures so far are still "
+                      f"reported below.")
                 break
-            key = (screen.game_state, screen.sub_state, screen.machine_state, screen.handshake)
-            if key != previous_key:
-                settled_since = 0
-                previous_key = key
-                if frame_after - last_shot_frame > 200:
-                    shot = self.try_capture(frame_after, screen)
-                    if shot:
-                        last_shot_frame = frame_after
-            else:
-                settled_since += 1
-            self.check_legs(screen, frame_after)
-            # A pad edge, but only where the front end's own code reads one and only once the screen
-            # has been still for a poll. Both are census decisions; neither is a cadence.
-            if (prompts.wants_start(screen) and settled_since >= 1
-                    and frame_after - last_tap_frame >= 12):
-                self.tap("start", 4, screen)
-                last_tap_frame = frame_after
-                settled_since = 0
-            if shot_every and frame_after - last_shot_frame >= shot_every:
-                shot = self.try_capture(frame_after, screen)
-                if shot:
-                    last_shot_frame = frame_after
-            if self.stopped:
-                break
-            time.sleep(poll_seconds)
         # A final photograph, so the last thing this run has is a picture of where it actually was.
         # Guarded like every other late query: if the product died, there is nothing left to photograph
         # and saying so is the honest outcome, where an unguarded call here would throw away the whole
@@ -955,21 +1298,99 @@ def report(session: Session, client: LiveClient, log: Path) -> int:
           "end's own handlers test (the decomp's `controller_state`).")
     for line in session.tap_log:
         print(f"[live]   tap offered: {line}")
+    # THE READ-BACK'S OWN RESOLUTION, before any verdict it could produce. Issue 0030 published
+    # "the tap was NOT delivered into guest memory" from this surface, and that conclusion was not
+    # available to it: a read costs more presented frames than a tap spans fields, so the read-back
+    # reports the idle word for a delivered tap every time. The cost is therefore measured here and
+    # the report says whether a read COULD have landed inside the edge, which is the question that
+    # makes any negative from this surface meaningful.
+    if session.read_cost_frames:
+        per_read = session.read_cost_frames / max(session.read_cost_samples, 1)
+        witnessed = per_read <= session.tap_fields
+        print(f"[live]   READ-BACK RESOLUTION: {session.read_cost_samples} packet read(s) cost "
+              f"{session.read_cost_frames} presented frame(s), i.e. {per_read:.1f} frame(s) per read. "
+              f"This run's taps span {session.tap_fields} field(s) each, so a read-back COULD "
+              f"{'land inside' if witnessed else 'NOT land inside'} the edge it is watching. The "
+              f"read-back's negative is therefore "
+              f"{'usable' if witnessed else 'NOT EVIDENCE of non-delivery'} — a surface that samples "
+              f"coarser than the thing it samples cannot report its absence.")
+    else:
+        print("[live]   READ-BACK RESOLUTION: NOT MEASURED this run, so the read-back's negative below "
+              "carries no weight either way.")
     if session.tap_unwitnessed:
-        print(f"[live]   INPUT VERDICT: {session.tap_unwitnessed} of {session.answers} tap(s) produced NO "
-              f"change at all in the guest's own libpad packet word (active-low idle is 0x"
-              f"{IDLE_ACTIVE_LOW:04X}) across every one of the frames the edge spanned. The edge was "
-              f"NOT delivered into guest memory. That is a finding about the input path, and it is NOT "
-              f"a finding about the title's front end, which never saw an edge to ignore.")
+        print(f"[live]   READ-BACK WITNESS: {session.tap_unwitnessed} of {session.answers} tap(s) showed no "
+              f"change in the guest's own libpad packet word (active-low idle is 0x{IDLE_ACTIVE_LOW:04X}) "
+              f"in any read-back sample. Read the READ-BACK RESOLUTION line above before drawing a "
+              f"conclusion from this: this is what an undersampled edge looks like, and it is NOT by "
+              f"itself a finding about the input path.")
     elif session.answers:
-        print(f"[live]   INPUT VERDICT: all {session.answers} tap(s) were witnessed as a change in the "
-              f"guest's own libpad packet word (active low) on at least one frame of the edge they "
-              f"spanned, so the edges WERE delivered into guest memory. Whether the front end's handler "
-              f"consumed them is the separate `unkD` question above.")
+        print(f"[live]   READ-BACK WITNESS: all {session.answers} tap(s) were witnessed as a change in the "
+              f"guest's own libpad packet word (active low) on at least one read-back sample.")
     if session.pad_words_seen:
         print(f"[live]   every distinct value the guest's pad words took while a tap was being witnessed:"
               f" { {k: sorted(v) for k, v in session.pad_words_seen.items()} }")
+    # The per-field input-path observer. Reported WHETHER OR NOT it was enabled, because "no observer
+    # lines" reads as "no finding" unless the report says the channel was off.
+    rows, unusable = parse_input_path_log(log)
+    if session.input_path_trace:
+        _, skipped, refused = parse_input_path_counts(log)
+        verdict_input = input_path_verdict(rows, session.pad_commands)
+        print(f"[live]   INPUT PATH, per delivered field (channel {INPUT_PATH_CHANNEL} was ON): "
+              f"{len(rows)} observer line(s) parsed ({len(rows) // 2} paired field(s)), "
+              f"{skipped} line(s) skipped for not matching this tool's reader, {refused} line(s) "
+              f"REFUSED because the record's own bytes and halfword disagree")
+        if verdict_input["unpaired_lines"]:
+            print(f"[live]     {verdict_input['unpaired_lines']} observer line(s) could NOT be paired into a "
+                  f"field and are NOT counted as passing fields")
+        if verdict_input["edge_fields"] == 0:
+            print(f"[live]     NO EDGE FIELD was observed: the endpoint was asked for "
+                  f"{verdict_input['endpoint_taps']} pad command(s) and the observer saw "
+                  f"{verdict_input['edge_fields']} field(s) whose tap countdown was live. This run did not "
+                  f"MEASURE the path — it asked no question of it.")
+        else:
+            print(f"[live]     {verdict_input['edge_fields']} of {len(rows) // 2} observed field(s) "
+                  f"consumed a tap count; the gate was open on "
+                  f"{verdict_input['gate_open_fields']} of them; "
+                  f"{verdict_input['delivered_fields']} reached the guest's own packet word")
+            if verdict_input["broken_at"] is None:
+                print(f"[live]     STAGE VERDICT: every observed edge field carried the correct mask through "
+                      f"all {len(FIELD_STAGES)} per-field stages "
+                      f"({' -> '.join(FIELD_STAGES)}), so the LAST STAGE CORRECT is `guest` — the edge "
+                      f"reached guest memory.")
+            else:
+                print(f"[live]     STAGE VERDICT: the first stage that disagreed is "
+                      f"`{verdict_input['broken_at']}`, so the LAST STAGE CORRECT is "
+                      f"`{verdict_input['last_correct_stage']}`.")
+            for sample in verdict_input["sample"]:
+                print(f"[live]       vbl={sample['vbl']} expected={sample['expected']} "
+                      f"resolved={sample['resolved']} gate={sample['gate']} "
+                      f"guest_packet_bytes={sample['guest_packet_bytes']} "
+                      f"guest_packet={sample['guest_packet']} "
+                      f"guest_held={sample['guest_held']} guest_pressed={sample['guest_pressed']}")
+            print(f"[live]     THE GATE'S OWN INPUTS, read from the product, over the "
+                  f"{verdict_input['edge_fields']} edge field(s): "
+                  f"bios_pad_initialized={verdict_input['initialized']} "
+                  f"bios_pad_irq_started={verdict_input['irq_started']} — and "
+                  f"Hle::biosPadShouldService() reported {verdict_input['gate_open_fields']} of "
+                  f"{verdict_input['edge_fields']} open. This is the framework's BIOS InitPAD "
+                  f"lifecycle gate (pad_input.cpp's `if (!game->hle.biosPadShouldService()) return;`), "
+                  f"and the words above decide whether it is the cause on THIS title.")
+            print(f"[live]     THE GUEST'S OWN DECODED WORDS across those edge fields: "
+                  f"held={['0x%04X' % v for v in verdict_input['guest_held_values']]} "
+                  f"pressed={['0x%04X' % v for v in verdict_input['guest_pressed_values']]} — the "
+                  f"packet word is ACTIVE LOW (idle 0xFFFF, a pressed bit CLEARED) and the guest's own "
+                  f"router converts it into its pressed-bit convention, so a non-zero value here is the "
+                  f"guest acknowledging the edge. The edge fields span the VBlank field counter "
+                  f"{verdict_input['edge_field_span']}.")
+    else:
+        print(f"[live]   INPUT PATH, per delivered field: NOT MEASURED — the {INPUT_PATH_CHANNEL} channel "
+              f"was off for this run, so the stages between the endpoint and the guest's packet buffer "
+              f"were sampled 0 times. That is an absent measurement, not a pass and not a defect.")
     for held in session.hold_log:
+        if held.get("skipped"):
+            print(f"[live] held {held['buttons']}: SKIPPED — the product was gone before a held input "
+                  f"could be delivered. That is a skip, not a zero, and it carries no input claim.")
+            continue
         before, after = held["player_before"], held["player_after"]
         print(f"[live] held {held['buttons']} for {held['seconds']}s: {held['presented_frames']} "
               f"presented frames; player {before} -> {after} "
@@ -1378,12 +1799,96 @@ def selftest() -> int:
                 return "env audit: 0 PSXPORT_* set -> 0 declared, 0 legacy, 0 UNKNOWN\n"
             if line.startswith("shot "):
                 return "shot -> (refused in this fixture)\n"
+            # The pad drive commands. A fixture that cannot answer them is not a fixture of a route
+            # that taps and a window that holds — it is a fixture of the census, and it fails with an
+            # IndexError from the byte-read fallback below the moment the route offers an edge.
+            if line.split()[0] in ("press", "release", "tap", "hold"):
+                return f"{line}\n"
             count = int(line.split()[2])
             payload = " ".join("00" for _ in range(count))
             return f"{line.split()[1]}: {payload}\n"
 
         def close(self) -> None:
             pass
+
+    class TapKillerClient(DyingClient):
+        """A front end that reads Start (unkD == 1) and a socket that dies DURING a tap's read-back.
+
+        This is the case the route's guard missed, and it is not hypothetical: the tap witness reads
+        the guest's own words back once per round trip for the whole edge, so it is the longest single
+        stretch of endpoint traffic in the route, and this title's measured 0x26010006 stage-load fault
+        lands at presented field ~1300-3600 — right where the first tap happens. The guard closed after
+        the census, so the exception escaped `run_route` and the run printed no report at all."""
+        def __init__(self) -> None:
+            super().__init__(polls=10**9)
+            self.taps = 0
+            self.dead = False
+
+        def send(self, line: str) -> str:
+            if self.dead:
+                raise ConnectionResetError(104, "Connection reset by peer")
+            if line.startswith("tap "):
+                self.taps += 1
+                if self.taps == 1:
+                    # The tap is accepted; the read-back that should witness it finds a dead socket.
+                    self.dead = True
+                    return f"tap {line.split()[1]} {line.split()[2]}\n"
+            if line.startswith("r ") and line.split()[1].upper() == f"{prompts.GAME_INFO:08X}":
+                # unkD is at game_info + 0x0D, and the only front-end state whose own code reads Start
+                # is unkD == 1. Without this the fixture would offer no tap and the case would pass
+                # without ever reaching the call site it exists to cover.
+                raw = bytearray(int("00", 16) for _ in range(int(line.split()[2])))
+                raw[0x0D] = 1  # accept_input is game_info + 0x0D, and 1 is the state that reads Start
+                return f"{line.split()[1]}: " + " ".join(f"{b:02x}" for b in raw) + "\n"
+            return super().send(line)
+
+    tap_killer = TapKillerClient()
+    tap_session = Session(tap_killer)
+    raised_out: BaseException | None = None
+    try:
+        tap_session.run_route(budget_frames=100000, budget_seconds=30.0, poll_seconds=0.0,
+                              shot_every=0, tap_frames=4)
+    except BaseException as error:  # noqa: BLE001 - the point of the case is that this must not happen
+        raised_out = error
+    check("a product that dies DURING a tap witness does NOT raise out of the route",
+          raised_out, None)
+    check("... it is RECORDED as how the run ended instead", tap_session.stopped is not None, True)
+    check("... and the census it had already taken survives", len(tap_session.screens) >= 1, True)
+    check("... and the tap is counted as offered", tap_killer.taps, 1)
+
+    class HoldKillerClient(DyingClient):
+        """Answers until the hold window's first `frame` poll, then dies.
+
+        The hold window is one `frame` poll every 50 ms for the whole hold, and this title's measured
+        0x26010006 stage-load fault lands at presented field ~1200-2800 — exactly where a hold that
+        follows a long route happens. The window used to let that raise out of `main` and the run
+        printed no report at all."""
+        def __init__(self) -> None:
+            super().__init__(polls=10**9)
+            self.pressing = False
+            self.dead = False
+
+        def send(self, line: str) -> str:
+            if line.startswith("press ") or line.startswith("release "):
+                self.pressing = True
+            if self.pressing and self.dead:
+                raise ConnectionResetError(104, "Connection reset by peer")
+            if self.pressing and line.startswith("frame"):
+                self.dead = True
+            return super().send(line)
+
+    hold_killer = HoldKillerClient()
+    hold_session = Session(hold_killer)
+    hold_raised: BaseException | None = None
+    try:
+        hold_session.hold_window(["right"], 0.2)
+    except BaseException as error:  # noqa: BLE001 - the point of the case is that this must not happen
+        hold_raised = error
+    check("a product that dies DURING a hold window does NOT raise out of it", hold_raised, None)
+    check("... and the hold is RECORDED as a SKIP, not as a zero",
+          hold_session.hold_log[0].get("skipped"), True)
+    check("... and a skipped hold claims nothing about movement",
+          hold_session.hold_log[0]["moved"], False)
 
     dying = DyingClient(polls=3)
     session = Session(dying)
@@ -1427,6 +1932,183 @@ def selftest() -> int:
     check("the two scene thresholds are the park's two MEASURED values, not magic constants",
           (prompts.PARK_COLOURS, prompts.PARK_PRIMS), (2, 2))
 
+    # --- the per-field input-path observer: BOTH ANSWERS, and the format guard ------------------------
+    # A stage verdict that has only ever printed "the edge did not arrive" is a tool that cannot
+    # support the opposite claim, and the whole point of measuring the stages is to be able to say the
+    # edge landed. So the fixture below is built to make it say BOTH, from the same reader, by moving
+    # ONE value: the resolved mask and the guest packet. Everything else is held identical, so a change
+    # in the verdict is attributable to that value and not to the reader.
+    # The fixture is pinned to the SHIPPING spelling of every field, measured from a real
+    # 2026-09-27 run's log rather than from what a formatter "should" print: `repl(on=...)` is an
+    # `int` member and prints `1`, while the three `gate(...)` fields are `bool` members and print
+    # `true`. A fixture that spelled both the same way passed against a parser that only accepted
+    # one of them, which is how the first live reading of this observer reported "broken at repl"
+    # for a product that had written the tap into guest memory. Both spellings are exercised below.
+    def observer_line(phase: str, *, tap: int = 0xF7FF, tap_n: int = 0, buttons: int = 0xFFFF,
+                      on: bool = True, gate: bool = True, slot0_buttons: int | None = None,
+                      init: bool = True, irq: bool = True, bool_spelling: str = "true",
+                      vbl: int = 100) -> str:
+        written = tap if slot0_buttons is None else slot0_buttons
+        # Pad::fillBuffer's own layout, reproduced here only as FIXTURE data: byte 0 status, byte 1
+        # pad id, bytes 2..3 the ACTIVE LOW mask. Packed little-endian into one word that puts the
+        # button halfword in the HIGH half and the status/id pair in the low half — which is exactly
+        # what a real run recorded (0xFFF74100 for a 0xFFF7 button mask). The record carries the
+        # packed word AND the halfword read back out of it, and the reader cross-checks the two — see
+        # the refusal case below, which is the byte-order mistake the frontier probe shipped in both
+        # directions.
+        slot0 = ((written & 0xFFFF) << 16) | 0x0041
+        flag = ((lambda value: "true" if value else "false") if bool_spelling == "true"
+                else (lambda value: "1" if value else "0"))
+        return (f"[{INPUT_PATH_CHANNEL}] {phase}: vbl={vbl} repl(on={flag(on)} tap=0x{tap:04X} "
+                f"tap_n={tap_n} hold=0xFFFF) resolved(buttons=0x{buttons:04X}) "
+                f"gate(initialized={flag(init)} irq_started={flag(irq)} "
+                f"shouldService={flag(gate)}) "
+                f"guest(slot0_bytes=0x{slot0:08X} slot0_buttons=0x{written:04X} "
+                f"slot1_bytes=0x00FFFFFF slot1_buttons=0x0000 held=0x0000 pressed=0x0000)")
+
+    # A record whose packed bytes and reported halfword DISAGREE is a line this reader refuses, and
+    # the refusal must be counted. This is the exact shape of the mistake the first live reading made:
+    # slice the packed word's low half and a delivered 0xFFF7 button halfword reads as the 0x4100
+    # status/id header. Resolving such a line in favour of either field is a guess, so neither is used.
+    selfrefuse = Path("scratch") / "live_probe"
+    selfrefuse.mkdir(parents=True, exist_ok=True)
+    inconsistent = selfrefuse / "inconsistent.log"
+    inconsistent.write_text(
+        observer_line("pre-service", tap_n=4).replace("slot0_buttons=0xF7FF", "slot0_buttons=0x4100")
+        + "\n"
+        + observer_line("post-service", tap_n=3, buttons=0xF7FF, slot0_buttons=0xF7FF,
+                        vbl=101) + "\n")
+    inconsistent_rows, inconsistent_skipped, inconsistent_refused = parse_input_path_counts(inconsistent)
+    check("a line whose bytes and halfword disagree is REFUSED, not interpreted",
+          inconsistent_refused, 1)
+    check("... and it is not counted as a parsed line", len(inconsistent_rows), 1)
+    check("... and the refused pre-service line is a HOLE, not a passing field",
+          input_path_verdict(inconsistent_rows, 1)["unpaired_lines"], 1)
+    check("... and the refused line is not read as an edge field",
+          input_path_verdict(inconsistent_rows, 1)["edge_fields"], 0)
+
+    # The reader must accept the real shipping spelling — an `int` member as 1/0 and a `bool` member
+    # as true/false in the SAME line. This is the case that would have caught the wrong verdict.
+    spellings = Path("scratch") / "live_probe"
+    spellings.mkdir(parents=True, exist_ok=True)
+    mixed = spellings / "spelling.log"
+    mixed.write_text("\n".join([
+        observer_line("pre-service", tap_n=4, bool_spelling="int"),
+        observer_line("post-service", tap_n=3, buttons=0xF7FF, slot0_buttons=0xF7FF,
+                      bool_spelling="int"),
+    ]) + "\n")
+    mixed_rows, _ = parse_input_path_log(mixed)
+    mixed_verdict = input_path_verdict(mixed_rows, 1)
+    check("a real line mixes an int member (1) and bool members (true) and the reader takes both",
+          (mixed_rows[0]["on"], mixed_rows[0]["gate"]), (True, True))
+    check("... and such a line is NOT reported as broken at `repl`",
+          mixed_verdict["broken_at"], None)
+    check("... and reaches the guest packet", mixed_verdict["delivered_fields"], 1)
+
+    import tempfile
+    with tempfile.TemporaryDirectory() as directory:
+        # DELIVERED: the tap mask is resolved into `buttons` AND the guest's packet carries it.
+        good = Path(directory) / "delivered.log"
+        good.write_text("\n".join([
+            observer_line("pre-service", tap_n=4),
+            observer_line("post-service", tap_n=3, buttons=0xF7FF, slot0_buttons=0xF7FF),
+            observer_line("pre-service", tap_n=3),
+            observer_line("post-service", tap_n=2, buttons=0xF7FF, slot0_buttons=0xF7FF),
+        ]) + "\n")
+        rows, skipped = parse_input_path_log(good)
+        verdict = input_path_verdict(rows, 1)
+        check("the reader parses every observer line it was given", len(rows), 4)
+        check("a well-formed log skips nothing", skipped, 0)
+        check("a delivered edge is counted at every field", verdict["edge_fields"], 2)
+        check("a delivered edge has NO stage that disagrees", verdict["broken_at"], None)
+        check("... so there is no stage short of the guest's own memory",
+              verdict["last_correct_stage"], None)
+        check("... and both fields reached the guest packet", verdict["delivered_fields"], 2)
+
+        # THE OPPOSITE ANSWER, from the same reader: the mask resolves but the gate is closed, so the
+        # framework never writes the packet. This is the shape issue 0030's symptom has, and a reader
+        # that could not produce it could not have found the cause.
+        gated = Path(directory) / "gated.log"
+        gated.write_text("\n".join([
+            observer_line("pre-service", tap_n=4),
+            observer_line("post-service", tap_n=3, buttons=0xF7FF, gate=False, slot0_buttons=0xFFFF),
+        ]) + "\n")
+        gated_verdict = input_path_verdict(parse_input_path_log(gated)[0], 1)
+        check("a closed gate is named as the first stage that disagreed",
+              gated_verdict["broken_at"], "gate")
+        check("... so the last stage correct is `resolved`",
+              gated_verdict["last_correct_stage"], "resolved")
+        check("... and no field reached the guest packet", gated_verdict["delivered_fields"], 0)
+
+        # The one that decides between them: the gate open but the packet still idle. That isolates
+        # the write itself from the gate, which is the distinction the two cases above do not make.
+        wrote = Path(directory) / "notwrote.log"
+        wrote.write_text("\n".join([
+            observer_line("pre-service", tap_n=4),
+            observer_line("post-service", tap_n=3, buttons=0xF7FF, gate=True, slot0_buttons=0xFFFF),
+        ]) + "\n")
+        wrote_verdict = input_path_verdict(parse_input_path_log(wrote)[0], 1)
+        check("an open gate that still does not write names `guest`",
+              wrote_verdict["broken_at"], "guest")
+        check("... so the last stage correct is `gate`", wrote_verdict["last_correct_stage"], "gate")
+
+        # A mask that never resolves: the break is between the REPL mask and Pad::buttons.
+        unresolved = Path(directory) / "unresolved.log"
+        unresolved.write_text("\n".join([
+            observer_line("pre-service", tap_n=4),
+            observer_line("post-service", tap_n=3, buttons=0xFFFF, slot0_buttons=0xFFFF),
+        ]) + "\n")
+        unresolved_verdict = input_path_verdict(parse_input_path_log(unresolved)[0], 1)
+        check("a mask that never resolves names `resolved`", unresolved_verdict["broken_at"], "resolved")
+        check("... so the last stage correct is `repl`",
+              unresolved_verdict["last_correct_stage"], "repl")
+
+        # NO EDGE AT ALL is not a pass. A run that asked no question of the path must say so, and this
+        # is the case that keeps "0 of 0" from reading as "the path is fine".
+        idle = Path(directory) / "idle.log"
+        idle.write_text("\n".join([
+            observer_line("pre-service"),
+            observer_line("post-service"),
+        ]) + "\n")
+        idle_verdict = input_path_verdict(parse_input_path_log(idle)[0], 0)
+        check("a run that offered no edge counts no edge field", idle_verdict["edge_fields"], 0)
+        check("... and therefore has no broken stage to name", idle_verdict["broken_at"], None)
+
+        # A LOG FORMAT CHANGE must be counted, not silently dropped: an unreadable observer line and a
+        # silent observer are the same shape otherwise, and that is the confusion the parse counts
+        # exist to remove.
+        drifted = Path(directory) / "drifted.log"
+        drifted.write_text("\n".join([
+            observer_line("pre-service", tap_n=4),
+            f"[{INPUT_PATH_CHANNEL}] post-service: repl(on=true tap=0xF7FF) resolved(buttons=0xF7FF)"
+            "  <-- the body changed, the channel did not",
+        ]) + "\n")
+        drifted_rows, drifted_skipped = parse_input_path_log(drifted)
+        check("a line this reader cannot parse IS COUNTED", drifted_skipped, 1)
+        check("... and is not counted as a parsed field", len(drifted_rows), 1)
+        check("... and a log with NO channel in it yields nothing rather than everything",
+              parse_input_path_log(Path(directory) / "absent.log")[0], [])
+        # The framework's own config echo NAMES the channel without being a record of it. Selecting
+        # by substring counted two such lines as unparsable observer records and put a phantom
+        # "2 line(s) skipped" into a report about the input path; the selector is the log's channel
+        # TAG, and this pins that.
+        echo = Path(directory) / "echo.log"
+        echo.write_text(
+            "[2026-09-27T21:59:10.704Z] [cfg] active: PSXPORT_DEBUG=x4-music-cd,x4-input-path ...\n"
+            "[2026-09-27T21:59:10.704Z] [cfg]   PSXPORT_DEBUG = x4-music-cd,x4-input-path [env]\n"
+            + observer_line("pre-service", tap_n=4) + "\n"
+            + observer_line("post-service", tap_n=3, buttons=0xF7FF, slot0_buttons=0xF7FF) + "\n")
+        echo_rows, echo_skipped, echo_refused = parse_input_path_counts(echo)
+        check("a config echo that NAMES the channel is not an observer record",
+              (len(echo_rows), echo_skipped, echo_refused), (2, 0, 0))
+
+        # An unpaired half-line is a hole, not a passing field.
+        half = Path(directory) / "half.log"
+        half.write_text(observer_line("pre-service", tap_n=4) + "\n")
+        half_verdict = input_path_verdict(parse_input_path_log(half)[0], 1)
+        check("an unpaired pre-service line is a hole", half_verdict["unpaired_lines"], 1)
+        check("... and is NOT counted as an edge field", half_verdict["edge_fields"], 0)
+
     if failures:
         print(f"  selftest: {failures} of {total} case(s) FAILED")
         return 1
@@ -1462,7 +2144,19 @@ def main() -> int:
     parser.add_argument("--narrow", action="store_true",
                         help="run the 4:3 leg (PSXPORT_X4_WIDESCREEN=0, 960x720 sink) instead of the "
                              "shipping 16:9 leg")
+    parser.add_argument("--tap-frames", type=int, default=4,
+                        help="how many presented fields each offered tap spans (default 4). A tap is an "
+                             "edge, so it must span more than one field to be an edge at all; the report "
+                             "prints this against what one endpoint read costs in presented frames, "
+                             "because a read that costs more frames than the tap spans fields CANNOT "
+                             "witness the tap and its negative is not evidence of non-delivery")
     parser.add_argument("--connect-timeout", type=float, default=180.0)
+    parser.add_argument("--input-path-trace", action="store_true",
+                        help="enable the title's per-field input-path observer channel, so the stages "
+                             "between the endpoint and the guest's own libpad packet buffer are sampled "
+                             "once per DELIVERED FIELD instead of once per poll. Costs O(fields) log "
+                             "lines, so it is off by default; a report that says the channel was off is "
+                             "reporting that the path was NOT MEASURED, never that it worked or did not")
     parser.add_argument("--selftest", action="store_true",
                         help="exercise the readers on fixtures; launches no product and drives nothing")
     arguments = parser.parse_args()
@@ -1495,16 +2189,19 @@ def main() -> int:
 
     wide = "0" if arguments.narrow else "1"
     sink = "960x720" if arguments.narrow else "1284x720"
-    process = launch(arguments.port, sink, wide, LOG, WAV)
+    process = launch(arguments.port, sink, wide, LOG, WAV,
+                     input_path_trace=arguments.input_path_trace)
     client: LiveClient | None = None
     try:
         client = connect(arguments.port, arguments.connect_timeout, LOG)
         session = Session(client)
+        session.input_path_trace = arguments.input_path_trace
+        session.tap_fields = arguments.tap_frames
         print(f"[live] endpoint on 127.0.0.1:{arguments.port}, product pid {process.pid}, presenting "
               f"from frame {frame_of(client)} (leg: PSXPORT_X4_WIDESCREEN={wide}, sink {sink})")
         session.sample_opening_state()
         session.run_route(arguments.budget_frames, arguments.budget_seconds, arguments.poll_seconds,
-                          arguments.shot_every)
+                          arguments.shot_every, tap_frames=arguments.tap_frames)
         if arguments.hold and session.alive():
             session.hold_window(list(arguments.hold), arguments.seconds)
         elif arguments.hold:
