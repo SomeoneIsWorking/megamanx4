@@ -202,11 +202,37 @@ preserves 4:3 identity and changes only measured OFX and draw-environment width 
 Gap: issue #19 proves the title's all-2D 320-wide composition becomes left-anchored. Correct title and
 gameplay margins, culling, HUD anchoring, and central scale remain visually unverified. Issue #24
 also records that the shared player Aspect Ratio row changes host-native `Mods::aspect`, not X4's
-title-authored guest projection policy, so it is not yet a truthful X4 widescreen control. The exact
+title-authored guest projection policy, so it is not yet a truthful X4 widescreen control. A live menu
+made the disagreement observable: its readout reported a 428-wide render while the generic Aspect
+Ratio row still said Vanilla.
 
-**MEASURED 2026-09-27, and it explains why no widescreen picture pair is capturable here yet.** The wide
-plan IS latched and IS reachable — `render_width=428` is a real observed state — but only for the ~45 ms
-between the boot prefix and the STR movie's first display publication. From the log, in order:
+**MEASURED 2026-09-27 (superseding the note below, which was measured on a shorter horizon).** The wide
+plan IS latched and IS reachable, and it now **STAYS** at `render_width=428` after the movies
+complete — because the movie does complete. `0x80018E50` is entered at display field 974
+(`ra=0x800184C4`, entry-one driver) and field 13,153 (`ra=0x800181DC`, indexed driver),
+`movieCleanup.completedFields()` is 7/7 at both, `cd.stream_active` reaches 0 between fields 13,000
+and 13,500, the guest's own field counter `0x80141BD8` leaves its movie-frozen 7 and reaches 351,
+archive CD requests 113 and 51 complete, and the display-mode init's own `GP1(08)` 15-bit 320x240
+switch and its `VSync(-1)` at `0x800E68F4` are both passed. The `[wide]` change log's last line is
+`render_width=428` (printed on change only, so the tail IS the steady state).
+
+**And the post-movie picture is still not a gameplay picture, so the pair still cannot be judged.**
+Every post-movie checkpoint measured — 13,500 / 15,000 / 17,000 / 19,900 — is byte-identical and one
+flat colour, RGB(8,8,16): 572,166/924,480 (61.89%) "non-black" in the 1284x720 wide sink, of which
+233,280 pixels are the literal-black wide margins; 686,169/691,200 (99.27%) in the 960x720 4:3 sink,
+because (8,8,16) is not (0,0,0). `widescreen_pair.py` therefore REFUSES, and its reason is the
+finding: both 162-column margins are `0.0% non-black, 1 colours, 161/161 repeated columns` — NOT SCENE.
+The guest is also not animating: it waits at `0x80021858`, which writes DPCR and walks a 6,144-byte
+DMA chain at `0x80173CA0` polling the flag byte `0x801721D7`. That is issue 0028.
+
+So: the projection owner and the seven widened culling owners are implemented, their 4:3 identity is
+pinned, `render_width=428` now persists past the movie, and the seven owners still have **no product
+evidence** — not a negative result, an absent measurement. Their first product evidence requires a
+post-movie frame with scene in it, which is issue 0028. The same shape holds for Tomba! 1, whose only
+present also lands inside its STR movie.
+
+<details>
+<summary>The earlier 600-field reading, kept because it explains the shape of the gap</summary>
 
     [cfg]      PSXPORT_X4_WIDESCREEN enhancement active in product run
     [x4-wide]  guest projection 320x240 -> 428x240, OFX=214, draw width=428
@@ -214,21 +240,13 @@ between the boot prefix and the STR movie's first display publication. From the 
     [gpu]      display depth -> 24-BIT (GP1(08)=08000011, 320x240)      <- the guest's own Set24BitDisp
     [wide]     native picture: aspect=0 wide_engine=0 native_width=320 render_width=320
 
-and it then STAYS at 320 for the rest of the run (600 fields measured; the `[wide]` announcement only
-prints on change, so the tail is the steady state, not a sample). That is the documented carve-out
-working as designed — `WidescreenPolicy::presentationAspect` returns `Standard4x3` while
-`cd.stream_active != 0 || movieCleanup.pending()`, because X4's STR movies are authored 320x240 24-bit
-VRAM pictures and widening their presentation extent would crop the pre-rendered one. **It does not
-reverse because the movie never completes** (the completion transaction at `0x80018E50` is still
-unreached), so the run has no post-movie frame in which a wide picture could be observed.
+At 600 fields it STAYED at 320, and the reading was that the documented carve-out never reverses
+because the movie never completes. Both halves of that were horizon artifacts: the carve-out does
+reverse, at field 13,000..13,500, and the completion transaction is reached twice. Recording the
+superseded reading because the next reader will otherwise re-derive a 30..400-field horizon.
 
-So: the projection owner and the seven widened culling owners are implemented and their 4:3 identity is
-pinned, but **no `widescreen_pair.py` verdict is obtainable for this title yet**, and the reason is the
-movie stall rather than anything widescreen-specific. Recording that so the absence is not mistaken for
-a missing implementation. The same shape holds for Tomba! 1, whose only present also lands inside its
-STR movie.
-live menu made the disagreement observable: its readout reported a 428-wide render while the generic
-Aspect Ratio row still said Vanilla.
+</details>
+
 
 ### S007 — Loading removal
 

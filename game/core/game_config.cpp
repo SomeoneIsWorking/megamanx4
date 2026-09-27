@@ -189,6 +189,16 @@ static const GuestProgramImage g_x4_program_image = {
 // silently re-binds every value after an inserted field. Binding by name makes an upstream insert a
 // no-op here and an upstream RENAME a compile error naming the field, which is the signal we want.
 // C++20 requires designators in declaration order; keep them so when adding one.
+//
+// The two asserts below tie the compatibility table's VSync facts to the owner's. They are here and
+// not in the `.hle` group because a declaration is not a statement; their message is the reason.
+static_assert(x4::vsync::kVblankCounter == 0x8011DC50u,
+              "the libetc VBlank counter is read from SLUS_005.61, not chosen; if this fires, "
+              "re-measure it and the owner in game/core/vsync_sync.cpp with it");
+static_assert(x4::vsync::kVSyncEntryEnd - x4::vsync::kVSync == 4u,
+              "the trap window is the measured four-byte libetc VSync entry and nothing else; a "
+              "wider window would admit adjacent library code into the host-service table");
+
 static const GameConfig g_x4_cfg = {
     // --- crt0 / boot ------------------------------------------------ RE-01: MEASURED and NOW WIRED --
     // Every field is the kCrt0* constant above, each with its retained binary evidence. psxport's
@@ -322,6 +332,30 @@ static const GameConfig g_x4_cfg = {
     // contiguous BIOS thread thunks used by X4's retail scheduler. The native frame shell owns all
     // timing, so every guest VSync mode traps. Adjacent library/engine code remains refused;
     // tools/verify_{vsync,threads}.py derive both ranges from SLUS_005.61.
+    //
+    // `.vsyncTrap` IS STILL REQUIRED, and not for the behaviour it used to imply. Two things read
+    // it: `psx::PlatformHle::bindVSyncBoundary` installs the framework's own all-mode leaf there, and
+    // `FrameLoopShell::prepareProduct` -> `requireNativeFrameLoopContract` ABORTS a boot whose
+    // measured VSync address is zero, on the grounds that a missing one would let a retail
+    // busy-wait run and report a misleading timeout. The trap itself is now only a backstop: the
+    // title installs `x4::vsync::serveVSync` as the authenticated image-scoped owner of 0x800E4DB0,
+    // and psxport's `resolveHostDispatch` consults the title's own override BEFORE the host-service
+    // table, so the entry is SERVED rather than trapped. game/core/vsync_sync.h is the migration
+    // note for moving that install to `x4::vsync::registerOverrides` in x4_runtime.cpp.
+    //
+    // THE COUNTER, and why it is named here without being handed to the framework. libetc VSync's
+    // negative mode is a plain query of the VBlank counter `x4::vsync::kVblankCounter` (0x8011DC50)
+    // — measured, not a port policy — and the display-mode init's VSync(-1) at 0x800E68F4 is the
+    // first caller a completed boot reaches outside a movie. The framework CAN carry that counter:
+    // `psx::PlatformHlePlan` declares `vsyncQueryCounterAddress` beside `vsyncAddress` for exactly
+    // this. The legacy-adapter path cannot. `GameConfig::PlatformHleCfg` has `vsyncTrap` and no
+    // companion field, and psxport/runtime/psx/platform_hle.cpp:221 therefore calls
+    // `bindVSyncBoundary(config.vsyncTrap, 0)` — a hardcoded zero that makes
+    // `PlatformHle::vsync` ABORT any negative query outright (platform_hle.cpp:61-69). That is the
+    // whole reason `VSync(-1)` used to kill the run ~35 fields after the movie completed, and it is
+    // why the entry is served by this title rather than by the framework leaf. The framework fix is
+    // one appended aggregate field plus that one call site; until it lands, the two static_asserts
+    // just above g_x4_cfg are what keep the two views of the entry from drifting apart silently.
     .hle = {.windowLo = {x4::vsync::kVSync, x4::bios_threads::kOpenThread},
             .windowHi = {x4::vsync::kVSyncEntryEnd, x4::bios_threads::kThreadWindowEnd},
             .vsyncTrap = x4::vsync::kVSync},

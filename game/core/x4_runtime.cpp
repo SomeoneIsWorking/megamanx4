@@ -10,7 +10,6 @@
 #include "guest_execution.h"
 #include "legacy_game_interface.h"
 #include "movie_cleanup.h"
-#include "movie_field.h"
 #include "music_stream.h"
 #include "native_overrides.h"
 #include "pad_layout.h"
@@ -53,7 +52,7 @@ void X4Runtime::registerOverrides(Game &game) {
   bios_threads::install(game);
   display_init::registerOverride(game.core);
   gpu_timeout::registerOverride(game.core);
-  movie::registerOverrides(game.core);
+  vsync::registerOverrides(game.core);
   movie_cleanup::registerOverride(game.core);
   music_stream::registerOverride(game.core);
   startup_cd::registerOverride(game.core);

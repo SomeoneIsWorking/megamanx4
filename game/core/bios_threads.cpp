@@ -17,10 +17,27 @@ namespace x4::bios_threads {
 namespace {
 
 // One task turn is one display field of guest CPU between two of the task's own field boundaries.
-// Retail `DecDCTvlc` (0x800ED574) measures 610,746 cycles, 1.082 fields, so the measured maximum is
-// 2. This cap is stated policy, not a measurement, and exists so the budget-resume path above can
-// report a guest loop instead of spinning on one.
-constexpr uint32_t kMaxTurnFields = 8u;
+//
+// This cap is a REPORTING BOUND, stated policy, and it is not a fix for anything. Its only job is to
+// turn "this task has not ended a turn in a very long time" into one line naming where, instead of a
+// silent spin. Two measurements set it, and they pull in opposite directions:
+//
+//   * the movie path, which is the one that works, needed 2: retail `DecDCTvlc` (0x800ED574) measures
+//     610,746 cycles = 1.082 fields, and the movie's own task ended a turn on a field boundary in
+//     11,860 of its 13,128 turns. So the bound is nowhere near a field wait.
+//   * the POST-MOVIE path needs more than 8, and the place it waits is not a loop: 0x80021858 writes
+//     DPCR (0x1F801064) and then walks a 6,144-byte DMA chain at 0x80173CA0, polling the guest flag
+//     byte 0x801721D7. That is the guest waiting for a DMA completion the host has not delivered, so
+//     its turns legitimately do not end while it waits. At 8 the bound fired at display field ~13,121
+//     and hid the whole post-movie phase; at 512 the same wait ran to display field 47,762 before the
+//     line printed.
+//
+// 512 is therefore "long enough that reporting it means something happened", not "long enough". The
+// defect this line REPORTS is the undelivered DMA completion above; see docs/issues/0028.
+constexpr uint32_t kMaxTurnFields = 512u;
+// The measured libetc VBlank counter, so a report of "how far did it get" is a guest address and a
+// field number rather than a PC alone. game/core/vsync_sync.h owns the boundary this word counts.
+constexpr uint32_t kVblankCounter = 0x8011DC50u;
 
 // Run-lifetime diagnostic tally, NOT execution state: nothing in the execution path reads or writes
 // a Core through it, and the loop keeps no cross-turn suspend record. It exists so the lines that DO
@@ -122,10 +139,13 @@ void run_guest_entry(Core &core, uint32_t entry) {
       if (++budgetTurns >= kMaxTurnFields) {
         lucent::error("x4-thread",
                       "guest task spent {} display field(s) of guest CPU without reaching a field "
-                      "boundary and is still at 0x{:08X}. Retail delivers a field every field, so "
-                      "this is a guest loop: reported rather than spun on",
+                      "boundary and is still at 0x{:08X} at display field {} (the measured libetc "
+                      "VBlank counter at 0x{:08X}). Retail delivers a field every field, so this is a "
+                      "guest loop: reported rather than spun on",
                       budgetTurns,
-                      result.guestPc);
+                      result.guestPc,
+                      core.mem_r32(kVblankCounter),
+                      kVblankCounter);
         std::abort();
       }
       ++census.budgetResumes;

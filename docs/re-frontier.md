@@ -103,13 +103,15 @@ not evidence for this gate.
 - deps: RE-01
 - evidence: Retail SLUS_005.61 has SHA-1 `213733031136d095ca275d6957695aa25011cfa5`, resident range `[0x80010000,0x80130000)`, crt0 `0x800DAE8C`, gameMain `0x80012024`, and no code overlays. A recorded pre-migration measurement found 6,193 binary roots and 7,534 functions, including live HookEntryInt continuation `0x800E5194`; FNTRACE reached it through shared BIOS delivery and then CD callback `0x800E7944`. `tools/verify_cd_irq.py` independently proves from retail bytes that setjmp saves this mid-function continuation. These are retained binary/runtime facts.
 - where: target shared psxport per-Core Lightrec executor and authenticated `GuestProgramImage`; target title image-and-address-keyed override/original-call registry; retained identity and control-flow verifiers under `tools/`
-- gap: The native/Lightrec product enters the authenticated title, but has not yet produced a translated-
-  block execution and fallback report or crossed the 4,000-field front-end/movie discriminator above.
-  Shared psxport `b3fbe300` crosses the former `0x8000E884` fault (issue #27), completes
-  the boot prefix and two CD requests, then the first frame aborts at the title's protected libetc
-  VSync `0x800E4DB0` after a typed `FrameBoundary` reaches a required-return guest call. Issue #25
-  owns caller-RA capture and the exact title timing/transaction boundary. The abort has no JIT/fallback
-  counters; the title has not completed a first field.
+- gap: The native/Lightrec product enters the authenticated title and now completes it: both STR movies
+  finish (completion owner `0x80018E50` at display field 974 and 13,153), `cd.stream_active` releases,
+  the guest's own field counter `0x80141BD8` leaves its movie-frozen 7 and reaches 351, and
+  `render_width=428` is the steady state. **The next frontier is issue #28**: the post-movie picture is
+  one flat clear colour, frozen from field ~13,500 to at least 19,900, because the retail task
+  `0x8001DAF8` waits at `0x80021858` — a DPCR write plus a 6,144-byte DMA chain walk at `0x80173CA0`
+  polling the flag byte `0x801721D7` — for a DMA completion the host never raises. Until that is
+  delivered there is no post-movie picture, and therefore no product evidence for the seven widened
+  cull owners (issue #19) and no obtainable `widescreen_pair.py` verdict.
 - notes: `0x800E5194` is not guessed: live HookEntryInt recorded it in jmp_buf `0x8011CBCC`, and retail startIntr proves it is the non-zero setjmp continuation into trapIntr. Dynamic execution discovers runtime targets directly; no seed list is part of the target product.
 
 ## overlays

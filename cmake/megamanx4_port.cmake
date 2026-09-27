@@ -20,7 +20,6 @@ set(SEAM_SRC
   game/core/guest_execution.cpp
   game/core/enhancements.cpp
   game/core/main.cpp
-  game/core/movie_field.cpp
   game/core/movie_cleanup.cpp
   game/core/music_stream.cpp
   game/core/native_overrides.cpp
@@ -112,7 +111,6 @@ if(BUILD_TESTING)
     ${CMAKE_SOURCE_DIR}/game/core/game_config.cpp
     ${CMAKE_SOURCE_DIR}/game/core/game_hooks.cpp
     ${CMAKE_SOURCE_DIR}/game/core/gpu_timeout.cpp
-    ${CMAKE_SOURCE_DIR}/game/core/movie_field.cpp
     ${CMAKE_SOURCE_DIR}/game/core/movie_cleanup.cpp
     ${CMAKE_SOURCE_DIR}/game/core/music_stream.cpp
     ${CMAKE_SOURCE_DIR}/game/core/native_overrides.cpp

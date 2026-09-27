@@ -1,14 +1,54 @@
 ---
 id: 25
 title: Remaining guest VSync callers trip native frame ownership
-status: open
+status: resolved
 symptom: Setup, loading, CD, movie, memory-card, or alarm code can reach protected VSync 0x800E4DB0
 tags: frame-loop,vsync,timing,RE-09,RE-11
 created: 2026-08-27
-updated: 2026-09-12
+updated: 2026-09-27
 ---
 
-## Ownership rule
+## Resolution, 2026-09-27
+
+The entry has ONE owner for all 42 callers, and it serves every mode the retail body defines.
+
+The reason this issue existed is gone. `x4::movie` installed a boundary at `0x800E4DB0` that
+accepted exactly the movie's four return addresses and refused the other 38 sites, because the
+title's own image-scoped override is the only answer that address gets — and the framework's
+positive-mode VSync then recorded `core.pc`, the entry, as the resume address, so a guest VSync
+would have spun at its own entry. psxport **9bd4e9a8** fixed that at the root: `requestExecutionExit`
+states no address when the requester did not choose one, and `invokeNativeFunction` fills the leaf's
+real `r[31]` continuation.
+
+`game/core/vsync_sync.h` now owns the entry, and its contract is read out of SLUS_005.61 rather than
+policed:
+
+- `mode < 0` returns the measured libetc VBlank counter `0x8011DC50`, with no wait and no state
+  write. This is the arm that used to kill the run: the display-mode init's `VSync(-1)` at
+  `0x800E68F4`.
+- `mode == 1` returns immediately, skipping both waits and both stores. **No site in the image passes
+  it** — the measured census is 7 × `VSync(0)`, 4 × `VSync(2)`, 11 × `VSync(3)`, 14 × `VSync(-1)` and 6
+  register-determined.
+- otherwise the wait is `max(mode, 1)` host fields. It is `fields - 1` parks plus one typed
+  `FrameBoundary` exit stating `r[31]`, and **the exit is load-bearing**: a park-only wait does not
+  end the turn, and `x4::bios_threads::run_guest_entry` counts consecutive budget exhaustions and
+  reports a guest loop at its bound. Measured: park-only aborted at display field 8 with "0 of 1 task
+  turn(s) reached a guest field boundary", where the working run reports 11,860 of 13,128.
+- the entry's own two state words (`0x8011CB90` last-sync, `0x8011CB8C` last-sample) and its return
+  value (a 16-bit HBlank delta read from the registers the image's own cells `0x8011CB84` /
+  `0x8011CB88` name) are reproduced. `tools/verify_vsync.py` pins all of it, with a negative per
+  claim.
+
+`x4::movie` is now a namespace alias for `x4::vsync`; `game/core/movie_field.h` is the migration note
+and names the two call sites to repoint before it is deleted (`game/core/x4_runtime.cpp:56` and
+`tests/test_x4_runtime.cpp:227`).
+
+**Measured after the fix:** both movies complete (field 974 and 13,153), `cd.stream_active` releases,
+the guest's field counter `0x80141BD8` leaves 7 and reaches 351, the display-mode init's 15-bit
+switch and its `VSync(-1)` are passed, and `render_width` 428 is the steady state. What that exposes
+next is issue 0028.
+
+## Ownership rule (historical — superseded by the resolution above)
 
 `X4FrameDriver` owns one complete retail field and replaces only the main loop's `VSync(0)` cadence
 call. Full libetc VSync at `0x800E4DB0` is a fail-fast `PlatformHle` ownership trap for every mode.

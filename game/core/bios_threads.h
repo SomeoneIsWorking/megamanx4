@@ -49,6 +49,14 @@ public:
   // callers must already be executing inside one of the measured non-main TCBs.
   void yieldToMain();
 
+  // Whether a field wait has a fiber to park. `yieldToMain` aborts when it does not, so an owner
+  // that must decide BEFORE parking — because that decision is a guest-behaviour claim and belongs
+  // in its own refusal message — asks this first. The main TCB (slot 0) is the boot/main thread and
+  // never has a fiber: its field cadence is the frame driver's, not a parkable task's.
+  [[nodiscard]] bool inTaskFiber() const {
+    return activeSlot_ > 0 && activeSlot_ < kThreadCount;
+  }
+
   [[nodiscard]] bool isOpen(uint32_t handle) const;
   [[nodiscard]] bool isDone(uint32_t handle) const;
 

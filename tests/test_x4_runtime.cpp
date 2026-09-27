@@ -10,8 +10,8 @@
 #include "game.h"
 #include "game_iface.h"
 #include "hw_bind.h"
-#include "movie_field.h"
 #include "stream_startup.h"
+#include "vsync_sync.h"
 #include "widescreen_controller.h"
 #include "x4_context.h"
 #include "x4_frame_driver.h"
@@ -212,7 +212,7 @@ bool verify_bios_thread_contract(Core &core) {
   return subject.close(reused) && subject.close(second) && subject.close(third);
 }
 
-bool verify_title_movie_field_yield(Core &core) {
+bool verify_title_vsync_field_yield(Core &core) {
   constexpr uint32_t kEntry = 0x8001D064u;
   constexpr uint32_t kStack = 0x801F8100u;
   constexpr uint32_t kGp = 0x8012F418u;
@@ -224,7 +224,7 @@ bool verify_title_movie_field_yield(Core &core) {
     valid &= entry == kEntry;
     taskCore.r[31] = 0x80018BC4u;
     phase = 1;
-    x4::movie::yieldField(taskCore, 0x80018BC4u, *service);
+    x4::vsync::yieldField(taskCore, 0x80018BC4u, *service);
     valid &= taskCore.r[2] == 0u;
     phase = 2;
     valid &= service->close(activeHandle);
@@ -459,7 +459,7 @@ int main() {
   if (!verify_bios_thread_contract(*core)) {
     return 1;
   }
-  if (!verify_title_movie_field_yield(*core)) {
+  if (!verify_title_vsync_field_yield(*core)) {
     return 1;
   }
   if (!verify_title_stream_field_yield(*core)) {
