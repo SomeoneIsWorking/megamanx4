@@ -203,6 +203,30 @@ Gap: issue #19 proves the title's all-2D 320-wide composition becomes left-ancho
 gameplay margins, culling, HUD anchoring, and central scale remain visually unverified. Issue #24
 also records that the shared player Aspect Ratio row changes host-native `Mods::aspect`, not X4's
 title-authored guest projection policy, so it is not yet a truthful X4 widescreen control. The exact
+
+**MEASURED 2026-09-27, and it explains why no widescreen picture pair is capturable here yet.** The wide
+plan IS latched and IS reachable — `render_width=428` is a real observed state — but only for the ~45 ms
+between the boot prefix and the STR movie's first display publication. From the log, in order:
+
+    [cfg]      PSXPORT_X4_WIDESCREEN enhancement active in product run
+    [x4-wide]  guest projection 320x240 -> 428x240, OFX=214, draw width=428
+    [wide]     native picture: aspect=0 wide_engine=0 native_width=320 render_width=428
+    [gpu]      display depth -> 24-BIT (GP1(08)=08000011, 320x240)      <- the guest's own Set24BitDisp
+    [wide]     native picture: aspect=0 wide_engine=0 native_width=320 render_width=320
+
+and it then STAYS at 320 for the rest of the run (600 fields measured; the `[wide]` announcement only
+prints on change, so the tail is the steady state, not a sample). That is the documented carve-out
+working as designed — `WidescreenPolicy::presentationAspect` returns `Standard4x3` while
+`cd.stream_active != 0 || movieCleanup.pending()`, because X4's STR movies are authored 320x240 24-bit
+VRAM pictures and widening their presentation extent would crop the pre-rendered one. **It does not
+reverse because the movie never completes** (the completion transaction at `0x80018E50` is still
+unreached), so the run has no post-movie frame in which a wide picture could be observed.
+
+So: the projection owner and the seven widened culling owners are implemented and their 4:3 identity is
+pinned, but **no `widescreen_pair.py` verdict is obtainable for this title yet**, and the reason is the
+movie stall rather than anything widescreen-specific. Recording that so the absence is not mistaken for
+a missing implementation. The same shape holds for Tomba! 1, whose only present also lands inside its
+STR movie.
 live menu made the disagreement observable: its readout reported a 428-wide render while the generic
 Aspect Ratio row still said Vanilla.
 
