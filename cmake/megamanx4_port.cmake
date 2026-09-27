@@ -317,6 +317,21 @@ if(BUILD_TESTING)
     NAME cull_evidence
     COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/tools/verify_cull.py --check --selftest
   )
+
+  # The task-resume product gate. It runs the PORT and asserts a picture, not a clean trace: the last
+  # sampled present must be at least 1% non-black AND the two last presents must byte-differ, because a
+  # frozen non-black frame passes the first and means nothing. `uv run --frozen` rather than
+  # ${Python3_EXECUTABLE}, because the script's imports come from this project's locked environment.
+  # SKIP_RETURN_CODE 77 so a fresh clone with no disc SKIPS rather than failing; a PRESENT disc that
+  # fails is a hard failure, which is the point of authenticating.
+  find_program(X4_UV_EXECUTABLE uv)
+  if(X4_UV_EXECUTABLE)
+    add_test(
+      NAME task_resume_evidence
+      COMMAND ${X4_UV_EXECUTABLE} run --frozen python ${CMAKE_SOURCE_DIR}/tools/verify_task_resume.py
+    )
+    set_tests_properties(task_resume_evidence PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 900)
+  endif()
 endif()
 
 add_executable(megamanx4_port ${SEAM_SRC})
