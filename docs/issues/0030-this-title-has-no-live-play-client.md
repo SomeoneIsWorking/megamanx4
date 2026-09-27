@@ -1,6 +1,7 @@
 ---
 id: 30
-title: This title has no live-play client, so nothing here was ever asked while the game was RUNNING
+title: This title had no live-play client, and running one closed issue 0029's falsifier and found two
+  new defects
 status: open
 symptom: Every Mega Man X4 product run in this repository is a fixed field budget with no input, and the
   post-movie park has been characterised by sampling guest words at three named presents
@@ -156,6 +157,112 @@ declaring the name — refuses the run before it launches anything. This is the 
 guest address that moved while a tool kept the old one makes the tool drive a stranger's memory while
 still printing a confident table.
 
-## Result
+## Result, as measured
 
-<!-- FILLED IN BY THE RUN: see the sections below. -->
+Everything below came out of `tools/live_play.py` runs on 2026-09-27 against `build/bin/megamanx4_port`
+resolved to psxport `84c4fca3`, headless, silent, unpaced, `PSXPORT_WIDESCREEN=1` (the shipping leg),
+sink `1284x720`. Six runs; the product died in every one, and the client reports that as a recorded
+outcome rather than a traceback.
+
+### The post-movie falsifier: ADVANCED, not fired
+
+Issue 0029's falsifier is *"If the state word is still 6 with a non-zero `x4-music-cd` tally after a
+run, the substituted `CdSync` owner is not the thing that was failing."* It did not fire.
+
+| evidence | measurement |
+|---|---|
+| the owner's per-step log | machine-state word 0x80139530 recorded as **6, 6, 5, 5, 1, 1** |
+| `x4-music-cd` tally | **3 of 3** `CdSync` edges served — state 6 (0x80016E48), state 5 (0x80016DC0), state 1 (0x80016B7C) |
+| `CdControl` edges | **3 of 3** served — 0x0D at 0x80016E64, 0x15 at 0x80016DF0, **0x1B at 0x80016BAC** |
+| the handshake byte | 0x80173C84 reached **2** |
+| the guest's own front end | `game_info` left sub-state **2**, reaching 1/6, 1/7, 1/8, 1/9, 1/10 and 1/13 across runs |
+| the accept-input flag | `unkD` became **1**, which is the state whose handler reads Start |
+| field reached | presented frames **1801, 1977, 2134, 2612, 3619** in successive runs |
+
+So the substituted `CdSync` owner was reached, the chain advanced, and **the guest left the post-movie
+park**. That is issue 0029's intermediate claim closed, and it took the `music_cd` fix to get there.
+
+**Which source saw the 6, and why that is stated.** The whole 6 -> 5 -> 1 chain completes inside ONE
+display field — the owner's three `CdSync` lines carry the same millisecond — so a census sampling once
+per ~100 presented fields essentially never observes the word while it is 6, and reported
+`NOT EXERCISED` for runs in which the chain demonstrably ran. The verdict now reads the word from BOTH
+the census and the owner's per-step log and names which contributed what.
+
+### Dynarec denominators, at the last successful sample of the longest run
+
+    13,742,733 executed blocks of 3,566 translated
+    150,935,471 guest instructions in 24,467 executor calls
+    13,739,167 cache hits / 3,566 misses
+    25,734,866 invalidations, 0 faults
+    0 interpreter fallback calls, 0 instructions, 0 refused —
+      by every one of the six reasons: compilation_failed=0, self_modifying_code=0,
+      unsupported_block=0, load_delay_hazard=0, unsafe_instruction_fetch=0
+    presented frames real=2534 interp=0 total=2534
+
+Nonzero translated and executed blocks, so this is dynarec execution and not interpreter-covered. The
+`interp` counter is 0, which is the reading MMX4's no-temporal-path profile requires and which would
+itself be a finding if it were not.
+
+### Issue 0029's CLOSING falsifier is still open: no scene
+
+    0 of 2 capture(s) were taken while the guest had submitted MORE THAN 2 prims
+    the park's measured values: 2 distinct colours, 2 submitted prims
+
+The guest walked out of the park and then crashed, and the picture never carried a scene. So the honest
+verdict is two verdicts: the intermediate claim closed, the closing one not.
+
+### TWO defects this run found, both named by the product
+
+**1. A new guest fault, in a different subsystem from the CD chain.** Every run ends:
+
+    [native-dispatch:error] guest address 0x26010006 resolves to zero or multiple active code images
+    [x4-thread:error] guest task stopped at 0x26010006 with unexpected fault boundary: ambiguous
+                         code-image identity
+
+`0x26010006` is not a code address; the guest jumped through a word that is not a pointer, in the
+post-park stage-load sequence, at presented frames 1336-3619 depending on the run. This is a **new
+frontier**, and it is NOT the `music_cd` defect: that owner has finished and the front end is
+executing stage setup for the first time. It is not diagnosed here — attributing a garbage-pointer
+fault to a cause would need RE of the stage-load path, and guessing an address is forbidden.
+
+**2. The input path does not deliver an edge into guest memory.** Measured at the resolution of the
+edge: after each `tap`, the guest's own libpad packet button halfword is read back **once per presented
+frame** for longer than the edge lasts.
+
+    INPUT VERDICT: 3 of 3 tap(s) produced NO change at all in the guest's own libpad packet word
+    (active-low idle is 0xFFFF) across every one of the frames the edge spanned.
+    every distinct value the guest's pad words took while a tap was being witnessed:
+      {'packet': [65535], 'held': [0], 'pressed': [0]}
+
+So `x4-music-cd`'s mechanism is confirmed AND the input path is separately broken. No gameplay claim can
+be made from this title until the second is fixed, and it is a distinct piece of work: the tap is
+accepted by the endpoint, `Pad::driveTap` sets `repl_on`/`repl_tap`, and either `serviceFrame` is not
+reached on this title's path or the packet is not written where this title reads it.
+
+### What the instruments got wrong first, because a run that cannot fail is not evidence
+
+Three of the four defects above were found in THIS tool by this run, and each is now a selftest case:
+
+| the wrong instrument | what it reported | the fix |
+|---|---|---|
+| scene test = distinct colour count > 2 | a post-movie frame with **14,276** colours at 98.51% non-black was called "a stage scene"; it was uninitialised VRAM read one instruction after the segfault | judge the guest's own classified display list (the park submits 2 prims); the colour count is still printed beside it and a many-colours/few-prims capture is reported as a MISMATCH |
+| pad "raw word" read at the packet's first two bytes | a constant `0x4100` every run, which reads exactly like "the taps never arrived" — it is the packet's status and pad-id header | `Pad::fillBuffer` writes status, id, then the active-low button halfword at **+2**; both are now named separately |
+| falsifier verdict = "the word is not 6" | a run that only saw the movie phase (word 0) reported `ADVANCED` for a chain it never entered | `NOT EXERCISED` is now a distinct answer, and the word must have been 6 **and** left 6 |
+| census raised on a dead product | a traceback, and every number already taken was lost | the death is a recorded outcome; the run reports the census, the legs and the captures it had |
+
+### Gate
+
+`ctest --test-dir build --output-on-failure` -> **33/33 passed**, including the product-launching
+`task_resume_evidence`. `tools/verify_music_cd.py --check --selftest` passes; `title_prompts.py
+--selftest` 51/51; `live_play.py --selftest` 44/44. `game/core/music_cd.h` is clang-format clean.
+
+### What remains
+
+1. **The `0x26010006` stage-load fault.** The new frontier. Needs RE of the post-park stage setup, and
+   it is what stands between this title and a scene.
+2. **The input path.** 3 of 3 edges not delivered; until it is, S009 is unreachable and no held-input
+   claim about this title means anything.
+3. **Issue 0029's closing falsifier**, which needs 1 before it can be answered.
+4. **S006 widescreen.** The `[wide]` tail is `render_width=320` on every run, not the 428 the parked
+   measurement recorded, and every capture was 320x240 with the guest submitting 2 prims. There is no
+   scene to widen, so this is blocked on 1, not on the projection owner.
