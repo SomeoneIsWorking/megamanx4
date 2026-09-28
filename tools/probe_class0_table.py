@@ -86,7 +86,11 @@ def slab(tick: int) -> list[tuple[int, int]]:
         if base + BLOCK * 4 <= GUEST_RAM_BYTES:
             ranges.append((base, BLOCK))
     return ranges
-SPOT = [0x801F8300, 0x80139554]
+# The cursor, its two NEIGHBOURS, and a control that is known to hold zero. The neighbours are
+# the control for the cursor reading itself: if an UNMAPPED address also echoes its own value,
+# then "0x801F8300 holds 0x801F8300" is the endpoint answering with the address it was asked
+# for, and the whole self-pointer finding is an instrument artifact rather than a measurement.
+SPOT = [0x801F8300, 0x801F8304, 0x801F8308, 0x801F8380, 0x80139554]
 BAD = 0x0113D7D0
 TERMINATOR = "---END---\n"
 

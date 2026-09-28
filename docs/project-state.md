@@ -410,6 +410,37 @@ cleanly through `jr $ra` to `0x800120EC`, which matches `r31` at the fault, so t
 that path. The cheapest open question is now **why the cursor points at itself**, and it is in guest
 data rather than in another register reading.
 
+*6. The self-pointer is REAL, it is heap, and the guest's only store to it never runs — each with a
+control, because the first two readings could both have been artifacts.*
+
+- *Not the endpoint echoing its own argument.* The probe now reads the cursor's **neighbours** as a
+  control, because an endpoint that answered an unmapped address with that address would produce an
+  identical line: `0x801F8300=801F8300  0x801F8304=00000000  0x801F8308=00000000
+  0x801F8380=00000000  0x80139554=00000000`. The neighbours read zero and do not echo themselves.
+- *It is HEAP, and no port code writes it.* Beyond the loaded image (`0x8012F800`) and beyond the
+  crt0-zeroed `.bss` (`[0x8012F418, 0x80175F38)`), above the heap base and below the stack top. The
+  title has **no reference to `0x801F83*` at all** and **no allocator**, so a free-list account is
+  refuted before it was proposed.
+- *The guest's only store to it never executes.* A register-tracking scan of all 294,400 words —
+  requiring the store's base register to hold the target at offset 0 — finds **1** store
+  (`0x80012724`, the scheduler's own cursor advance) and **0** storing the self-reference. The first
+  version of that scan was loose and matched `sw ..., ($sp)`; the corrected one has the opposite flaw,
+  missing writers reached through a loaded pointer, and both are recorded.
+- *And that store's silence is real, not an unproven instrument.* `PSXPORT_STORE_OBSERVE=0x80012724`
+  reports no events over 20,000 fields, so the instrument was re-armed on the scheduler's prologue
+  store `0x80012620` and **proven to fire** before the zero was believed.
+
+**So the cursor is never advanced by the guest, nothing in the port writes it, and it is not zero.**
+The open question is sharp: a store through a *loaded pointer*, invisible to a `lui`/`addiu`/`ori`
+chain scan. The observer's own dump also shows the scheduler running early with `t0 = 0x80166C74` /
+`0x80166D14`, which look like **record pointers** — so the cursor may be valid when the scheduler
+executes and only self-referential later, and no measurement yet covers the moment it runs.
+
+**A trap walked into and recorded, because the workspace map already warns about it.**
+`PSXPORT_STORE_OBSERVE` takes **store-instruction PCs**, not data addresses, and says so on arming. It
+was first armed with the data address `0x801F8300` — the exact error the map records as having
+happened before — and would have produced a clean, confident, meaningless zero.
+
 *Why the boundary defect survived so long, and this is the useful part:* `stream_startup` and
 `movie_cleanup` set `r[31]` to the return address in their own `call` helpers before dispatching, so
 the old guess read the RIGHT value from them by accident of ordering. `vram_rect_queue` did not set

@@ -149,6 +149,61 @@ means the fault is NOT on the state-`0x8300` path. It narrows the search to the 
 dispatch, and it gives a new, cheaper question: **why does the cursor at `0x801F8300` hold a
 self-reference?**
 
+## MEASURED 2026-09-29 — the self-pointer is REAL, it is heap, and the guest's only store to it NEVER RUNS
+
+Four measurements, each with a control, because the first two could both have been artifacts.
+
+**1. The reading is not the endpoint echoing the address it was asked for.** The first version of the
+probe read `0x801F8300` alone. The control is its *neighbours*: an endpoint that answers an unmapped
+address with that address would produce the identical line. Reading the neighbourhood settles it:
+
+    spot 0x801F8300=801F8300  0x801F8304=00000000  0x801F8308=00000000  0x801F8380=00000000
+          0x80139554=00000000
+
+The neighbours read zero and do **not** echo themselves, so `0x801F8300` genuinely holds
+`0x801F8300` — and the whole `0x80`-byte record the cursor steps through is otherwise zero.
+
+**2. It is HEAP, and no port code writes it.** The loaded image ends at `0x8012F800` and the
+crt0-zeroed `.bss` is `[0x8012F418, 0x80175F38)`, so `0x801F8300` is in neither — above the heap base
+`0x80175F38`, below the stack top `0x801FFFF0`. Grepping the title for `0x801F83*` returns
+**nothing**, and the port has **no allocator at all**, so a free-list explanation is refuted before it
+was proposed.
+
+**3. The guest's only store to that address never executes.** A register-tracking scan of all 294,400
+text words — requiring the store's *base register* to hold the target with offset 0 — finds **1**
+store, the scheduler's own `sw $v0, ($s0)` at `0x80012724`, and **0** of them store the
+self-reference. (The first version of this scan was loose: it accepted any `sw` within five
+instructions and matched `sw ..., ($sp)`, reporting three "writers" that were stack saves. The
+corrected version has the OPPOSITE failure mode — it can miss writers reached through a loaded
+pointer, which is exactly what is left.)
+
+**4. And that store genuinely does not run — verified with an instrument proven to fire.**
+`PSXPORT_STORE_OBSERVE=0x80012724` reports **no events** across a 20,000-field run. A zero from an
+unproven instrument means nothing, so it was re-armed on the scheduler's own prologue store
+`0x80012620`, which must run, and it fires immediately:
+
+    [store-observe] guest_pc=0x80012620 phase=before cycle=16 a0=0x00000000 t0=0x80166C74
+      t1=0x0000002A gpr[29]=0x801FFFC0 gpr[31]=0x800120EC seen=1
+
+So the silence at `0x80012724` is real: **the cursor is never advanced by the guest.**
+
+**Which leaves one sharp open question.** Nothing in the port writes `0x801F8300`, the guest's only
+tracked store to it never runs, and it is not zero. So either a store reached through a **loaded
+pointer** wrote it — invisible to a `lui`/`addiu`/`ori` chain scan — or the word predates the run. Note
+too that the observer's dump shows the scheduler running early with `t0 = 0x80166C74` / `0x80166D14`,
+which look like **record pointers**, so the cursor may be a valid pointer when the scheduler actually
+runs and only self-referential later; the probe sampled it at frame 13,163 and **no measurement yet
+covers the moment the scheduler executes**.
+
+### A trap this section walked into, recorded because the map already warns about it
+
+`PSXPORT_STORE_OBSERVE` takes **store-instruction PCs**, and says so on arming: *"These are the PCs OF
+STORES, not the guest words they write."* It was first armed with `0x801F8300` — a **data** address.
+That is the exact error `WORKSPACE.md` records as having happened before ("arming the store observer
+on a data address and reading the guaranteed `MATCHED NONE` as absence"), and it would have produced a
+clean, confident, meaningless zero. It is named so the next reader does not repeat it, and because the
+instrument then had to be re-proven.
+
 ## The next step, named
 
 1. **Why does the cursor at `0x801F8300` point at itself?** This is now the cheapest open question
