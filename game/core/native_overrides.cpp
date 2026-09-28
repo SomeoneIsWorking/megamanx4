@@ -8,6 +8,7 @@
 #include "guest_execution.h"
 #include "music_cd.h"
 #include "stream_interrupt.h"
+#include "vram_rect_queue.h"
 #include "x4_context.h"
 
 #include <cstdint>
@@ -180,6 +181,7 @@ void install(Core &core) {
   guest::install(core, fast_wait::kCdControl, "fast_wait::CdControl", synchronousCdControl);
   guest::install(core, fast_wait::kCdControlBlocking, "fast_wait::CdControlB", synchronousCdControlBlocking);
   guest::install(core, fast_wait::kCdGetSector, "fast_wait::CdGetSector", synchronousCdGetSector);
+  vram_rect::install(core);
   music_cd::registerOverrides(core);
 }
 

@@ -32,6 +32,7 @@ set(SEAM_SRC
   game/core/title_layout.cpp
   game/core/title_quad.cpp
   game/core/visibility_cull.cpp
+  game/core/vram_rect_queue.cpp
   game/core/vsync_sync.cpp
   game/core/widescreen_controller.cpp
   game/core/x4_context.cpp
@@ -123,6 +124,17 @@ if(BUILD_TESTING)
     NAME stage_fault_evidence
     COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/tools/verify_stage_fault.py --check --selftest
   )
+  # The rectangle queue's OWNER (game/core/vram_rect_queue.{h,cpp}) replaces three guest functions, so
+  # every address and immediate in it is a decision rather than a copy, and the bound it supplies is
+  # the one the guest states in two places and enforces nowhere. This gate re-derives all of it from
+  # the authenticated image: the queue's layout, the three entries, the appender's arithmetic, and the
+  # pass ordering the fault argument rests on. Separate from stage_fault_evidence because that one
+  # pins the DIAGNOSIS and this one pins the FIX's constants; a fix whose constants drift is a
+  # different defect from a diagnosis that was wrong.
+  add_test(
+    NAME x4_vram_rect_queue_evidence
+    COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/tools/verify_vram_rect_queue.py --check --selftest
+  )
   # The live-play apparatus: the front-end state model and the transport that reads it. Both selftests
   # drive NOTHING and launch no product, so they are hermetic — but they are in the gate because a
   # census that cannot say "the park is still the park", or a differencer that cannot say "nothing
@@ -160,6 +172,7 @@ if(BUILD_TESTING)
     ${CMAKE_SOURCE_DIR}/game/core/title_quad.cpp
     ${CMAKE_SOURCE_DIR}/game/core/cull_overrides.cpp
     ${CMAKE_SOURCE_DIR}/game/core/visibility_cull.cpp
+    ${CMAKE_SOURCE_DIR}/game/core/vram_rect_queue.cpp
     ${CMAKE_SOURCE_DIR}/game/core/vsync_sync.cpp
     ${CMAKE_SOURCE_DIR}/game/core/input_path.cpp
     ${CMAKE_SOURCE_DIR}/game/core/widescreen_controller.cpp

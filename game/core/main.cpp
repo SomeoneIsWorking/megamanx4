@@ -14,6 +14,7 @@
 #include "hw_bind.h"
 #include "psx_exe_image.h"
 #include "store_observe.h" // store_observe_attach — PSXPORT_STORE_OBSERVE on a title-owned spine
+#include "vram_rect_queue.h"
 #include "x4_runtime.h"
 #include <stdio.h>
 
@@ -112,6 +113,10 @@ int main(int argc, char **argv) {
   // what it drew. (X4Runtime::bootInit is not the run end — native_boot_run calls it to enter the
   // loop.)
   x4::guest::reportGuestCallCensus("after native boot");
+  // The rectangle queue's census names how many appends were REFUSED for want of room, which is
+  // the number that says whether the bound this repository added is load-bearing on this disc. A
+  // run that never refuses it says so with a denominator rather than by silence.
+  x4::vram_rect::reportCensus("after native boot");
   cfg_logi("boot", "native boot returned");
   return 0;
 }

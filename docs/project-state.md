@@ -253,6 +253,38 @@ emits exactly 200 `deliverField` calls, so the extra increment arrives from the 
 `Timing::raiseVBlank` path, which X4 does not opt out of). It is not established as the cause of the
 empty object list and is reported rather than guessed at.
 
+**MEASURED 2026-09-28 (issue 0035) — THE STAGE-LOAD FAULT IS GONE AT ROOT CAUSE, and the game goes
+1,652 display fields further.** The fatal `0x26010006` dispatch is **absent**: it does not appear
+once in a run that previously ended on it. The guest now reaches display field **31,166** against
+the fault's **29,514**, and the reason it stops is a **different, already-guarded** condition —
+`vsync_sync.cpp`'s own `guest::call(c, vblankHandler)` refusing a **non-guest** entry word,
+`0x0113D7D0`, read from the guest's class-0 interrupt table at `0x8011CB98`. A first run of the
+owner, built with the twenty-bit stream mask the gate later caught as wrong, stopped earlier and
+differently — on `kMaxTurnFields = 512` budget exhaustions without a field boundary, at
+`0x800312B4`, inside the later stage-load stage whose per-entity loop is `0x80094F74` — so
+**31,166 display fields is the SUPERSEDED number and is not claimed here.** Both stops are reached,
+not caused: the queue owner provably stores only inside `[0x801659D0, 0x80165A30)`, and its bound is
+a membership test over that range, so it cannot have written `0x0113D7D0`.
+
+What changed is a native owner of the guest's eight-entry VRAM rectangle upload queue
+(`game/core/vram_rect_queue.{h,cpp}`), which replaces the guest's clearer, uploader and band
+appender and supplies the array's real capacity at the **two** stores the guest leaves unbounded: the
+record store, and the appender's post-loop terminator store — which lands on `item_objects[0].x_pos`
+at the array's own designed occupancy of eight, and needs no ninth append at all. The attribution
+that motivated it is measured, with denominators `PSXPORT_WWATCH` structurally cannot produce (its
+`pc`/`ra` are the executor segment boundary): in one guest field the appender was entered **184**
+times, **9** stored, all **9** from the single call site `0x80022058` for `g_Player`, and **16 of the
+17 call sites never executed at all**. The ninth store is what sets `item_objects[0].active` from
+`0x00` to `0x40`.
+
+**S009 stays `missing` and this is not a partial credit for it.** No scene with more than 2 submitted
+prims is still reached, and the run now ends one stage-load stage later on a CPU-bound guest loop
+rather than on a fault. The honest gain is the fault and the extra distance, both measured; the
+gameplay capability is unchanged and its blocker has moved, not gone. The next step is named in
+issue 0035: the writer of `g_Player+0x47`, which the measurement brackets to the code between two
+consecutive executions of the pass function `0x80021F34`, and which decides whether the nine-entry
+count is the guest's own (issue 0035's (a)) or something the port paces.
+
 So: the projection owner and the seven widened culling owners are implemented, their 4:3 identity is
 pinned, `render_width=428` is the steady state on the wide leg, and the seven owners still have **no
 product evidence** — not a negative result, an absent measurement. Their first product evidence
