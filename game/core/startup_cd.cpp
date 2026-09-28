@@ -119,7 +119,7 @@ void run(Core *core) {
     cfg_loge("x4-startup-cd", "func_80013588 received a null Core");
     std::abort();
   }
-  run(*core, guest::call, setupNativeController);
+  run(*core, guest::callWithoutKnownReturn, setupNativeController);
 }
 
 void registerOverride(Core &core) {

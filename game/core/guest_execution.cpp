@@ -224,21 +224,101 @@ void runToReturn(Core &core,
 
 } // namespace
 
-void call(Core *core, std::uint32_t address) {
+// `returnPc` IS the boundary. See the header for why a native owner must supply it rather than let
+// it come from `core->r[31]`: measured 2026-09-29, that inherited 0x80022060 — the return address
+// of an unrelated `jal` — and the call ran 757,804 cycles off the end of its own function.
+//
+// `r[31]` is SET to the boundary as well as passed as the return address, because the guest entry is
+// a leaf that returns through `jr $ra`: with `r[31]` left alone, the leaf would dispatch to whatever
+// the guest last left there and never reach the boundary this call is running under.
+void call(Core *core, std::uint32_t address, std::uint32_t returnPc) {
   if (!core) {
     lucent::error("x4-guest", "guest call 0x{:08X} received a null Core", address);
     std::abort();
   }
-  // The return address is the caller's r[31] as the FIRST segment saw it. Capturing it here is what
-  // keeps a resume from adopting the nested r[31] the guest left behind: that is a different address
-  // and would end the call in the wrong place.
-  const std::uint32_t returnPc = core->r[31];
+  core->r[31] = returnPc;
   runToReturn(*core,
               address,
               returnPc,
               "Mega Man X4 guest call",
               std::nullopt,
               psx::cpu::dispatchGuest(*core, address, psx::cpu::ExecutionBudget::currentTurn(*core)));
+}
+
+void callWithRegisterReturn(Core *core, std::uint32_t address) {
+  if (!core) {
+    lucent::error("x4-guest", "guest call 0x{:08X} received a null Core", address);
+    std::abort();
+  }
+  // THE CHECK THAT MAKES THIS DIFFERENT FROM THE OLD BEHAVIOUR. The old form read `r[31]` and used
+  // it; this one reads it and REFUSES unless it resolves in a code image, so an owner that forgot to
+  // set it is named instead of silently resuming against a stale value. Measured 2026-09-29: the
+  // decompress owner did not set it, inherited 0x80022060 - the return address of an unrelated
+  // `jal 0x80015ecc` - and ran 757,804 cycles off the end of its function.
+  const std::uint32_t returnPc = core->r[31];
+  if (!core->currentImageIdentity(returnPc)) {
+    lucent::error("x4-guest",
+                  "guest call 0x{:08X} is dispatching through a link register of 0x{:08X}, which is "
+                  "not in any code image. Either this owner did not set `r[31]` to the return "
+                  "address of the call it stands in for, or the guest left a stale value there. "
+                  "Refusing: resuming against this address is how the 2026-09-29 corruption ran "
+                  "757,804 guest cycles past the end of a function. `tools/"
+                  "census_guest_call_sites.py` lists the `jal` sites that target this entry; the "
+                  "return address is `jal + 8`",
+                  address,
+                  returnPc);
+    std::abort();
+  }
+  runToReturn(*core,
+              address,
+              returnPc,
+              "Mega Man X4 guest call with a register return point",
+              std::nullopt,
+              psx::cpu::dispatchGuest(*core, address, psx::cpu::ExecutionBudget::currentTurn(*core)));
+}
+
+void callWithoutKnownReturn(Core *core, std::uint32_t address) {
+  if (!core) {
+    lucent::error("x4-guest", "guest call 0x{:08X} received a null Core", address);
+    std::abort();
+  }
+  // The first segment, honestly bounded. If it returns, the boundary was never needed and the stale
+  // `r[31]` was harmless. If it ends BudgetExhausted, the boundary WOULD be needed and there is none,
+  // so this refuses instead of resuming against a guess.
+  const psx::cpu::ExecutionResult first =
+      psx::cpu::dispatchGuest(*core, address, psx::cpu::ExecutionBudget::currentTurn(*core));
+  if (first.reason != psx::cpu::ExecutionExitReason::BudgetExhausted) {
+    if (first.returned()) {
+      recordCompleted(address, first.guestPc, 1u, first.cycles);
+      return;
+    }
+    // The entry is NAMED here, not only the owner string. Measured 2026-09-29: after the boundary
+    // repair, guest address 0x0113D7D0 still faulted, but through a DIFFERENT call than the one the
+    // boundary defect explained - and the owner-only message could not say which entry it was, so
+    // the next measurement had no subject. A refusal that cannot name what it refused about is half
+    // a refusal.
+    lucent::error("x4-guest",
+                  "guest call 0x{:08X} exited {} at 0x{:08X} after {} cycles, and this owner has no "
+                  "return point for it: {}",
+                  address,
+                  psx::cpu::executionExitName(first.reason),
+                  first.guestPc,
+                  first.cycles,
+                  first.detail);
+    std::abort();
+  }
+  lucent::error("x4-guest",
+                "guest call 0x{:08X} outlived one host turn and this owner has NO return point for "
+                "it, so there is no boundary to resume against: {} cycles at 0x{:08X}. Supply one - "
+                "`tools/census_guest_call_sites.py` lists every `jal` that targets this entry, and "
+                "the return address is `jal + 8`. Refusing rather than resuming against "
+                "`core->r[31]`, which is a stale return address left by whatever the guest called "
+                "last (measured 2026-09-29: that resumed 0x80016FF4 against 0x80022060 and ran "
+                "757,804 cycles off the end of the function)",
+                address,
+                first.cycles,
+                first.guestPc);
+  std::abort();
 }
 
 psx::cpu::ExecutionResult dispatch(Core &core, std::uint32_t address) {

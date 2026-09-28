@@ -23,7 +23,7 @@ constexpr std::uint32_t kQueryArchiveStatus = 0x8001385Cu;
 constexpr std::uint32_t kPublishDirectReady = 0x80013650u;
 
 void call(std::uint32_t address, Core *core) {
-  guest::call(core, address);
+  guest::callWithoutKnownReturn(core, address);
 }
 
 void original(std::uint32_t address, const char *owner, Core *core) {

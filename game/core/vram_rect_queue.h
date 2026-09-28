@@ -68,6 +68,21 @@ inline constexpr std::uint32_t kAppendBandsGuest = 0x80015ECCu; // decompress_pl
 inline constexpr std::uint32_t kDecompressGfxGuest = 0x80016FF4u;
 inline constexpr std::uint32_t kLoadImageGuest = 0x800EA4D0u;
 
+// The return points for the two guest calls this owner stands in for. A `jal` links `$ra` to PC+8
+// because of the delay slot, so the return address is `jal + 8`; both values below are the call
+// sites this owner's own comments already named, and `tools/census_guest_call_sites.py` reproduces
+// both from the image independently - the decompressor's is the ONLY `jal` targeting 0x80016FF4 in
+// 294,400 words, so it is the call and not a candidate; LoadImage has 11 sites, and this is the one
+// at 0x80015E8C that this owner documents.
+//
+// These are required, not cosmetic. `x4::guest::call` used to take its boundary from `core->r[31]`,
+// which is a return address only when GUEST code executed the `jal`; a native owner inherited
+// whatever the guest last left, and the decompress call inherited 0x80022060 - the return address of
+// an unrelated `jal 0x80015ecc`. It could not return there, ran 757,804 cycles past its own end and
+// faulted at a non-address. See `docs/issues/0037`.
+inline constexpr std::uint32_t kDecompressGfxReturn = 0x80015F5Cu;  // `jal` at 0x80015F54
+inline constexpr std::uint32_t kLoadImageGuestReturn = 0x80015E94u; // `jal` at 0x80015E8C
+
 // ── the appender's own constants, measured ───────────────────────────────────────────────────
 
 // The per-object animation word: `lw $5,0($2)` at 0x80015F14 with `$2 = unk38 + unk47*4`.

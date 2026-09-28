@@ -312,27 +312,51 @@ would convert a diagnosable fault into a refusal without saying where the value 
 re-pointed at the **task stack**, which no earlier scan covered, and found it at **0 of 43,520**
 word-reads, so a stale return address off the task's own stack is refuted.
 
-**ROOT CAUSE (issue 0037) — a NATIVE owner calls `x4::guest::call`, which takes its return boundary
-from `core->r[31]`, so the boundary is a stale return address from unrelated code.**
-`x4::guest::call` does `const std::uint32_t returnPc = core->r[31];`, and its comment's assumption
-("the caller's `r[31]` as the FIRST segment saw it") holds **only when guest code executed the
-`jal`**. A native owner inherits whatever link register the guest last left, and that becomes the
-address the call must reach to return.
+**TWO FINDINGS, NOT ONE (issue 0037) — a boundary defect that was real and is FIXED, and a
+corruption that predates it, is still live, and is now LOCALISED.**
 
-The faulting call is exactly that case. `0x80016FF4` is `kDecompressGfxGuest` (the RLE decompressor),
-and `vram_rect_queue.cpp` invokes it from host C++ with the comment "`jal 0x80016FF4` at `0x80015F54`"
-— so the owner's real return point is `0x80015F58`. The boundary it actually got was **`0x80022060`**,
-and the framework disassembler shows what that is:
+*1. Fixed and verified.* `x4::guest::call` derived its return boundary from `core->r[31]`, which is a
+return address only when GUEST code executed the `jal`. `0x80016FF4` is `kDecompressGfxGuest`,
+invoked from host C++ by `vram_rect_queue.cpp`, and it inherited **`0x80022060`** — which the
+framework disassembler shows is the return address of an unrelated `jal 0x80015ecc` at `0x80022058`.
+It could not return there, so it ran past its own end. The repair makes the boundary explicit and
+gate-checked, and the product run shows the call now returning at the right place:
 
-    80022058  jal   0x80015ecc      <- an UNRELATED guest call
-    8002205C  move  $a2, $zero
-    80022060  lw    $ra, 0x14($sp)  <- the boundary the decompress call was given
+    before:  guest call 0x80016FF4 to return address 0x80022060   <- inherited, unrelated `jal`
+    after:   guest call 0x80016FF4 to return address 0x80015F5C   <- `jal` at 0x80015F54, +8
 
-**The decompressor cannot return to an address belonging to a different function**, so it runs on
-past its own end through code it was never meant to execute, consumes 757,804 cycles over 2 host
-turns, and faults at `0x0113D7D0` with 0 cycles. That accounts for every earlier observation at
-once: the fault after a long call rather than at a branch, and a value that is in no image, no table,
-no RAM region and no stack — because it was produced by code running past its intended boundary.
+*2. NOT the cause of the corruption, and this supersedes the previous entry in this file.* The fault
+survives the repair and arrives through a different call. Naming the entry — a diagnostic added
+because the owner-only message could not say which entry had faulted — gives:
+
+    [x4-guest:error] guest call 0x80012600 exited fault at 0x0113D7D0 after 0 cycles, and this
+                     owner has no return point for it: ambiguous code-image identity
+
+**`0x80012600` is `kUpdateTasks`**, the retail task scheduler the frame driver dispatches, and it
+faults **0 cycles** into its first host turn. So it is not a boundary consulted across a resume: the
+guest jumps to a non-address from inside the scheduler, which is the `ChangeTh` fiber-switch path the
+original frontier named. **The frontier is the scheduler, not the boundary.**
+
+*Why the boundary defect survived so long, and this is the useful part:* `stream_startup` and
+`movie_cleanup` set `r[31]` to the return address in their own `call` helpers before dispatching, so
+the old guess read the RIGHT value from them by accident of ordering. `vram_rect_queue` did not set
+it, so it inherited a stale one. One ordering difference separated a working call from a corrupting
+one, and both looked identical from outside.
+
+*A PREDICTION REFUTED ON THE WAY, with the instrument now shipping.* The stale-`$ra` hypothesis was
+tested by a census in `guest_execution.cpp` classifying the link register at the instant of every
+resume, via `Core::currentImageIdentity` — the criterion the fault message itself quotes. A
+20,000-field run reported `1 in a code image, 0 in RAM outside one, 0 outside RAM` and then the same
+for the second call, so the stale-`$ra` mechanism was refuted. Two denominators worth keeping: only
+**2 of 46,715** guest calls ever need a resume, and the first is `0x800ED574` at 610,746 cycles,
+matching the `DecDCTvlc` figure already recorded in `bios_threads.cpp`.
+
+*Also corrected earlier today:* the "BIOS range" classification was wrong. The EXE loads text at
+`0x80010000` size `0x11F800`, so the image spans `0x80010000..0x8012F800` and **contains** the
+`0x800E0000..0x80100000` range I had been calling BIOS; `0x800EA0F4` decodes as a guest byte-getter
+ending in `jr $ra`. The "80.8% of resumes continue at an HLE entry" claim was an artifact of
+overlapping buckets and is withdrawn, and the framework root cause built on it is refuted in
+`psxport/docs/issues/0038`.
 
 **A PREDICTION THAT WAS REFUTED ON THE WAY, and the measurement that refuted it is now shipping.**
 The stale-`$ra` hypothesis was tested by a new census in `guest_execution.cpp` that classifies the

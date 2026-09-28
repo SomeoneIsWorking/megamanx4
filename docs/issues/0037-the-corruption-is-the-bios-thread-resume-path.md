@@ -9,7 +9,73 @@ created: 2026-09-29
 updated: 2026-09-29
 ---
 
-## MEASURED 2026-09-29 — ROOT CAUSE: a NATIVE owner calls `x4::guest::call`, which takes its return boundary from `core->r[31]`
+## CORRECTED BY THE PRODUCT RUN — the boundary defect was REAL and is FIXED, but it is NOT the cause of `0x0113D7D0`
+
+**The claim in the heading above is falsified.** The boundary defect was genuine, the repair works,
+and the decompress call now returns correctly — but the corruption survives the repair, so the
+boundary was a second defect, not this one.
+
+**What the repair verifiably achieved.** The decompress call now runs with the boundary the image
+implies and COMPLETES:
+
+    before:  guest call 0x80016FF4 to return address 0x80022060   <- inherited, unrelated `jal`
+    after:   guest call 0x80016FF4 to return address 0x80015F5C   <- `jal 0x80016FF4` at 0x80015F54, +8
+
+Both before and after it reports `2 turn(s), 757804 cycles total` and is counted as completed
+(`2 of 46715 completed guest call(s) have needed a resume`). The call genuinely is that long, and it
+now returns at the right place instead of running past its own end.
+
+**And the corruption is still there, through a different call.** Naming the entry (a diagnostic added
+for exactly this, because the owner-only message could not say which entry had faulted) gives:
+
+    [x4-guest:error] guest call 0x80012600 exited fault at 0x0113D7D0 after 0 cycles, and this
+                     owner has no return point for it: ambiguous code-image identity
+
+**`0x80012600` is `kUpdateTasks`** — the retail task scheduler, dispatched by the frame driver. It
+faults **within its first host turn**, so this is not a boundary consulted across a resume; it is the
+guest jumping to a non-address from inside the scheduler. That is the BIOS-thread `ChangeTh` /
+fiber-switch path the original frontier pointed at, and it is where the frontier now belongs.
+
+**So the honest position is two findings, not one.** A real, measured, fixed defect in how a native
+owner obtained a return boundary; and an unexplained corruption that predates it, still live, and now
+localised to the task scheduler. The second was never caused by the first.
+
+## The next step, named
+
+1. **The scheduler, not the boundary.** `0x80012600` chooses a task and calls `ChangeTh`
+   (`0x800EDDBC`); the fault is 0 cycles after entering it. Instrument the `ChangeTh` fiber switch to
+   report the register file it resumes a task with, specifically the task's `r[31]` and `pc` — the
+   same census that refuted the stale-`$ra` hypothesis here should be pointed at the switch itself,
+   because `Service::open` sets `r[29]`, `r[28]` and `pc` and never `r[31]`.
+2. **Supply boundaries for the remaining native-owner calls**, so the refusals become working calls.
+   `tools/census_guest_call_sites.py` has the candidates: `kAppendBandsGuest` (0x80015ECD) has **no**
+   `jal` site at all, so it needs a pointer/`jalr` reachability answer before a boundary can be
+   derived for it; the `display_init` and `music_stream` entries have 2-24 sites each and the owner
+   must name which one it stands in for.
+3. **Widen `GuestDispatch` to carry the return address.** Five headers each declare their own
+   `using GuestDispatch = void (*)(Core *, std::uint32_t);`, so a boundary cannot travel with a
+   dispatch today, which is why `callWithRegisterReturn` exists as a verified-register compromise.
+   One typedef, one owner, and the return address becomes impossible to drop.
+4. Keep the boundary gate. `tools/census_guest_call_sites.py --verify-boundaries` re-derives the two
+   hard-coded constants from the image and was confirmed red on a mutated constant; it is what stops
+   a future edit from silently restoring the defect this repair removed.
+
+## CORRECTION THE PRODUCT RUN FORCED — the boundary was NOT the cause of `0x0113D7D0`
+
+**The section below claims the boundary was the root cause of the corruption. That claim is wrong,
+and the disc-backed product run falsified it.** The boundary defect was real and the repair works — the
+decompress call now returns at `0x80015F5C` instead of inheriting `0x80022060` — but `0x0113D7D0`
+survives the repair, arriving through `guest call 0x80012600`, which is `kUpdateTasks`, the retail
+task scheduler the frame driver dispatches. It faults **0 cycles** into its first host turn, so it is
+not a boundary consulted across a resume at all: it is the guest jumping to a non-address from inside
+the scheduler, which is the `ChangeTh` fiber-switch path the original frontier named.
+
+**Two findings, not one: a measured and fixed defect in how a native owner obtained a return
+boundary, and an unexplained corruption that predates it, still live, and now localised to
+`0x80012600`.** What follows is kept because the boundary defect was real and the evidence for it
+stands; what it does not establish is that it explained the corruption.
+
+## MEASURED 2026-09-29 — ROOT CAUSE (SUPERSEDED BY THE RUN ABOVE): a NATIVE owner calls `x4::guest::call`, which takes its return boundary from `core->r[31]`
 
 **The prediction that failed first, because the record should show the refutation.** The hypothesis
 above was a stale `$ra`. `guest_execution.cpp`'s census now classifies the link register at the

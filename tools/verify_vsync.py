@@ -542,7 +542,7 @@ def verify(inputs: Inputs, *, check_digest: bool = True) -> list[str]:
         "kVblankHandler = 0x800E56FCu",
         "kSetInterruptTable = 0x8011CB98u",
         "const uint32_t vblankHandler = c->mem_r32",
-        "guest::call(c, vblankHandler)",
+        "guest::callWithoutKnownReturn(c, vblankHandler)",
         "c->game->pad.serviceFrame()",
         "c->game->spu_audio.frame()",
         "c->game->presentation.commit(c, 1)",
@@ -684,7 +684,7 @@ def selftest(inputs: Inputs) -> list[str]:
         inputs.exe,
         inputs.header,
         inputs.source.replace(
-            "guest::call(c, vblankHandler)", "guest::call(c, kVblankHandler)", 1
+            "guest::callWithoutKnownReturn(c, vblankHandler)", "guest::call(c, kVblankHandler)", 1
         ),
         inputs.frame,
         inputs.config,

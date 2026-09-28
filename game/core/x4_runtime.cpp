@@ -82,7 +82,7 @@ void X4Runtime::bootInit(Core &core) {
 }
 
 std::unique_ptr<FrameDriver> X4Runtime::createFrameDriver(Game &game) {
-  return std::make_unique<frame::X4FrameDriver>(guest::call,
+  return std::make_unique<frame::X4FrameDriver>(guest::callWithoutKnownReturn,
                                                 vsync::deliverField,
                                                 synchronizePresentation,
                                                 context(game.core).movieCleanup,

@@ -115,13 +115,14 @@ std::uint32_t decompressedBuffer(Core &core, std::uint32_t object) {
   return kPerSlotGfxBuffer + static_cast<std::uint32_t>(slot * static_cast<std::int32_t>(kGfxBufferStride));
 }
 
-void runGuest(Core &core, std::uint32_t entry, std::uint32_t a0, std::uint32_t a1, std::uint32_t caller) {
+void runGuest(
+    Core &core, std::uint32_t entry, std::uint32_t returnPc, std::uint32_t a0, std::uint32_t a1, std::uint32_t caller) {
   core.r[4] = a0;
   core.r[5] = a1;
   // The nested guest call returns to the return address the OVERRIDE was entered with, so a `jr $ra`
   // out of the callee lands on the dispatcher's boundary exactly as the guest's own `jal` would.
   core.r[31] = caller;
-  guest::call(&core, entry);
+  guest::call(&core, entry, returnPc);
 }
 
 } // namespace
@@ -151,7 +152,7 @@ void upload(Core &core) {
     // `jal 0x800EA4D0` at 0x80015E8C with `$0 = &entry` and `$1 = entry->pixels`. The RECT is read
     // out of guest memory by the callee, so the entry has to be written before the call, which is
     // what makes this an owner rather than a buffer it could build on the stack.
-    runGuest(core, kLoadImageGuest, entry, pixels, caller);
+    runGuest(core, kLoadImageGuest, kLoadImageGuestReturn, entry, pixels, caller);
     stats.uploadedEntries += 1;
   }
   core.mem_w32(kCursorGlobal, kQueueBase);
@@ -185,7 +186,15 @@ void append(Core &core, std::uint32_t object, std::int32_t x, std::int32_t y) {
   // `jal 0x80016FF4` at 0x80015F54 with `$0 = blob + (word & 0xFFFFF)` and `$1 = buffer`. The
   // decompressor is a leaf that owns the compression format, so it stays a guest call: this owner
   // owns what the queue DOES with the result, not the format.
-  runGuest(core, kDecompressGfxGuest, stream, buffer, caller);
+  //
+  // The return point is `jal + 8` = 0x80015F5C, because a `jal` links `$ra` to PC+8 (the delay slot).
+  // It is the ONLY `jal` in the whole image that targets 0x80016FF4 - 1 site of 294,400 words
+  // scanned, cross-checked by `tools/census_guest_call_sites.py` - so this is the call being stood
+  // in for and not a choice among candidates. Before this was supplied, `x4::guest::call` took the
+  // boundary from `core->r[31]` and inherited 0x80022060, the return address of an unrelated
+  // `jal 0x80015ecc`; the decompressor could not return there, ran 757,804 cycles past its own end
+  // and faulted at a non-address. See `docs/issues/0037`.
+  runGuest(core, kDecompressGfxGuest, kDecompressGfxReturn, stream, buffer, caller);
 
   emitBands(core, buffer, x, y, bands, record);
 

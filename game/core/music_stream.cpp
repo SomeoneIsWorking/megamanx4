@@ -42,7 +42,7 @@ void yieldSetModeFields(Core &core, std::uint32_t returnAddress, std::uint32_t f
 }
 
 void cdControl(Core *core) {
-  guest::call(core, 0x800E5D90u);
+  guest::callWithoutKnownReturn(core, 0x800E5D90u);
 }
 
 void runSetMode(Core *core) {

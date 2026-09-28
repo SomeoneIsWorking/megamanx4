@@ -118,7 +118,7 @@ void bootPrefix(Core &core, GuestDispatch dispatch) {
 }
 
 void bootPrefix(Core &core) {
-  bootPrefix(core, guest::call);
+  bootPrefix(core, guest::callWithoutKnownReturn);
 }
 
 X4FrameDriver::X4FrameDriver(GuestDispatch dispatch,

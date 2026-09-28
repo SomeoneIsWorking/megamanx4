@@ -31,19 +31,19 @@ void copyWords(Core &core, std::uint32_t destination, std::uint32_t source) {
 }
 
 void resetGraph(Core *core) {
-  guest::call(core, 0x800E9D4Cu);
+  guest::callWithoutKnownReturn(core, 0x800E9D4Cu);
 }
 void clearImage(Core *core) {
-  guest::call(core, 0x800EA3A0u);
+  guest::callWithoutKnownReturn(core, 0x800EA3A0u);
 }
 void drawSync(Core *core) {
-  guest::call(core, 0x800EA20Cu);
+  guest::callWithoutKnownReturn(core, 0x800EA20Cu);
 }
 void setDisplayMask(Core *core) {
-  guest::call(core, 0x800EA170u);
+  guest::callWithoutKnownReturn(core, 0x800EA170u);
 }
 void publishEnvironment(Core *core) {
-  guest::call(core, 0x800E9424u);
+  guest::callWithoutKnownReturn(core, 0x800E9424u);
 }
 
 void run(Core *core) {

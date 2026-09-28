@@ -108,3 +108,20 @@ endif()
 add_test(
   NAME megamanx4_psxport_pin_selftest
   COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_psxport_sync.py")
+
+# The `jal` census's own selftest, registered WITHOUT media. It pins the two decode rules the
+# boundary repair depends on - an absolute J-type target, and `$ra = PC + 8` for the delay slot - plus
+# the negative that an entry nobody calls must come back empty rather than guessed. The first draft
+# of this decoder took the J-type region nibble from the instruction word instead of the address, and
+# the first draft of the selftest listed 0x0C000000 as a non-`jal` when it is opcode 3; both were
+# caught here rather than in a hand-decoded listing.
+#
+# The OTHER mode, `--verify-boundaries`, re-derives the two hard-coded boundary constants in
+# `vram_rect_queue.h` from the authenticated image and is deliberately NOT registered here: it needs
+# the provisioned executable, and a registered test that cannot run in CI is the green-zero this
+# workspace keeps meeting. Run it directly after provisioning:
+#   uv run --frozen python tools/census_guest_call_sites.py --verify-boundaries
+add_test(
+  NAME megamanx4_guest_call_site_census_selftest
+  COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/census_guest_call_sites.py"
+          --selftest)

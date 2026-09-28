@@ -97,7 +97,7 @@ void deliverField(Core &core) {
     std::abort();
   }
   const R3000 saved = *static_cast<R3000 *>(c);
-  guest::call(c, vblankHandler);
+  guest::callWithoutKnownReturn(c, vblankHandler);
   *static_cast<R3000 *>(c) = saved;
 
   const uint32_t after = c->mem_r32(kVblankCounter);

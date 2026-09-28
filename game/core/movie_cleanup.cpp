@@ -193,7 +193,7 @@ void run(Core *core) {
   if (!core) {
     refuse("Core is null");
   }
-  run(*core, context(*core).movieCleanup, guest::call, cd_controller::reset);
+  run(*core, context(*core).movieCleanup, guest::callWithRegisterReturn, cd_controller::reset);
 }
 
 void registerOverride(Core &core) {
