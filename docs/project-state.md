@@ -441,6 +441,38 @@ executes and only self-referential later, and no measurement yet covers the mome
 was first armed with the data address `0x801F8300` — the exact error the map records as having
 happened before — and would have produced a clean, confident, meaningless zero.
 
+*7. The scheduler is entered ONCE and reaches NEITHER of its own exit stores — with its code
+provably intact. This is the sharpest localization on the corruption frontier.*
+
+The state machine's two exits both store, which makes them watchable, and all three store PCs were
+armed in ONE run with the function prologue as a control that must fire:
+
+    armed: 0x80012620 (prologue/control)  0x800126A8 (dispatch exit)  0x80012724 (fall-through exit)
+    events: 0x80012620 before + after, ONCE.  Nothing at 0x800126A8.  Nothing at 0x80012724.
+
+**The scheduler is entered once and never passes `0x80012624`.** It dies in the state block
+`0x8001262C..0x8001267C`.
+
+**The instructions there are provably UNMODIFIED at run time.** `0x0113D7D0` sits below `0x04000000`,
+so it is exactly what a corrupted 26-bit `j` field would produce, and the block has two `j`
+instructions — so "a `j` field was overwritten" was the obvious hypothesis. The runtime words were
+read through the debug server: `0x80012658 = 0x80012674 = 0x080049C4`, byte-identical to the
+authenticated image. **That hypothesis is refuted, not merely unproven.**
+
+**The resulting contradiction is the useful part.** With the cursor self-referential the state read
+yields `0x8300`, no branch handles it, `0x80012674` jumps to `0x80012710`, `sltu` makes `beqz` fall
+through, and `0x80012724` **must** execute. It does not — while the instructions that would take it
+there are provably unmodified. **Data and code are both shown intact, the path is shown taken, and
+the store ending it is shown not to happen.** That points at the EXECUTION of the block rather than
+its contents — a translation or branch-propagation fault in the executor, a different owner from
+anything examined so far and a different kind of fix.
+
+**Not yet established:** the `beqz` back-edge at `0x80012720` targets the state-read block itself, so
+a **re-entered** block would also produce no exit store. The observer shows one entry, but a loop
+re-entering through the prologue is a different thing from a loop inside the block, and nothing
+separates them yet. That distinction decides which owner is responsible, and is the next thing to
+settle.
+
 *Why the boundary defect survived so long, and this is the useful part:* `stream_startup` and
 `movie_cleanup` set `r[31]` to the return address in their own `call` helpers before dispatching, so
 the old guess read the RIGHT value from them by accident of ordering. `vram_rect_queue` did not set

@@ -90,7 +90,12 @@ def slab(tick: int) -> list[tuple[int, int]]:
 # the control for the cursor reading itself: if an UNMAPPED address also echoes its own value,
 # then "0x801F8300 holds 0x801F8300" is the endpoint answering with the address it was asked
 # for, and the whole self-pointer finding is an instrument artifact rather than a measurement.
-SPOT = [0x801F8300, 0x801F8304, 0x801F8308, 0x801F8380, 0x80139554]
+SPOT = [0x801F8300, 0x801F8304, 0x801F8308, 0x801F8380, 0x80139554,
+        # The two `j` instructions in the scheduler's state-read block, and the words just
+        # before them. A `j` takes a 26-bit field, and 0x0113D7D0 is below 0x04000000, so a
+        # corrupted field of that exact value jumps to the fault address. The static image says
+        # 0x080049C4 / 0x080049C8; if the RUNTIME word differs, the fault is a corrupted `j`.
+        0x80012654, 0x80012658, 0x80012670, 0x80012674]
 BAD = 0x0113D7D0
 TERMINATOR = "---END---\n"
 

@@ -204,6 +204,60 @@ on a data address and reading the guaranteed `MATCHED NONE` as absence"), and it
 clean, confident, meaningless zero. It is named so the next reader does not repeat it, and because the
 instrument then had to be re-proven.
 
+## MEASURED 2026-09-29 — the scheduler enters ONCE and never reaches either of its own stores, with its code provably intact
+
+The observer makes the state machine's two exits into **watchable stores**, and watching all three
+store PCs *in one run, with a control*, is what turns this from a guess into a localization.
+
+The scheduler's dispatch exit and its fall-through exit both store, and they are the only two ways
+out of the state block:
+
+    800126A4  jal   0x800eddbc      ; ChangeTh
+    800126A8  sh    $s1, ($v0)     ; delay slot: record state <- 0x7f   (DISPATCH exit)
+    ...
+    80012718  addiu $v0, $v0, 0x80 ; cursor += 0x80
+    80012720  beqz  $v1, 0x8001262c
+    80012724  sw    $v0, ($s0)     ; cursor store                (FALL-THROUGH exit)
+
+One run, three store PCs armed, `0x80012620` being the function prologue and therefore a control
+that must fire:
+
+    armed: 0x80012620  0x800126A8  0x80012724
+    events: 1 x guest_pc=0x80012620 phase=before
+            1 x guest_pc=0x80012620 phase=after
+
+**The prologue fires exactly once, and NEITHER exit store ever fires.** The scheduler is entered once
+and never passes `0x80012624`. The state block at `0x8001262C..0x8001267C` is where it dies.
+
+**The instructions in that block are provably UNMODIFIED at run time.** `0x0113D7D0` is below
+`0x04000000`, so it is exactly the kind of value a corrupted 26-bit `j` field would produce, and the
+block contains two `j` instructions — which made "a `j` field was overwritten" an obvious hypothesis.
+The runtime words were read directly through the debug server:
+
+    0x80012654=3C03801F  0x80012658=080049C4  0x80012670=3C03801F  0x80012674=080049C4
+
+Both `j` instructions are `0x080049C4`, byte-identical to the authenticated image. **The
+corrupted-`j` hypothesis is REFUTED**, not merely unproven.
+
+**Which leaves a contradiction sharp enough to be useful.** With the cursor self-referential
+(`0x801F8300`), the state read at `0x80012638` yields `0x8300`; no branch handles it; `0x80012674`
+jumps to `0x80012710`; `sltu` makes `beqz` fall through; and `0x80012724` **must** execute. It does
+not — while the instructions that would take it there are provably unmodified.
+
+So this is no longer a question about a word someone wrote. The data and the code are both shown
+intact, the path is shown to be taken, and the store at the end of it is shown not to happen. **That
+points at the EXECUTION of that block rather than at its contents** — a translation or branch-
+propagation fault on the state-read block in the executor, which is a different owner from anything
+examined so far and a different kind of fix.
+
+### What this does NOT establish
+
+It does not establish that the executor is at fault. The `beqz $v1, 0x8001262c` back-edge at
+`0x80012720` targets the state-read block itself, so a **re-entered** block would also produce no
+exit store, and the observer's `seen=` counter shows one entry — but a loop that re-enters through the
+prologue is a different thing from a loop inside the block, and nothing yet separates them. That
+distinction is the next thing to settle, and it decides which owner is responsible.
+
 ## The next step, named
 
 1. **Why does the cursor at `0x801F8300` point at itself?** This is now the cheapest open question
