@@ -1,0 +1,108 @@
+---
+id: 37
+title: The corruption is the BIOS-thread budget RESUME path, and the bad address is never at rest anywhere
+status: open
+symptom: The build stops with guest address 0x0113D7D0 "resolves to zero or multiple active code images"
+state_items: S002
+tags: megamanx4,bios,threads,resume,executor
+created: 2026-09-29
+updated: 2026-09-29
+---
+
+## What this does that the earlier frontier did not
+
+Issues 0036 and 0037 established that `0x0113D7D0` is **nowhere at rest**: not in the image, not in the
+class-0 table, not in three live RAM windows. That left the question "what computes it" with no
+mechanism attached. `PSXPORT_DEBUG=x4-thread` turns on `Service::open`'s own `lucent::debug` line, which
+logs every BIOS thread activation with its entry, SP and GP — **the instrument was already in the
+shipping code and nobody had switched the channel on.**
+
+The run narrows the fault to a specific port-owned path.
+
+## MEASURED — the last four events before the fault
+
+    OpenTh handle=0xFF000001 entry=0x8001DAF8 sp=0x801FEC00 gp=0x00000000
+    ChangeTh main -> 0xFF000001 entry=0x8001DAF8 sp=0x801FEBC8
+    ChangeTh main -> 0xFF000001 entry=0x8001DAF8 sp=0x801FEB58
+    retail task entry 0x8001DAF8 ... was RESUMED at 0x800EA0F4 after 564486 cycle(s) in that turn.
+      Denominator: 1561 of 13420 task turn(s) have needed a budget resume, 881179244 guest cycle(s)
+      over them; the other 11859 reached a guest field boundary
+    [native-dispatch:error] guest address 0x0113D7D0 resolves to zero or multiple active code images
+    [executor:error] ... execution exited as fault at 0x0113D7D0 after 0 cycles
+
+**The chain is task -> budget resume -> BIOS-range address `0x800EA0F4` -> fault at `0x0113D7D0`.**
+`0x800EA0F4` is in the BIOS range and is **not** an entry the port's BIOS table names (it knows
+`PutDispEnv` 0x800EAAD8, `DrawSync` 0x800EA20C, `LoadImage` 0x800EA4D0, and others). The turn after
+that resume consumed **0 guest cycles**, which is the signature of a jump to a non-code address
+rather than of code that ran and went wrong.
+
+## The seam, which is the actual finding
+
+`game/core/bios_threads.cpp` takes the resume address from the executor's own exit report:
+
+    resumeAddress = result.guestPc;
+    suspended = true;
+
+and its only guard on that value is `result.cycles == 0u || result.guestPc == 0u` — a **non-zero**
+check. There is no check that the resume address is a guest **code** address. A value like
+`0x0113D7D0` passes that guard and is handed straight to `psx::cpu::resumeGuestToReturnFrom` on the
+next turn, which is where the framework's `ambiguous code-image identity` comes from.
+
+**So the port-owned seam through which a non-address becomes an execution target is identified, and it
+is a missing predicate rather than a wrong computation.** The code already knows the difference
+matters — it aborts on a zero PC for exactly this reason — and stops one predicate short.
+
+**This is NOT yet a fix, and the reason matters.** Adding "is this a code address" as a check would
+turn a diagnosable fault into a refusal, and would not say where the value came from. The correct
+fix is upstream of the seam: find why the executor reported `0x0113D7D0` as `guestPc` after a resume
+into `0x800EA0F4`. Recorded as the next step, not applied.
+
+## Two more measured facts about the activations
+
+* **Every activation passes `gp=0x00000000`.** All five `OpenTh` calls in the run log
+  `gp=0x00000000`, from a0=entry, a1=sp, a2=gp. The BIOS contract's third argument is documented in
+  the owner as the global pointer. Either this guest never uses `$gp`, or it is passing zero where
+  retail passes a real value, and any `$gp`-relative access in a task would then read from address 0.
+  **Not established which**, and it is a separate question from the fault.
+* **Task `0x8001DAF8` never retires, and its SP descends monotonically**: 0x801FEC00 -> 0x801FEBC8 ->
+  0x801FEB58 across three `ChangeTh main ->` transfers, with no `RETIRED` line for that entry
+  anywhere in the run. The task is being re-entered without ever reaching its activation's return
+  address.
+
+## The value is still nowhere at rest — now over four regions
+
+`tools/probe_class0_table.py` was re-pointed at the **task stack**, which the earlier scans never
+covered: the activations log `sp=0x801FEC00` and descending, and the earlier ranges were
+0x8011C000, 0x801F8000 and 0x80139000.
+
+    34 ticks x 1,280 word-reads = 43,520 word-reads, presented frames to 13,163
+    regions: 0x8011C000..0x8011C200, 0x801FE000..0x801FE200, 0x801F8000..0x801F8200,
+             0x80139000..0x80139100
+    0x0113D7D0 present at 0 of 43,520
+
+The product still exited at the fault (the probe's `RC=1` is its BrokenPipe on the dying child, not a
+scan failure). **So a stale return address read off the task's own stack is refuted** — that was the
+most likely mechanism for a fiber-resumed guest task, and it is not it.
+
+## The next step, named
+
+1. **Resolve `0x800EA0F4`.** It is a resume address the executor reported, in the BIOS range, that the
+   port's BIOS table does not name. Either it is a BIOS entry the HLE does not intercept — in which
+   case a budget resume should not be landing there at all, because the guest call should have been
+   serviced by the HLE rather than by executing BIOS bytes — or it is not a BIOS entry and the
+   reported `guestPc` is wrong. **These two have opposite fixes and the distinction is one lookup.**
+2. **Only then decide the seam's predicate.** The `guestPc != 0` check is the place a non-address gets
+   to become a target, and tightening it is a refusal, not a repair.
+3. **Answer the `gp=0` question** independently. Five of five activations pass a zero global pointer.
+4. Keep the `x4-thread` channel in the standing probe set. The fault's mechanism was in the shipping
+   debug channel the whole time; the earlier frontier spent its effort on a static image scan of a
+   value that is never in the image.
+
+## Falsifier
+
+* If `0x800EA0F4` turns out to be a valid, named BIOS entry that the HLE legitimately services, then
+  the resume landing there is correct behaviour and the fault lies in what that BIOS code dispatched
+  to — this issue's central claim would be wrong.
+* If a run with a different frame budget faults at a different BIOS-range resume address, the
+  `0x800EA0F4` link is incidental rather than causal. The `1561 of 13420` budget-resume denominator is
+  what a repeat run has to reproduce.

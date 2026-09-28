@@ -289,6 +289,29 @@ differently — on `kMaxTurnFields = 512` budget exhaustions without a field bou
 not caused: the queue owner provably stores only inside `[0x801659D0, 0x80165A30)`, and its bound is
 a membership test over that range, so it cannot have written `0x0113D7D0`.
 
+**MEASURED 2026-09-29 (issue 0037) — and the MECHANISM is now named: it is the BIOS-thread budget
+resume, found in the shipping debug channel.** `Service::open` already logs every activation's entry,
+SP and GP via `lucent::debug("x4-thread", ...)`; turning the channel on with
+`PSXPORT_DEBUG=x4-thread` shows the last four events before the fault:
+
+    OpenTh handle=0xFF000001 entry=0x8001DAF8 sp=0x801FEC00 gp=0x00000000
+    retail task entry 0x8001DAF8 ... was RESUMED at 0x800EA0F4 after 564486 cycle(s) in that turn.
+      Denominator: 1561 of 13420 task turn(s) needed a budget resume, 881179244 guest cycles
+    [native-dispatch:error] guest address 0x0113D7D0 resolves to zero or multiple active code images
+    [executor:error] execution exited as fault at 0x0113D7D0 after 0 cycles
+
+**The chain is task -> budget resume -> BIOS-range `0x800EA0F4` -> fault**, and the turn consumed **0
+guest cycles**, the signature of a jump to a non-code address. `0x800EA0F4` is in the BIOS range and
+is **not** an entry the port's BIOS table names. The port-owned seam is
+`resumeAddress = result.guestPc` in `game/core/bios_threads.cpp`, whose only guard is
+`result.guestPc == 0u` — a non-zero check, one predicate short of "is this a code address". **That
+is a missing predicate, not a wrong computation, and it is deliberately NOT tightened yet**: doing so
+would convert a diagnosable fault into a refusal without saying where the value came from. Separately,
+**all five activations pass `gp=0x00000000`**, and the task's SP descends monotonically
+(0x801FEC00 -> 0x801FEB58) without ever retiring. The value is still nowhere at rest: the probe was
+re-pointed at the **task stack**, which no earlier scan covered, and found it at **0 of 43,520**
+word-reads, so a stale return address off the task's own stack is refuted.
+
 **MEASURED 2026-09-29 (issue 0036) — the model attached to that word was wrong twice, and this
 paragraph is the surviving instance of the FIRST correction; the second is stated after it.** A
 register dump at the fault boundary in a headless driven run reads

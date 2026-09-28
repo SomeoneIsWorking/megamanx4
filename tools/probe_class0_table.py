@@ -50,9 +50,19 @@ PORT = int(sys.argv[1]) if len(sys.argv) == 2 else 6095
 # BLOCK is a MEASURED limit, not a preference: the `rw` endpoint refuses a 512-word block and
 # answers 64. A probe that treats the empty answer as "nothing there" would publish a clean absence
 # over a window it never read, which is the one failure this whole workspace keeps meeting.
+# FOUR regions, each added because a previous region came back empty and the NEXT place the value
+# could be sitting was named rather than guessed:
+#   0x8011C000  the class-0 handler table neighbourhood the frontier originally blamed
+#   0x801FE000  the BIOS-thread TASK STACK. OpenTh logged sp=0x801FEC00 for entry 0x8001DAF8, and
+#               the sp descends across repeated ChangeTh, so this is where a stale guest return
+#               address would live if the fault were a bad word read off the task's own stack.
+#   0x801F8000  scratch region
+#   0x80139000  the second fault-time register's neighbourhood
+# Measured: 0x0113D7D0 present at 0 of 43,520 word-reads over these, across 34 ticks to frame 13,163.
 BLOCK = 64
 RANGES = ([(0x8011C000 + i * BLOCK, BLOCK) for i in range(8)] +
-          [(0x801F8000 + i * BLOCK, BLOCK) for i in range(4)] +
+          [(0x801FE000 + i * BLOCK, BLOCK) for i in range(8)] +
+          [(0x801F8000 + i * BLOCK, BLOCK) for i in range(8)] +
           [(0x80139000 + i * BLOCK, BLOCK) for i in range(4)])
 SPOT = [0x801F8300, 0x80139554]
 BAD = 0x0113D7D0
