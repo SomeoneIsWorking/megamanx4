@@ -291,13 +291,30 @@ amended:** whether `0x800126A8` and `0x80012724` execute. Runs watching them abo
 is the same green-zero mistake in a new costume. A run that aborts is not a run that proves absence,
 and the previous section treated it as one.
 
-**RESOLVED 2026-09-29 — the "observer changes behaviour" anomaly did NOT reproduce, and was
-run-length variance.** It was flagged rather than worked around, which was the right call, so the
-resolution is recorded next to the flag.
+**RETRACTED 2026-09-29 — my "run-length variance" resolution of this was WRONG, and the effect is
+real.** The resolution was generalised from two runs of the *same* arming and never compared the two
+armings head to head. Doing that settles it, with identical flags, one target per run, repeated:
 
-Two runs with **identical** configuration (cursor store watched, debug server off, 400 native
-frames) each produced **exactly 400 events and no crash** — one scheduler call per native frame,
-deterministic. So the earlier 1-versus-10,403 split does not come from which store PC is watched.
+| armed store PC | events | outcome |
+|---|---|---|
+| `0x80012628` (cursor store, function entry) | 400 | **no abort**, 400 frames clean |
+| `0x80012724` (cursor advance, inside the loop) | 0 | **aborts** before any event |
+
+Reproducible two runs each way. **Arming a store PC does change this program's outcome**, so the
+worry is reinstated and only the "run-length variance" explanation is withdrawn.
+
+**The mechanism is now known and it is a property of the INSTRUMENT, not of MMX4.**
+`lightrec_set_store_observer` calls `lightrec_invalidate_all` and `lightrec_free_all_blocks` —
+arming discards the entire translation cache — and the emitter then instruments **every store in
+every block**, filtering by PC only later in the callback. Each observed store additionally flushes
+and resets the whole register cache. So a run with the observer armed **is not the program**, which
+is the same class of failure this project treats as worst. Full derivation and the reproduction:
+`psxport/docs/issues/0039`.
+
+**What that does and does not settle here.** It explains why an instrumented run is not a clean run,
+and it means the 0 / 10,403 / 400 event counts must not be read as clean-program behaviour. It does
+**not** explain why the two armings differ, since by that mechanism both instrument every store
+everywhere. That part is unexplained and is reported, not worked around.
 The runs that produced 10,403 and the runs that produced 1 differed in how long they lived before
 the budget refusal ended the process, and that is what set the count.
 
