@@ -486,6 +486,35 @@ re-entering through the prologue is a different thing from a loop inside the blo
 separates them yet. That distinction decides which owner is responsible, and is the next thing to
 settle.
 
+*8. CORRECTION — the cursor's self-reference is the scheduler's NORMAL exit value, and the
+"code/translation problem" conclusion is RETRACTED.*
+
+A positive control overturned it. The debug server's `call` invokes a guest function directly and
+reports its register file:
+
+    call 80012600(a0=00000000,...) -> v0=801F8300 v1=00000001
+
+`v1` is the `sltu` result at `0x8001271C`, so **`v1 = 1` means `beqz` was NOT taken and
+`0x80012724` DID execute.** The code path is correct.
+
+The arithmetic explains the rest: the loop at `0x80012710` adds `0x80` to `$v0` and continues while
+`0x801F82FF < $v0`, and **the first multiple of `0x80` above `0x801F82FF` is `0x801F8300`**. So
+the loop's terminal value is `0x801F8300` *from any starting cursor* — the value the poller saw
+4,814 times out of 4,814 is simply where this loop always stops. **It is not a self-reference and
+not corruption; it is the scheduler's designed end state.** The uniform poll result was a correct
+observation of a correct program, and reading it as a symptom was the error.
+
+**The useful part is the loop length.** Iterations = `(0x801F8300 - entry_cursor) / 0x80`. Entered
+with `$v0 = 0` that is **262,142 iterations in one guest call** — which is why
+`callWithoutKnownReturn` exhausts its budget and refuses. **The budget abort is a consequence of
+loop length, not a fault.** The two mysteries I had conflated are separate: the abort is now
+explained, and the `0x0113D7D0` fault is still open.
+
+**Not established:** the entry value of `$v0` in the *real* caller. The debug `call` sets
+`a0..a3` from arguments and leaves `v0` at zero, so the positive control cannot speak to what the
+product passes. That is the next question, and it decides whether 262,142 iterations describes the
+product at all or only the control.
+
 *Why the boundary defect survived so long, and this is the useful part:* `stream_startup` and
 `movie_cleanup` set `r[31]` to the return address in their own `call` helpers before dispatching, so
 the old guess read the RIGHT value from them by accident of ordering. `vram_rect_queue` did not set

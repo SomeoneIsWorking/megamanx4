@@ -357,6 +357,44 @@ it cannot characterise (it says `NOT a conclusion` rather than guessing). It pri
 the failure count separately, because 4,814 successes out of 9,627 attempts is a fact about the
 endpoint dying mid-poll, not about the guest.
 
+## CORRECTION 2026-09-29 — the self-pointer is the scheduler's NORMAL exit value, and the previous section's conclusion is WRONG
+
+The previous section concluded that `0x80012724` does not execute and that execution "diverges
+from the decoded path", pointing at the executor. **A positive control overturns that.** The debug
+server's `call` command invokes a guest function directly and reports its register file:
+
+    call 80012600(a0=00000000,...) -> v0=801F8300 v1=00000001
+
+`v1` is the `sltu` result from `0x8001271C`. **`v1 = 1` means `beqz` was NOT taken, so execution DID
+fall through to `0x80012724` and DID store the cursor.** The code path is correct.
+
+**And the arithmetic shows the poll was measuring the wrong thing.** The loop at `0x80012710`
+increments `$v0` by `0x80` and continues while `0x801F82FF < $v0`. The first multiple of `0x80`
+strictly greater than `0x801F82FF` **is `0x801F8300`**. So the loop's terminal value is
+`0x801F8300` **from any starting cursor** — the value the high-frequency poll saw 4,814 times out
+of 4,814 is simply where this loop always stops.
+
+**So `0x801F8300` holding `0x801F8300` is not a self-reference and not corruption. It is the
+scheduler's designed end state**, and the poll's uniform result is a correct observation of a
+correct program. My "data and code disagree" verdict was reading a designed terminal value as a
+symptom.
+
+**What the loop length actually tells us, and it is the useful part.** The iteration count is
+`(0x801F8300 - entry_cursor) / 0x80`. Entered with `$v0 = 0` — which is what the direct call
+supplies — that is **262,142 iterations in a single guest call**, which is why
+`callWithoutKnownReturn` exhausts its budget and refuses. **The budget abort is a consequence of
+the loop's length, not of a fault**, and the two things I had been treating as one mystery are
+separate: the abort is explained, and the `0x0113D7D0` fault is still open.
+
+**What is NOT established:** the entry value of `$v0` in the real caller. The debug `call` sets
+`a0..a3` from arguments and leaves `v0` at zero, so this experiment **cannot** speak to what the
+real caller passes. That is the next question, and it is the one that decides whether the 262,142
+-iteration loop describes the product at all or only my positive control.
+
+**Retracted:** "execution diverges from the decoded path inside the state block", and "that is a
+code/translation problem, not a data one". Both were wrong, and both came from treating the
+scheduler's normal terminal value as evidence of a fault.
+
 ### A green zero I built MYSELF, and the selftest that now kills it
 
 Worth recording because this session spent its whole time finding dead taps and gates that
