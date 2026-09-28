@@ -33,35 +33,96 @@ conclusion.
 
 ## The call site, decoded from the image
 
-`ra = 0x800120EC` places the faulting call in a function whose body is a run of `jal`/`nop` pairs:
+> **CORRECTED 2026-09-29. The listing below was wrong on 5 of its 7 call targets, and the reason it
+> looked right is worth more than the fix. The correct listing is in the replacement section; the
+> original is kept so the error is not re-derived.**
 
-    800120D8  lw   $v0,0($s0)
-    800120E0  addiu $v0,$v0,1
-    800120E4  jal  0x800246E8
-    800120E8  sw   $v0,0($s0)          ; delay slot
-    800120EC  jal  0x80026870          ; <-- ra points HERE, so the previous call returned to it
-    800120F0  nop
-    800120F4  jal  0x800EA20C
-    800120F8  addu $a0,$zero,$zero     ; delay slot
-    800120FC  jal  0x80027F54
-    80012100  nop
-    80012104  jal  0x8002810C
-    80012108  nop
-    8001210C  jal  0x800EA20C
-    80012110  addu $a0,$zero,$zero     ; delay slot
-    80012114  jal  0x8002456C
+Decoded with the framework's own disassembler, `psxport/tools/disasm.py` (Capstone MIPS32, a locked
+dependency, gated by `tests/test_disasm.py`), over a RAM dump built from the authenticated
+`SLUS_005.61`:
 
-Decoded from the authenticated `SLUS_005.61` at its PS-X EXE load address `0x80010000`. Never
-`llvm-objdump --triple=mips`, which misdecodes this image — that is on record in the workspace map and
-it is why the words here were read out of the file rather than out of a disassembler.
+    800120D8  0000028e  lw       $v0, ($s0)
+    800120DC  00000000  nop
+    800120E0  01004224  addiu    $v0, $v0, 1
+    800120E4  8049000c  jal      0x80012600
+    800120E8  000002ae  sw       $v0, ($s0)      ; delay slot
+    800120EC  e051000c  jal      0x80014780
+    800120F0  00000000  nop
+    800120F4  83a8030c  jal      0x800ea20c
+    800120F8  21200000  move     $a0, $zero      ; delay slot
+    800120FC  9557000c  jal      0x80015e54
+    80012100  00000000  nop
+    80012104  0158000c  jal      0x80016004
+    80012108  00000000  nop
+    8001210C  83a8030c  jal      0x800ea20c
+    80012110  21200000  move     $a0, $zero      ; delay slot
+    80012114  1549000c  jal      0x80012454
+    scanned 16/16 words; decoded 16/16 words; unknown 0; complete
 
-The override entry, `0x80012600`, is a real function and not a table slot:
+### What the old listing claimed, and the exact rule that produced it
 
-    80012600  addiu $sp,$sp,-32
-    80012604  lui   $v0,0x801F
-    80012608  ori   $v0,$v0,0x8100     ; 0x1F8100xx — the DMA/IFAREAS window
-    8001260C  sw    $s1,0x14($sp)
-    80012610  addiu $s1,$zero,127
+| `jal` at | claimed | actual | verdict |
+|---|---|---|---|
+| `0x800120E4` | `0x800246E8` | `0x80012600` | wrong |
+| `0x800120EC` | `0x80026870` | `0x80014780` | wrong |
+| `0x800120F4` | `0x800EA20C` | `0x800EA20C` | right |
+| `0x800120FC` | `0x80027F54` | `0x80015E54` | wrong |
+| `0x80012104` | `0x8002810C` | `0x80016004` | wrong |
+| `0x8001210C` | `0x800EA20C` | `0x800EA20C` | right |
+| `0x80012114` | `0x8002456C` | `0x80012454` | wrong |
+
+**All five wrong entries follow one rule exactly:**
+
+    claimed == actual + (delay_slot_address & 0x0FFFFFFF)
+
+checked for every one of the five, with no exceptions. So the decode treated the J-type 26-bit field
+as an offset **from the current PC** instead of applying the MIPS rule
+
+    target = (PC + 4) & 0xF0000000 | (imm26 << 2)
+
+which is the mistake of adding a PC offset that the encoding has already accounted for. The two
+entries that came out right are the two whose real target lies in a different 256 MB page, where the
+error would have been obvious rather than plausible.
+
+**Why this survived review, and why that is the part to remember:** every wrong number is a *plausible
+guest address in the right neighbourhood* — `0x8002xxxx` for a function that is really at
+`0x8001xxxx`. A wrong value that looks like the right kind of thing is far more dangerous than a
+number that is obviously wrong, and a listing of seven consistent-looking addresses invites the
+reader to check the shape rather than the arithmetic.
+
+Independently confirmed by hand for one entry, so the correction does not rest on the tool alone:
+the word at `0x800120EC` is `0x0C0051E0`, `op = 3` (`JAL`), `imm26 = 0x000051E0`, `imm26 << 2 =
+0x00014780`, and `(PC+4) & 0xF0000000 = 0x80000000`, so the target is **`0x80014780`**.
+
+The override entry, `0x80012600`, is unchanged and was right the first time — it is a real function,
+6 of 6 words decoded:
+
+    80012600  e0ffbd27  addiu    $sp, $sp, -0x20
+    80012604  1f80023c  lui      $v0, 0x801f
+    80012608  00814234  ori      $v0, $v0, 0x8100     ; 0x1F8100xx
+    8001260C  1400b1af  sw       $s1, 0x14($sp)
+    80012610  7f001124  addiu    $s1, $zero, 0x7f     ; 127
+    80012614  1000b0af  sw       $s0, 0x10($sp)
+
+### A NEW discrepancy this correction exposes
+
+**`0x80012600` is the callee of the `jal` at `0x800120E4`, whose return address is `0x800120E8` — and
+the fault reports `returnPc 0x800120EC`.** `0x800120E8` is that call's delay slot, and `0x800120EC`
+is a *different* `jal`. So the override entry recorded in the fault was not reached from the call the
+old listing pointed at. Either it was entered from another site, or the recorded `returnPc` does not
+belong to this chain. **That is now the sharpest open question in this issue**, and it is a better
+question than the one the wrong listing was being used to ask.
+
+### The workspace map's stated reason for hand-decoding was itself wrong
+
+The map records that `llvm-objdump --triple=mips` "misdecodes `SLUS_005.61`". Checked: the string
+`0x800120D8` decodes cleanly under the framework's Capstone tool, **16 of 16, zero unknown**. The
+real reason llvm-objdump is unusable here is mundane and was never the encoding: it rejects a raw
+image outright — *"The file was not recognized as a valid object file"* — because it wants an object
+or a recognised container, not a PS-X EXE. The map's claim has been corrected; the instruction it
+implied (read words out of the file, do not trust a disassembler) is the right instinct for the wrong
+stated reason, and the tool that should have been used was already in the repository.
+
 
 ## What this changes
 
