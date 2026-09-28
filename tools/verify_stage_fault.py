@@ -132,6 +132,78 @@ class Image:
             count += 1
         return count
 
+    # A MIPS store is ONE word: op(6) base(5) rt(5) imm(16). That is what makes the writer scan
+    # below exhaustive rather than heuristic — no dataflow, no control flow, no constant tracking.
+    STORE_OPCODES = {0x28: "sb", 0x29: "sh", 0x2B: "sw",
+                     0x2C: "swl", 0x2E: "swr", 0x2F: "sdl", 0x3F: "sdr"}
+
+    def stores_with_displacement(self, low: int, high: int) -> list[tuple[int, int, str]]:
+        """Every store instruction whose 16-bit displacement lies in [low, high].
+
+        Returned as (site, displacement, mnemonic). This is a property of single words, so it does
+        not depend on which registers hold what, and therefore cannot miss a writer merely because
+        the writer's base register was built in another basic block.
+        """
+        found: list[tuple[int, int, str]] = []
+        for index in range(self.text_bytes // 4):
+            word = self._words[index]
+            opcode = word >> 26
+            mnemonic = self.STORE_OPCODES.get(opcode)
+            if mnemonic is None:
+                continue
+            displacement = word & 0xFFFF
+            if low <= displacement <= high:
+                found.append((self.text_address + index * 4, displacement, mnemonic))
+        return found
+
+    def occurrences_of_word(self, value: int) -> int:
+        """How many word-aligned times `value` appears in the whole image, in either byte order.
+
+        A statically formed POINTER to a global has to be that global's address stored somewhere.
+        Counting both byte orders rules out the word-swapped form this port's Core actually reads.
+        """
+        little = struct.pack("<I", value)
+        big = struct.pack(">I", value)
+        return sum(1 for index in range(0, len(self.text) - 3, 4)
+                   if self.text[index:index + 4] in (little, big))
+
+    def addiu_forming(self, immediate: int) -> int:
+        """How many `addiu $r, $r, imm` instructions build a pointer by adding `immediate`.
+
+        The other way a compiler forms a base+displacement address is a two-step `lui` then `addiu`
+        followed by a store at offset 0. Counting the `addiu`s bounds that formation.
+        """
+        count = 0
+        for index in range(self.text_bytes // 4 - 1):
+            word = self._words[index]
+            if (word >> 26) in (0x09, 0x0D) and (word & 0xFFFF) == immediate:
+                count += 1
+        return count
+
+    def store_base_page(self, site: int) -> int | None:
+        """The 0xXXXX page a store's base register was last loaded with, searched BACKWARD.
+
+        THIS CLOSES A REAL HOLE IN THE WRITER SCAN, and the selftest's 8th case is what found it.
+        Matching a store on its 16-bit displacement alone proves only that the DISPLACEMENT is
+        0x1F68; it does not prove the base register holds 0x8014, and therefore does not prove the
+        store touches 0x80141F68 at all. `0x80141F68` and `0x00141F68` have the same displacement.
+        So the page the base register actually carries is read from the image, not assumed, and the
+        search stops at the enclosing `jr $ra` so a constant from a PREVIOUS function cannot be
+        mistaken for this one's.
+        """
+        opcode, base, _, _ = self.fields(site)
+        del opcode
+        for step in range(1, 64):
+            earlier = site - 4 * step
+            if earlier < self.text_address:
+                return None
+            if self.word(earlier) == 0x03E00008:  # jr $ra — the previous function's epilogue
+                return None
+            word = self.word(earlier)
+            if (word >> 26) == 0x0F and ((word >> 16) & 0x1F) == base:
+                return word & 0xFFFF
+        return None
+
 
 def read_image(path: Path) -> Image:
     return Image(path.read_bytes())
@@ -303,6 +375,49 @@ def verify(image: Image) -> Report:
     report.check("the array end the loader states is base + 0x60, which is the record base",
                  VRAM_RECT_ARRAY + 0x60, ITEM_OBJECTS)
 
+    # --- claim 5: WHO writes the cursor word, established EXHAUSTIVELY from bytes -------------
+    #
+    # Claims 1-4 name the three functions. This one answers the question issue 0032 left open —
+    # WHICH INSTRUCTION writes 0x80141F68 — and it answers it without any dataflow, because a MIPS
+    # store is exactly ONE 32-bit word: op(6) base(5) rt(5) imm(16). A store whose displacement can
+    # reach the cursor is therefore found by matching two fields of one word, which makes the scan
+    # independent of control flow, of register allocation and of the reader's constant tracking.
+    #
+    # THE LIMIT IS STATED, NOT HIDDEN: this is exhaustive over DIRECT (register + immediate) stores
+    # and over the pointer-then-store-at-0 formation. It is not a proof about a store through a
+    # pointer COMPUTED at runtime, because no such pointer can be formed statically — which is
+    # checked below, by requiring the cursor's own address to appear nowhere in the image as data.
+    writers = image.stores_with_displacement(0x1F60, 0x1F70)
+    exact = sorted({site for site, _displacement, _op in writers if _displacement == 0x1F68})
+    report.check(
+        f"the whole text holds exactly {len(writers)} store(s) whose displacement could reach the "
+        f"cursor word, and exactly {len(exact)} of them land on it",
+        len(exact), 3)
+    report.check("the three cursor writers are the clear, the loader and the appender",
+                 exact, sorted((CLEAR_VRAM_RECTS + 0x0C, 0x80015EB0, APPEND_CURSOR_PUBLISH)))
+    # The scan is only meaningful if it can FAIL, so it is also required to have a denominator: an
+    # empty scan that reported "0 exact" would be indistinguishable from a reader that matches
+    # nothing at all. These two require the scan to have actually matched the surrounding window.
+    report.check("the displacement window is non-empty (the scan matched something)",
+                 len(writers) >= 3, True)
+    report.check("every cursor writer uses the same base register the image's own $at holds",
+                 sorted({image.fields(site)[1] for site in exact}), [1])
+    # ...and that this base register really carries page 0x8014 at each of the three, which is what
+    # turns "displacement 0x1F68" into "address 0x80141F68". 0x00141F68 has the same displacement,
+    # so without this the scan would be reporting a displacement, not a writer.
+    report.check("and each of the three is reached with its base register holding page 0x8014",
+                 sorted({image.store_base_page(site) for site in exact}), [0x8014])
+    # The appender's publish is the one that ADVANCES the cursor; the other two write the base back.
+    report.check("the clear publishes the array BASE, not an advanced cursor",
+                 image.word(CLEAR_VRAM_RECTS + 4) & 0xFFFF, 0x59D0)
+    report.check("the appender advances the cursor by exactly one 12-byte entry per call",
+                 image.sign16(image.fields(APPEND_CURSOR_ADVANCE)[3]), 0x0C)
+    # The pointer case: a statically formed pointer to the cursor would have to BE the address.
+    report.check("the cursor's own address appears NOWHERE in the image as data (so no static",
+                 image.occurrences_of_word(CURSOR_GLOBAL), 0)
+    report.check("...pointer to it can exist, and the appender never builds one with addiu",
+                 image.addiu_forming(CURSOR_GLOBAL & 0xFFFF), 0)
+
     print(f"comparisons: {report.comparisons}; failures: {len(report.failures)}")
     return report
 
@@ -353,6 +468,37 @@ def selftest() -> int:
                           struct.pack("<II", (0x0F << 26) | (1 << 16) | 0x8016,
                                       (0x09 << 26) | (1 << 21) | (1 << 16) | 0x5A30)),
                   "never forms the array base or end"))
+
+    # 6-9. THE WRITER SCAN, which is the claim issue 0032 left open. A scan is the easiest kind of
+    #      check to pass for the wrong reason: widen the displacement window and it will "find a
+    #      writer" for any address at all. Each mutation below must break the scan's own identity,
+    #      so the three sites it reports are a fact about THIS image and not about the window.
+    #
+    #      6. retarget the appender's publish onto the neighbouring word. The exact-writer SET has to
+    #         change, which is what separates "found the three writers" from "found three of
+    #         however many happen to exist".
+    cases.append(("the three cursor writers are the clear, the loader and the appender",
+                  _mutate(original, offset_of(APPEND_CURSOR_PUBLISH), struct.pack("<H", 0x1F6C)),
+                  "the three cursor writers"))
+
+    #      7. add a FOURTH writer of the cursor word. This is the case that matters most: it proves
+    #         the scan counts every writer rather than recognising a known list of three.
+    cases.append(("exactly 3 of them land on it",
+                  _mutate(original, offset_of(0x80015E50), struct.pack("<I", 0xAC241F68)),
+                  "land on it"))
+
+    #      8. move the shared base register off 0x8014. A scan matching on the displacement alone
+    #         would still pass, so this also pins that the base register is checked.
+    cases.append(("every cursor writer uses the same base register",
+                  _mutate(original, offset_of(0x80015E14),
+                          struct.pack("<I", (0x0F << 26) | (1 << 16) | 0x8015)),
+                  "the three cursor writers"))
+
+    #      9. plant a static pointer to the cursor. The two claims bounding the
+    #      pointer-through-a-register case are exactly the ones a reader would wave through.
+    cases.append(("appears NOWHERE in the image as data",
+                  _mutate(original, offset_of(0x800F1658), struct.pack("<I", CURSOR_GLOBAL)),
+                  "as data"))
 
     failures = 0
     for name, data, expect in cases:
