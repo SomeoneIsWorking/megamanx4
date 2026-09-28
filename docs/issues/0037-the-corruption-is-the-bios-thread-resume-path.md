@@ -322,6 +322,69 @@ the budget refusal ended the process, and that is what set the count.
 survives is the correction above: a run that aborts is not a run that proves absence, and the
 "entered once, reached neither exit" reading was made on an aborted run.
 
+## MEASURED 2026-09-29 — the cursor store at `0x80012724` provably does NOT execute, and the data is not why
+
+This is settled **without** the store observer, because `psxport/docs/issues/0039` established that
+arming it invalidates every block and instruments every store, so a run with it armed is not the
+program. `tools/probe_cursor_poll.py` polls the word directly and reports the full histogram.
+
+    scanned 9627 read(s) of 0x801F8300; 4813 read(s) returned nothing
+    1 distinct value(s) observed:
+      0x801F8300    4814 read(s)  100.0%
+
+**`0x801F8380` is never observed once in 4,814 successful reads.** The decoded path says the store at
+`0x80012724` must write it, so the two facts are incompatible and the code reading is the one that is
+wrong.
+
+**The sampling bias runs AGAINST this result, which is what makes it trustworthy.** Between two
+scheduler calls the cursor would hold `0x801F8380` for essentially the entire frame; `0x801F8300` is
+written only at the call's entry (`0x80012628`) and overwritten at the exit. A poller is therefore
+biased toward seeing `0x801F8380`, not toward seeing `0x801F8300`. A uniform `0x801F8300` across
+4,814 reads is not a phase artifact — it is what a word that only ever takes that value looks like,
+and that is exactly what the histogram is for: a single reported value is otherwise indistinguishable
+from sampling one window.
+
+**So, with the `j` words at `0x80012658` and `0x80012674` proven byte-identical to the authenticated
+image, and the data proven intact, execution diverges from the decoded path INSIDE the state block.**
+This is a code/translation finding, not a data finding, and it is the first result on this frontier
+that points at the executor rather than at MMX4's memory.
+
+### The tool, and what it refuses
+
+`tools/probe_cursor_poll.py` REFUSES rather than reporting a vacuous result in three cases: fewer than
+200 samples ("a short run proves nothing about a polling phase"), every read failing, and any outcome
+it cannot characterise (it says `NOT a conclusion` rather than guessing). It prints the read count and
+the failure count separately, because 4,814 successes out of 9,627 attempts is a fact about the
+endpoint dying mid-poll, not about the guest.
+
+### A green zero I built MYSELF, and the selftest that now kills it
+
+Worth recording because this session spent its whole time finding dead taps and gates that
+cannot fail, and then produced one.
+
+The first `probe_cursor_poll.py --selftest` had four cases and **three behavioural mutations
+survived it**. Every case was vacuous, in four different ways:
+
+- `Endpoint(1)` tested the *environment* (that port refuses) not the code — deleting the check
+  changed nothing;
+- the sample-floor case compared a constant to a computed value, self-consistent by construction;
+- `if collections.Counter() or True:` made the failure branch **dead code**;
+- `if 0x801F8380 == 0x801F8300` compared two constants.
+
+The fix is structural, not cosmetic: **every refusal and every verdict now lives in one pure
+function**, `classify(histogram, reads, failures) -> (verdict, exit_code)`, with no I/O, no clock
+and no defaults, and the selftest drives it with synthetic histograms. Two further defects only
+appeared once the mutations ran:
+
+- the `if not seen` guard was **unreachable**, because an empty histogram already fails the sample
+  floor, so removing it changed nothing. The guards were reordered so both are live.
+- the all-failed case asserted only `"REFUSED"`, which *either* guard produces, so it could not
+  tell which one fired. It now asserts the specific message of each guard.
+
+**Now verified: five of five mutations go red** — empty guard, sample floor, predicted-value
+verdict, single-value verdict, and collapsing `PREDICTED_CURSOR` onto the observed value — and the
+baseline is green. A gate that cannot fail is not a gate; this one now can.
+
 ## The next step, named
 
 1. **Why does the cursor at `0x801F8300` point at itself?** This is now the cheapest open question

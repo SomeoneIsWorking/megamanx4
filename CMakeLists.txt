@@ -125,3 +125,12 @@ add_test(
   NAME megamanx4_guest_call_site_census_selftest
   COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/census_guest_call_sites.py"
           --selftest)
+
+# probe_cursor_poll.py's refusals are the part worth gating: a tool that reports a
+# confident answer when it has no measurement is the failure this project treats as worst.
+# --selftest checks the refusal paths WITHOUT a port, so it is a real negative case in the
+# gate rather than a construction test that passes whether or not the tool works.
+add_test(
+  NAME megamanx4_cursor_poll_selftest
+  COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/probe_cursor_poll.py"
+          --selftest)
