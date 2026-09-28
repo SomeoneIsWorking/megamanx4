@@ -450,8 +450,21 @@ armed in ONE run with the function prologue as a control that must fire:
     armed: 0x80012620 (prologue/control)  0x800126A8 (dispatch exit)  0x80012724 (fall-through exit)
     events: 0x80012620 before + after, ONCE.  Nothing at 0x800126A8.  Nothing at 0x80012724.
 
-**The scheduler is entered once and never passes `0x80012624`.** It dies in the state block
-`0x8001262C..0x8001267C`.
+**WITHDRAWN 2026-09-29 — that localization was measured on a CRASHED run.** The scheduler is in fact
+called **10,403 times**, and the cursor store `0x80012628` fires on every one. Signal 06 from `abort()`
+with the stack `native_boot_run -> FrameLoopShell::step -> X4FrameDriver::stepFrame ->
+callWithoutKnownReturn` — the port's own budget refusal doing its designed job as the scheduler spins
+on its `beqz` back-edge. A run that aborts is not a run that proves absence, and the earlier section
+read one as the other. Whether the two exit stores execute remains **unestablished**.
+
+**The scan's predicted false negative, observed:** `0x80012628` (`sw $v0, -0x7d00($at)`) *writes* the
+cursor at `0x801F8300`, and the register tracker missed it because the address is formed from
+`lui $at, 0x8020` plus a `-0x7D00` displacement, not the `lui $s0, 0x801f` / `ori 0x8300` chain it
+followed. It runs on all 10,403 calls, so the cursor is rewritten continuously from `$v0`.
+
+**Unresolved and reported rather than worked around:** two runs differing only in which store PC is
+watched give 10,403 events and 1. Nothing explains why arming `0x80012724` would exhaust the budget
+that much sooner.
 
 **The instructions there are provably UNMODIFIED at run time.** `0x0113D7D0` sits below `0x04000000`,
 so it is exactly what a corrupted 26-bit `j` field would produce, and the block has two `j`

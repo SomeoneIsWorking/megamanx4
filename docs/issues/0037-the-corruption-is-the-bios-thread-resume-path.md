@@ -258,6 +258,46 @@ exit store, and the observer's `seen=` counter shows one entry — but a loop th
 prologue is a different thing from a loop inside the block, and nothing yet separates them. That
 distinction is the next thing to settle, and it decides which owner is responsible.
 
+## CORRECTION 2026-09-29 — "entered ONCE and reached neither exit" is WITHDRAWN; it was measured on a crashed run
+
+The previous section's central claim is **refuted by my own later measurement**, and the reason it
+was wrong is worth recording because it is a new instance of the same class this investigation keeps
+meeting: a run that died early was read as a run that reached a conclusion.
+
+**The scheduler is called 10,403 times, and the cursor store fires on every one of them.** Arming the
+prologue and the cursor write — two targets, both of which execute — gives:
+
+    10403  guest_pc=0x80012620 phase=before / after
+    10403  guest_pc=0x80012628 phase=before / after
+
+So `0x80012628` — `sw $v0, -0x7d00($at)`, which **writes the cursor at `0x801F8300`** — runs on every
+call. That is also the store the earlier register-tracking scan missed, because it forms the address
+from `lui $at, 0x8020` plus a `-0x7D00` displacement rather than from the `lui $s0, 0x801f` /
+`ori 0x8300` chain the scan followed. **The scan's predicted false negative, observed.**
+
+**What made the earlier reading wrong: the process was crashing, and the "1 event" was the crash.**
+Signal **06** from `abort()`, and the stack is the port's own:
+
+    native_boot_run -> FrameLoopShell::step -> X4FrameDriver::stepFrame
+      -> x4::guest::callWithoutKnownReturn -> abort
+
+That is **`callWithoutKnownReturn` hitting its budget and refusing, which is the function's designed
+behaviour** — the scheduler spins on its `beqz` back-edge at `0x80012720` until the budget is gone.
+It is not a segfault and not an observer fault.
+
+**What is still NOT established, and is the reason the earlier section is withdrawn rather than
+amended:** whether `0x800126A8` and `0x80012724` execute. Runs watching them abort almost immediately
+(1 event, same stack), so their silence is a run that **died before it could observe anything** — which
+is the same green-zero mistake in a new costume. A run that aborts is not a run that proves absence,
+and the previous section treated it as one.
+
+**One thing here does not add up and is recorded rather than explained away.** The two runs differ
+only in which store PC is watched, yet one reaches 10,403 events and the other aborts after 1. If
+arming `0x80012724` changes the scheduler's loop behaviour enough to exhaust the budget that much
+sooner, that is a fact about the observer's effect on execution, and nothing about it is understood
+yet. It is flagged for the pinest session's standing request to report what will not add up: this is
+exactly that, and it is not being worked around.
+
 ## The next step, named
 
 1. **Why does the cursor at `0x801F8300` point at itself?** This is now the cheapest open question
