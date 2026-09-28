@@ -289,15 +289,24 @@ differently — on `kMaxTurnFields = 512` budget exhaustions without a field bou
 not caused: the queue owner provably stores only inside `[0x801659D0, 0x80165A30)`, and its bound is
 a membership test over that range, so it cannot have written `0x0113D7D0`.
 
-**MEASURED 2026-09-29 (issue 0036) — the model attached to that word was wrong: it is a table
-DISPATCH, not a stray store.** A register dump at the fault boundary in a headless driven run reads
+**MEASURED 2026-09-29 (issue 0036) — the model attached to that word was wrong twice, and this
+paragraph is the surviving instance of the FIRST correction; the second is stated after it.** A
+register dump at the fault boundary in a headless driven run reads
 `entry 0x80012600 returnPc 0x800120EC guestPc 0x0113D7D0 detail='ambiguous code-image identity'`. The
-faulting address **is the word** that was found in the class-0 table, so the guest read that value and
-**called through it**; the framework's refusal is its honest classification of a target outside every
-image. The write census issue 0035 ran — every instruction that can write the word — was answering a
-question about a store that is not happening. And `0x8011CB98` reads `0x800DD7FC`, a plausible guest
-address, at the moment of the fault, so the slot is written between the dispatch and the dump or the
-pointer came from a different slot; that difference is the next measurement and is not settled here.
+faulting address **is the dispatched word**, so the guest computed that value and **called through
+it**; the framework's refusal is its honest classification of a target outside every image. The write
+census issue 0035 ran — every instruction that can write the word — was answering a question about a
+store that is not happening.
+
+**CORRECTED THE SAME DAY — the word was never FOUND in the class-0 table, and the sentence above
+used to say it was.** An earlier draft of this paragraph read "is the word that was found in the
+class-0 table", which is the claim the wide scan then refuted: `0x0113D7D0` is present at 0 of 97 spot
+observations and 0 of 41,984 word-reads, `0x8011CB98` holds a stable `0x800DD7FC` at every one, and
+0 of 294,912 static image words contain the value. The dispatch is real; **the table never held it**.
+The old sentence also speculated that the slot "is written between the dispatch and the dump" — that
+is now unnecessary, because the value is not in the table at any observed moment, so the frontier is
+what *computes* it, not which slot carries it. The corrected reading is in issue 0036 and the probe
+that settles it is `tools/probe_class0_table.py`.
 
 What changed is a native owner of the guest's eight-entry VRAM rectangle upload queue
 (`game/core/vram_rect_queue.{h,cpp}`), which replaces the guest's clearer, uploader and band
