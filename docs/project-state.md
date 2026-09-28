@@ -381,6 +381,35 @@ entry does not claim it.** The next instrument must be cheap per sample: a store
 must have been written before it could be loaded), or a static count of the scheduler's `jalr`/`j`
 sites, which finds the offending branch even when its target is dynamic.
 
+*5. The scheduler is DECODED, and it is a polling loop over a cursor that points at itself.*
+`0x80012600` is not a dispatcher: it is a bounded loop over a cursor at `0x801F8300`, reading a state
+halfword with `lhu` AT the cursor and branching on 1 / 2 / 4 / 0x7f, then advancing the cursor by
+`0x80` per pass and returning when it reaches `0x801F8380`. Decoded with `psxport/tools/disasm.py`
+from the authenticated image, 100/100 words across four windows, zero unknown.
+
+    80012638  lhu   $v1, ($a0)      ; the state, read AT the cursor
+    80012640  beq   $v1, $v0, ...   ; state == 2  -> ChangeTh
+    80012650  beq   $v1, $v0, ...   ; state == 1
+    80012664  beq   $v1, $v0, ...   ; state == 4  -> ChangeTh
+    8001266C  beq   $v1, $s1, ...   ; state == 0x7f -> ChangeTh
+    80012718  addiu $v0, $v0, 0x80  ; cursor += 0x80
+    80012720  beqz  $v1, 0x8001262c ; loop back to re-read the state
+
+**In this run the cursor holds `0x801F8300` — itself** (measured by the probe at every tick, and it is
+`r2` at the fault). So the state the machine reads is the cursor's own low halfword, **`0x8300`**,
+which none of the four branches handles. The fall-through advances the cursor and **returns without
+ever calling `ChangeTh`**.
+
+That has two measured consequences: the `ChangeTh` paths are unreachable from this state, which
+explains why the task's SP descends without ever retiring (something else is driving the fiber
+switches); and **a cursor pointing at itself is wrong in the guest's data, not in the port** — the
+record pointer being iterated is its own storage, so the table it walks is not a table.
+
+**It does not yet account for `0x0113D7D0`**: on the state-`0x8300` path the scheduler returns
+cleanly through `jr $ra` to `0x800120EC`, which matches `r31` at the fault, so the fault is NOT on
+that path. The cheapest open question is now **why the cursor points at itself**, and it is in guest
+data rather than in another register reading.
+
 *Why the boundary defect survived so long, and this is the useful part:* `stream_startup` and
 `movie_cleanup` set `r[31]` to the return address in their own `call` helpers before dispatching, so
 the old guess read the RIGHT value from them by accident of ordering. `vram_rect_queue` did not set

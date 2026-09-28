@@ -97,9 +97,66 @@ rate rather than assume it: 16,384 words per tick, ticks arriving every ~4,500 f
 so its clean result never supported "it is not in memory", and this issue is not to be read as
 having claimed that.**
 
+## MEASURED 2026-09-29 — the scheduler DECODED: it is a polling loop over a cursor that points at ITSELF
+
+Decoded from the authenticated image with `psxport/tools/disasm.py` (28/28, 32/32, 28/28 and 12/12
+words across four windows, zero unknown). `0x80012600` is not a dispatcher in the sense the issue
+assumed; it is a **bounded polling loop over a cursor at `0x801F8300`**.
+
+    80012618  lui   $s0, 0x801f
+    8001261C  ori   $s0, $s0, 0x8300      ; $s0 = 0x801F8300, the cursor
+    8001262C  lui   $a0, 0x8020
+    80012630  lw    $a0, -0x7d00($a0)     ; $a0 = *(0x801F8300)
+    80012638  lhu   $v1, ($a0)             ; the STATE, a halfword read AT the cursor
+    8001263C  addiu $v0, $zero, 2
+    80012640  beq   $v1, $v0, 0x80012698   ; state == 2  -> ChangeTh
+    80012648  beqz  $v0, 0x80012660        ; state < 3
+    80012650  beq   $v1, $v0, 0x8001267C   ; state == 1
+    80012664  beq   $v1, $v0, 0x80012698   ; state == 4  -> ChangeTh
+    8001266C  beq   $v1, $s1, 0x80012698   ; state == 0x7f -> ChangeTh
+
+and the loop tail:
+
+    80012710  lw    $v0, ($s0)             ; re-read the cursor
+    80012714  ori   $v1, $v1, 0x82ff       ; $v1 = 0x801F82FF
+    80012718  addiu $v0, $v0, 0x80         ; cursor += 0x80
+    8001271C  sltu  $v1, $v1, $v0
+    80012720  beqz  $v1, 0x8001262c        ; cursor < 0x801F8380 -> re-read the state
+    80012724  sw    $v0, ($s0)             ; else store it and return via `jr $ra`
+
+**So `0x801F8300` is a CURSOR, not a state variable — and in this run it holds `0x801F8300`, itself.**
+The probe measured that value at every tick, and `r2` at the fault is the same `0x801F8300`.
+
+**Which means the "state" the state machine reads is the cursor's own low halfword: `lhu` at
+`0x801F8300` yields `0x8300`.** None of the four branches handles `0x8300` — not 1, not 2, not 4,
+not `0x7f` — so the fall-through runs, reaches `0x80012710`, advances the cursor by `0x80` to
+`0x801F8380`, finds `sltu` false, and **returns without ever calling `ChangeTh`**.
+
+Two consequences, both measured rather than inferred:
+
+* **The scheduler does not dispatch tasks from this state.** The `ChangeTh` paths at `0x80012698`
+  are unreachable while the cursor points at itself, which is consistent with the task's SP
+  descending across repeated `ChangeTh main ->` transfers without ever retiring — something else is
+  driving the fiber switches, not this state machine's `ChangeTh` branch.
+* **A cursor that points at itself is a defect on its own terms**, whatever the fault: the record
+  pointer the guest is iterating is its own storage, so the table it walks is not a table. This is
+  the first thing found in this investigation that is wrong in the GUEST's data rather than in the
+  port, and it is the thing to check first from here.
+
+**This does not yet account for `0x0113D7D0`.** With state `0x8300` the scheduler's path returns
+cleanly through `jr $ra` to `0x800120EC`, which is consistent with `r31 = 0x800120EC` at the fault and
+means the fault is NOT on the state-`0x8300` path. It narrows the search to the paths that *do*
+dispatch, and it gives a new, cheaper question: **why does the cursor at `0x801F8300` hold a
+self-reference?**
+
 ## The next step, named
 
-1. **Do not scan memory for it; catch the load.** Scanning is bounded below the run length by the
+1. **Why does the cursor at `0x801F8300` point at itself?** This is now the cheapest open question
+   and it is in the GUEST's data rather than in the port, so it is worth more than another register
+   reading. `Service::open` and the frame driver both write that neighbourhood, so the first check is
+   which of them last stored `0x801F8300` there - the same "name the feeder" discipline the dead taps
+   in this workspace demanded.
+2. **Do not scan memory for it; catch the load.** Scanning is bounded below the run length by the
    endpoint's per-read cost, so the next instrument must be cheap per sample. A store observer is the
    right shape, because the value must have been written to RAM before it could be loaded from it —
    the port already has the `configureStoreObserver` seam.
