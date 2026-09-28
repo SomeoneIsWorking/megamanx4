@@ -312,35 +312,49 @@ would convert a diagnosable fault into a refusal without saying where the value 
 re-pointed at the **task stack**, which no earlier scan covered, and found it at **0 of 43,520**
 word-reads, so a stale return address off the task's own stack is refuted.
 
-**CORRECTED TWICE — the "BIOS range" classification was WRONG, and `0x800EA0F4` is GUEST CODE.**
-The EXE loads its text at `0x80010000` with size `0x11F800`, so the loaded image spans
-**`0x80010000..0x8012F800`, which CONTAINS the `0x800E0000..0x80100000` range I had been calling
-"BIOS"**. Every address flagged as BIOS is inside the game's own image, and they decode as clean guest
-code:
+**ROOT CAUSE (issue 0037) — a NATIVE owner calls `x4::guest::call`, which takes its return boundary
+from `core->r[31]`, so the boundary is a stale return address from unrelated code.**
+`x4::guest::call` does `const std::uint32_t returnPc = core->r[31];`, and its comment's assumption
+("the caller's `r[31]` as the FIRST segment saw it") holds **only when guest code executed the
+`jal`**. A native owner inherits whatever link register the guest last left, and that becomes the
+address the call must reach to return.
 
-    800EA0F4  lui  $v0, 0x8012      <- the address the fault followed
-    800EA0F8  lbu  $v0, -0x1e78($v0)
-    800EA0FC  jr   $ra              <- a guest leaf that RETURNS THROUGH $ra
-    800ED744  srl $t0, $v0, 0x13    <- 583 resumes; mid-function decoder code
+The faulting call is exactly that case. `0x80016FF4` is `kDecompressGfxGuest` (the RLE decompressor),
+and `vram_rect_queue.cpp` invokes it from host C++ with the comment "`jal 0x80016FF4` at `0x80015F54`"
+— so the owner's real return point is `0x80015F58`. The boundary it actually got was **`0x80022060`**,
+and the framework disassembler shows what that is:
 
-**The resume-count split is therefore void** — the two buckets overlap. The only honest reading is
-**1,561 of 1,561 budget resumes land inside the loaded guest image, none outside it**. The earlier
-"80.8% resume at an HLE entry" claim is an artifact of overlapping ranges and is withdrawn, as is the
-framework root cause built on it (`psxport/docs/issues/0038`, kept as the record of the wrong
-premise). **The framework is not implicated by this run**: these addresses are guest code, so
-`NativeExecutionScope` is never constructed for them.
+    80022058  jal   0x80015ecc      <- an UNRELATED guest call
+    8002205C  move  $a2, $zero
+    80022060  lw    $ra, 0x14($sp)  <- the boundary the decompress call was given
 
-**What survives, and it moves the frontier into the title.** The leaf at `0x800EA0F4` ends in
-`jr $ra`, so the continuation after a resume that lands there **is the task's `$ra`**. And
-`game/core/bios_threads.cpp`'s `Service::open` sets `r[29]` (sp), `r[28]` (gp) and `pc` (entry) and
-**never initializes `r[31]`** — so a task's link register is whatever its saved register file held. A
-stale `$ra` there produces exactly the observed 0-cycle fault, and it is consistent with every negative
-this title accumulated: 0 of 43,520 word-reads over four RAM regions, 0 of 294,912 image words, and a
-value that is never at rest because a register is never "at rest".
+**The decompressor cannot return to an address belonging to a different function**, so it runs on
+past its own end through code it was never meant to execute, consumes 757,804 cycles over 2 host
+turns, and faults at `0x0113D7D0` with 0 cycles. That accounts for every earlier observation at
+once: the fault after a long call rather than at a branch, and a value that is in no image, no table,
+no RAM region and no stack — because it was produced by code running past its intended boundary.
 
-**The next measurement is now title-local and cheap: report the task's `r[31]` at each of the 1,561
-budget resumes and classify each as guest text / BIOS-and-inside-text / non-address.** The predicted
-shape is that nearly all are valid text, with a small non-address minority.
+**A PREDICTION THAT WAS REFUTED ON THE WAY, and the measurement that refuted it is now shipping.**
+The stale-`$ra` hypothesis was tested by a new census in `guest_execution.cpp` that classifies the
+link register at the instant of every resume, using `Core::currentImageIdentity` — the framework's own
+rule, and the criterion the fault message itself quotes. A 20,000-field run:
+
+    guest call 0x800ED574 to return 0x80018AA0 ... 1 of 278 completed guest call(s) resumed
+      Link register at the resume point: 1 in a code image, 0 in RAM outside one, 0 outside RAM
+    guest call 0x80016FF4 to return 0x80022060 ... 2 of 46715 completed guest call(s) resumed
+      Link register at the resume point: 2 in a code image, 0 in RAM outside one, 0 outside RAM
+
+**Both were valid code addresses, so the stale-`$ra` mechanism is refuted** — the defect is the
+boundary, not the link register. The census also produced two denominators worth keeping: only **2 of
+46,715** guest calls ever need a resume, and the first is `0x800ED574` at 610,746 cycles, matching the
+`DecDCTvlc` figure already recorded in `bios_threads.cpp`.
+
+**Also corrected earlier today:** the "BIOS range" classification was wrong. The EXE loads text at
+`0x80010000` size `0x11F800`, so the image spans `0x80010000..0x8012F800` and **contains** the
+`0x800E0000..0x80100000` range I had been calling BIOS; `0x800EA0F4` decodes as a guest byte-getter
+ending in `jr $ra`. So the earlier "80.8% of resumes continue at an HLE entry" claim is an artifact of
+overlapping buckets and is withdrawn, and the framework root cause built on it is refuted in
+`psxport/docs/issues/0038`. The framework is not implicated: these addresses are guest code.
 
 **MEASURED 2026-09-29 (issue 0036) — the model attached to that word was wrong twice, and this
 paragraph is the surviving instance of the FIRST correction; the second is stated after it.** A

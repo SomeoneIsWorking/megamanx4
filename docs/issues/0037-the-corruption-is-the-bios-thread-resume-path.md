@@ -9,6 +9,61 @@ created: 2026-09-29
 updated: 2026-09-29
 ---
 
+## MEASURED 2026-09-29 — ROOT CAUSE: a NATIVE owner calls `x4::guest::call`, which takes its return boundary from `core->r[31]`
+
+**The prediction that failed first, because the record should show the refutation.** The hypothesis
+above was a stale `$ra`. `guest_execution.cpp`'s census now classifies the link register at the
+instant of every resume, using `Core::currentImageIdentity` — the framework's own rule, and the same
+criterion the fault message quotes. A 20,000-field run reported:
+
+    guest call 0x800ED574 to return 0x80018AA0 ... 1 of 278 completed guest call(s) resumed
+      Link register at the resume point: 1 in a code image, 0 in RAM outside one, 0 outside RAM
+    guest call 0x80016FF4 to return 0x80022060 ... 2 of 46715 completed guest call(s) resumed
+      Link register at the resume point: 2 in a code image, 0 in RAM outside one, 0 outside RAM
+
+**Both resume points carried a valid code address, so the stale-`$ra` mechanism is REFUTED** — exactly
+as this file's own falsifier said it would be. Two useful denominators fell out: only **2 of 46,715**
+guest calls ever need a resume, and the first is `0x800ED574` at 610,746 cycles, which matches the
+`DecDCTvlc` figure already recorded in `bios_threads.cpp`.
+
+**The boundary, not the link register, is the defect.** `x4::guest::call` derives its return boundary
+from `core->r[31]`:
+
+    const std::uint32_t returnPc = core->r[31];
+
+Its comment states the assumption — "the caller's `r[31]` as the FIRST segment saw it ... keeps a
+resume from adopting the nested `r[31]`" — and the assumption holds **only when guest code executed
+the `jal`**. A **native owner** invoking the same helper inherits whatever link register the guest
+happened to leave, and that stale address becomes the boundary the call must reach to return.
+
+**And the faulting call is exactly that case.** `0x80016FF4` is `kDecompressGfxGuest`, the RLE
+decompressor, and `vram_rect_queue.cpp` calls it from host C++:
+
+    runGuest(core, kDecompressGfxGuest, stream, buffer, caller);
+
+with the comment "`jal 0x80016FF4` at `0x80015F54`" — so the owner's own real return point is
+**`0x80015F58`**. Decoding the boundary it actually got:
+
+    80022058  jal   0x80015ecc      <- an UNRELATED guest call
+    8002205C  move  $a2, $zero
+    80022060  lw    $ra, 0x14($sp)  <- the boundary the call was given
+
+**`0x80022060` is the return address of a different function's `jal 0x80015ecc`.** It is not a return
+point for a call to `0x80016FF4`, and the decompressor cannot reach it by returning. So the call does
+not return: it runs on past its own end through code it was never meant to execute, consumes 757,804
+cycles over 2 host turns, and faults at `0x0113D7D0` — a value produced by code running past its
+intended boundary, which is also **why that value is never at rest anywhere**.
+
+**This accounts for every earlier observation at once**: the fault after a long call rather than at a
+branch, the valid link register at the resume, the value absent from the image, from the class-0
+table, from four RAM regions and from the task stack, and the 0-cycle fault (a fetch, not a
+computation).
+
+**The fix direction is now well-posed and the owner already holds the answer**: a native-owner
+initiated guest call must supply the return point its own call site implies (`0x80015F58` here), not
+`core->r[31]`. That is a real behavioural repair, so it is recorded rather than applied in the same
+breath as the measurement, and it needs a regression test that fails today.
+
 ## What this does that the earlier frontier did not
 
 Issues 0036 and 0037 established that `0x0113D7D0` is **nowhere at rest**: not in the image, not in the

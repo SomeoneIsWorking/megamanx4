@@ -7,6 +7,7 @@
 #include <cstdlib>
 #include <lucent/log.h>
 #include <optional>
+#include <vector>
 
 namespace x4::guest {
 namespace {
@@ -37,9 +38,56 @@ struct CallCensus {
   std::uint64_t resumed = 0;
   std::uint32_t deepestTurns = 0;
   std::uint64_t resumedCycles = 0;
+  // The link register at the instant of each resume, classified against the ONE owner of this
+  // title's image extent. Measured 2026-09-29: the fault is a guest call resumed into a leaf that
+  // ends `jr $ra`, and a `jr $ra` at a resume point does NOT consult the `returnPc` boundary — it
+  // uses `r[31]` as it stands. So this is the register that can turn a resume into a jump to a
+  // non-address, and the faulting value 0x0113D7D0 is in no active code image at all.
+  std::uint64_t raInCodeImage = 0;
+  std::uint64_t raInRamOutsideCode = 0;
+  std::uint64_t raOutsideRam = 0;
 };
 
 CallCensus census;
+
+// The distinct out-of-text link registers, capped so a long run cannot turn a diagnostic into a log
+// flood. The cap is stated and the TOTAL is always reported, so a capped report is still a
+// denominator rather than a sample.
+constexpr std::size_t kMaxReportedOutOfText = 8u;
+
+struct OutOfTextRa {
+  std::uint32_t ra = 0;
+  std::uint32_t resumePoint = 0;
+  std::uint32_t entry = 0;
+  std::uint32_t returnPc = 0;
+};
+std::vector<OutOfTextRa> outOfTextRas;
+// Classification against `measuredProgramImage`, NOT against a constant written here. The image
+// extent comes from the PS-X EXE header's `t_addr`/`t_size`, and 2026-09-29 is the day this file's
+// author classified 0x800E0000..0x80100000 as "BIOS" and built an account on it: that range is
+// INSIDE this image's text (0x80010000..0x8012F800), so every address involved was the game's own
+// code. One owner, derived from the image, or the next reader repeats the mistake.
+enum class RaClass {
+  CodeImage,
+  RamOutsideCode,
+  OutsideRam,
+};
+
+// KSEG0/KSEG1 to physical, and the PSX's 2 MiB of RAM. The CODE test deliberately delegates to
+// `Core::currentImageIdentity` rather than re-deriving an extent: that is the framework's own rule
+// for "does this address resolve to a code image", it is what `keyFor` above already uses, and it is
+// literally the criterion the fault message quotes ("resolves to zero or multiple active code
+// images"). An overlay module's text is a code image too, so a resident-text test would have
+// misfiled a valid address from one.
+inline constexpr std::uint32_t kGuestPhysicalMask = 0x1FFFFFFFu;
+inline constexpr std::uint32_t kGuestRamPhysicalBytes = 2u * 1024u * 1024u;
+
+RaClass classifyRa(const Core &core, std::uint32_t ra) {
+  if (core.currentImageIdentity(ra)) {
+    return RaClass::CodeImage;
+  }
+  return (ra & kGuestPhysicalMask) < kGuestRamPhysicalBytes ? RaClass::RamOutsideCode : RaClass::OutsideRam;
+}
 
 psx::cpu::NativeKey keyFor(Core &core, std::uint32_t address, const char *owner) {
   const auto image = core.currentImageIdentity(address);
@@ -69,14 +117,28 @@ void recordCompleted(std::uint32_t entry, std::uint32_t returnPc, std::uint32_t 
   lucent::info("x4-guest",
                "guest call 0x{:08X} to return address 0x{:08X} outlived one host turn: {} turn(s), "
                "{} cycles total. Denominator: {} of {} completed guest call(s) have needed a resume; "
-               "deepest {} turn(s)",
+               "deepest {} turn(s). Link register at the resume point: {} in a code image, {} in RAM "
+               "outside one, {} outside RAM",
                entry,
                returnPc,
                turns,
                cycles,
                census.resumed,
                census.completed,
-               census.deepestTurns);
+               census.deepestTurns,
+               census.raInCodeImage,
+               census.raInRamOutsideCode,
+               census.raOutsideRam);
+  for (const OutOfTextRa &sample : outOfTextRas) {
+    lucent::error("x4-guest",
+                  "resume of call 0x{:08X} (return 0x{:08X}) at 0x{:08X} carried link register "
+                  "0x{:08X}, which is NOT in any code image: a `jr $ra` at that resume point would "
+                  "dispatch straight to it and never reach the return boundary",
+                  sample.entry,
+                  sample.returnPc,
+                  sample.resumePoint,
+                  sample.ra);
+  }
 }
 
 double displayFields(Core &core, std::uint64_t cycles) {
@@ -129,6 +191,28 @@ void runToReturn(Core &core,
       std::abort();
     }
     const psx::cpu::ExecutionBudget turn = psx::cpu::ExecutionBudget::currentTurn(core);
+    // CLASSIFIED BEFORE THE RESUME, because that is the instant whose `r[31]` the resumed code will
+    // use. `result.guestPc` re-enters guest code mid-function; if the instruction there is a
+    // `jr $ra` — and 0x800EA0F4, the resume point this fault followed, IS such a leaf — it
+    // dispatches to `r[31]` and never reaches the `returnPc` boundary. Reading it after the resume
+    // would read the NEXT segment's link register and classify the wrong value.
+    switch (classifyRa(core, core.r[31])) {
+    case RaClass::CodeImage:
+      ++census.raInCodeImage;
+      break;
+    case RaClass::RamOutsideCode:
+      ++census.raInRamOutsideCode;
+      if (outOfTextRas.size() < kMaxReportedOutOfText) {
+        outOfTextRas.push_back({core.r[31], result.guestPc, entry, returnPc});
+      }
+      break;
+    case RaClass::OutsideRam:
+      ++census.raOutsideRam;
+      if (outOfTextRas.size() < kMaxReportedOutOfText) {
+        outOfTextRas.push_back({core.r[31], result.guestPc, entry, returnPc});
+      }
+      break;
+    }
     result = original ? psx::cpu::resumeOriginal(core, *original, result.guestPc, returnPc, turn)
                       : psx::cpu::resumeGuestToReturn(core, result.guestPc, returnPc, turn);
     cycles += result.cycles;
