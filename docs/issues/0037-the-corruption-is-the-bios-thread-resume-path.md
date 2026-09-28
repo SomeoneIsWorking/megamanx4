@@ -291,12 +291,19 @@ amended:** whether `0x800126A8` and `0x80012724` execute. Runs watching them abo
 is the same green-zero mistake in a new costume. A run that aborts is not a run that proves absence,
 and the previous section treated it as one.
 
-**One thing here does not add up and is recorded rather than explained away.** The two runs differ
-only in which store PC is watched, yet one reaches 10,403 events and the other aborts after 1. If
-arming `0x80012724` changes the scheduler's loop behaviour enough to exhaust the budget that much
-sooner, that is a fact about the observer's effect on execution, and nothing about it is understood
-yet. It is flagged for the pinest session's standing request to report what will not add up: this is
-exactly that, and it is not being worked around.
+**RESOLVED 2026-09-29 — the "observer changes behaviour" anomaly did NOT reproduce, and was
+run-length variance.** It was flagged rather than worked around, which was the right call, so the
+resolution is recorded next to the flag.
+
+Two runs with **identical** configuration (cursor store watched, debug server off, 400 native
+frames) each produced **exactly 400 events and no crash** — one scheduler call per native frame,
+deterministic. So the earlier 1-versus-10,403 split does not come from which store PC is watched.
+The runs that produced 10,403 and the runs that produced 1 differed in how long they lived before
+the budget refusal ended the process, and that is what set the count.
+
+**Nothing suggests the store observer perturbs execution, and the earlier worry is withdrawn.** What
+survives is the correction above: a run that aborts is not a run that proves absence, and the
+"entered once, reached neither exit" reading was made on an aborted run.
 
 ## The next step, named
 
