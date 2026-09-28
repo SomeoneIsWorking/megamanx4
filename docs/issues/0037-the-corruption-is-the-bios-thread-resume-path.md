@@ -40,6 +40,32 @@ fiber-switch path the original frontier pointed at, and it is where the frontier
 owner obtained a return boundary; and an unexplained corruption that predates it, still live, and now
 localised to the task scheduler. The second was never caused by the first.
 
+## MEASURED 2026-09-29 — the fiber SWITCH is refuted too: 14,000 resumes, 0 with an unusable register
+
+The next step named above was to point the register census at the `ChangeTh` fiber switch itself,
+because `Service::open` writes `r[29]`, `r[28]` and `pc` and **never `r[31]`**. That census now ships
+in `bios_threads.cpp` and reports on a stride, so a run that never trips it still says how much it
+scanned.
+
+    fiber-switch census: 14000 task resume(s) scanned; 14000 resumed with a pc inside a code image,
+    0 with one outside EVERY code image; of their link registers, 3 were zero (`Service::open` never
+    initialises r[31]), 13997 were in a code image and 0 were not
+
+**So the switch is sound on both registers that matter, and it is not the source.** Every one of
+14,000 task resumes loaded a `pc` that resolves in a code image, and no link register was outside one.
+
+**The "3 were zero" is a measured confirmation, not a fault.** Those are the first resumes of tasks
+that have not yet executed a `jal`, so `r[31]` is still the zero `Service::open` left in it — which
+is exactly why the census reports the zero case separately instead of folding it into "not a code
+image". They are benign: the task sets the register before it returns through it.
+
+**Where this leaves `0x0113D7D0`.** Not the boundary (fixed, and the fault survives that fix), not
+the saved `pc`, not the saved `r[31]`. The task resumes valid and then, somewhere in its own guest
+execution, jumps to a non-address. Catching that means watching the VALUE rather than the two
+registers at a switch — a store observer or a register watchpoint on `0x0113D7D0` appearing in any
+register — because every structural register the port owns is now measured sound at the point where
+it hands control to the guest.
+
 ## The next step, named
 
 1. **The scheduler, not the boundary.** `0x80012600` chooses a task and calls `ChangeTh`
@@ -47,16 +73,23 @@ localised to the task scheduler. The second was never caused by the first.
    report the register file it resumes a task with, specifically the task's `r[31]` and `pc` — the
    same census that refuted the stale-`$ra` hypothesis here should be pointed at the switch itself,
    because `Service::open` sets `r[29]`, `r[28]` and `pc` and never `r[31]`.
-2. **Supply boundaries for the remaining native-owner calls**, so the refusals become working calls.
+   **DONE, and it refuted the switch — see the section above.**
+2. **Watch the value, not the registers at a switch.** Every structural register the port owns is
+   now measured sound where it hands control to the guest, so the next instrument has to catch
+   `0x0113D7D0` *appearing* — in a register or in memory — rather than inspect a register the port
+   already sets correctly. The port already has a store-observer seam (`configureStoreObserver`); a
+   watchpoint on the faulting word's own RAM neighbourhood is the cheaper first attempt, and the
+   earlier wide scan only covered four windows.
+3. **Supply boundaries for the remaining native-owner calls**, so the refusals become working calls.
    `tools/census_guest_call_sites.py` has the candidates: `kAppendBandsGuest` (0x80015ECD) has **no**
    `jal` site at all, so it needs a pointer/`jalr` reachability answer before a boundary can be
    derived for it; the `display_init` and `music_stream` entries have 2-24 sites each and the owner
    must name which one it stands in for.
-3. **Widen `GuestDispatch` to carry the return address.** Five headers each declare their own
+4. **Widen `GuestDispatch` to carry the return address.** Five headers each declare their own
    `using GuestDispatch = void (*)(Core *, std::uint32_t);`, so a boundary cannot travel with a
    dispatch today, which is why `callWithRegisterReturn` exists as a verified-register compromise.
    One typedef, one owner, and the return address becomes impossible to drop.
-4. Keep the boundary gate. `tools/census_guest_call_sites.py --verify-boundaries` re-derives the two
+5. Keep the boundary gate. `tools/census_guest_call_sites.py --verify-boundaries` re-derives the two
    hard-coded constants from the image and was confirmed red on a mutated constant; it is what stops
    a future edit from silently restoring the defect this repair removed.
 

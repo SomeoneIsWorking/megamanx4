@@ -71,6 +71,56 @@ struct TaskCensus {
 
 TaskCensus census;
 
+// WHAT A FIBER IS RESUMED WITH, and why this census exists.
+//
+// `Service::change` loads a task's SAVED register file straight into the Core:
+//
+//     mainRegs_ = static_cast<R3000 &>(core_);
+//     static_cast<R3000 &>(core_) = thread.regs;
+//
+// and `Service::open` builds that saved file as `Thread{}` (zero-initialised) with only `r[29]`
+// (sp), `r[28]` (gp) and `pc` (entry) written. **`r[31]` is never initialised.** So every value a
+// task is resumed with is either something the guest itself wrote before yielding, or zero - and the
+// product run on 2026-09-29 faults at 0x0113D7D0, 0 cycles into a dispatch of the retail task
+// scheduler 0x80012600, which is this path.
+//
+// The two registers that decide whether that resume is sound are `pc` (where the task will execute)
+// and `r[31]` (where a `jr $ra` with no frame of its own will go). Both are classified here against
+// `Core::currentImageIdentity` - the framework's own rule, and the criterion the fault message quotes
+// ("resolves to zero or multiple active code images") - so a resume that is already wrong is caught
+// at the switch, with the slot and the entry named, rather than 13,000 fields later as a bare fault
+// address.
+struct SwitchCensus {
+  std::uint64_t resumes = 0;
+  std::uint64_t pcInCodeImage = 0;
+  std::uint64_t pcNotInCodeImage = 0;
+  std::uint64_t raZero = 0;
+  std::uint64_t raInCodeImage = 0;
+  std::uint64_t raNotInCodeImage = 0;
+};
+
+SwitchCensus switchCensus;
+
+// HOW OFTEN THE SOUND CASE IS REPORTED. The interesting case (a resume whose pc is outside every
+// code image) reports IMMEDIATELY and always. The sound case is reported on a fixed stride, because
+// a run that switches tasks 1,000 times must not print 1,000 identical lines - and because a
+// census that only prints when it is worried is indistinguishable from a census that is not
+// running. The stride is what turns "nothing printed" into "scanned N, matched 0".
+constexpr std::uint64_t kSwitchCensusReportStride = 1000u;
+
+void reportSwitchCensus() {
+  lucent::info("x4-thread",
+               "fiber-switch census: {} task resume(s) scanned; {} resumed with a pc inside a code "
+               "image, {} with one outside EVERY code image; of their link registers, {} were zero "
+               "(`Service::open` never initialises r[31]), {} were in a code image and {} were not",
+               switchCensus.resumes,
+               switchCensus.pcInCodeImage,
+               switchCensus.pcNotInCodeImage,
+               switchCensus.raZero,
+               switchCensus.raInCodeImage,
+               switchCensus.raNotInCodeImage);
+}
+
 void run_guest_entry(Core &core, uint32_t entry) {
   // THE TASK ACTIVATION'S RETURN ADDRESS, captured ONCE, before anything has run.
   //
@@ -121,13 +171,22 @@ void run_guest_entry(Core &core, uint32_t entry) {
       lucent::info("x4-thread",
                    "retail task entry 0x{:08X} reached its activation's return address 0x{:08X} and "
                    "RETIRED after {} turn(s) ({} guest field-boundary resume(s), {} host-turn budget "
-                   "resume(s), {} guest cycles over those budget resumes). It is no longer scheduled",
+                   "resume(s), {} guest cycles over those budget resumes). It is no longer scheduled. "
+                   "Fiber-switch census: {} task resume(s), {} resumed with a pc inside a code image "
+                   "and {} with one outside every code image; of their link registers, {} were zero, "
+                   "{} were in a code image and {} were not",
                    entry,
                    result.guestPc,
                    census.turns,
                    census.fieldResumes,
                    census.budgetResumes,
-                   census.budgetCycles);
+                   census.budgetCycles,
+                   switchCensus.resumes,
+                   switchCensus.pcInCodeImage,
+                   switchCensus.pcNotInCodeImage,
+                   switchCensus.raZero,
+                   switchCensus.raInCodeImage,
+                   switchCensus.raNotInCodeImage);
       return;
     }
     if (result.reason == psx::cpu::ExecutionExitReason::BudgetExhausted) {
@@ -435,12 +494,47 @@ bool Service::change(uint32_t handle) {
 
   Thread &thread = threads_[target];
   mainRegs_ = static_cast<R3000 &>(core_);
+  // CENSUS BEFORE THE LOAD, so it reports what the task is about to be resumed WITH rather than what
+  // it left behind afterwards.
+  ++switchCensus.resumes;
+  const bool pcIsCode = core_.currentImageIdentity(thread.regs.pc).has_value();
+  const std::uint32_t savedRa = thread.regs.r[31];
+  const bool raIsCode = core_.currentImageIdentity(savedRa).has_value();
+  (pcIsCode ? switchCensus.pcInCodeImage : switchCensus.pcNotInCodeImage) += 1u;
+  if (savedRa == 0u) {
+    ++switchCensus.raZero;
+  } else {
+    (raIsCode ? switchCensus.raInCodeImage : switchCensus.raNotInCodeImage) += 1u;
+  }
+  if (!pcIsCode) {
+    lucent::error("x4-thread",
+                  "resuming task slot {} (entry 0x{:08X}) with pc 0x{:08X}, which is NOT in any code "
+                  "image, and r[31] 0x{:08X} ({}). `Service::open` writes r[29], r[28] and pc and "
+                  "never initialises r[31], so this is a saved register file the guest did not "
+                  "establish. Denominator so far: {} resume(s), {} with a pc outside every code "
+                  "image",
+                  target,
+                  thread.entry,
+                  thread.regs.pc,
+                  savedRa,
+                  savedRa == 0u ? "zero" : (raIsCode ? "in a code image" : "NOT in a code image"),
+                  switchCensus.resumes,
+                  switchCensus.pcNotInCodeImage);
+  } else if (switchCensus.resumes % kSwitchCensusReportStride == 0u) {
+    reportSwitchCensus();
+  }
   static_cast<R3000 &>(core_) = thread.regs;
   activeSlot_ = target;
   if (!thread.fiber) {
     startFiber(target);
   }
-  lucent::debug("x4-thread", "ChangeTh main -> 0x{:08X} entry=0x{:08X} sp=0x{:08X}", handle, thread.entry, core_.r[29]);
+  lucent::debug("x4-thread",
+                "ChangeTh main -> 0x{:08X} entry=0x{:08X} sp=0x{:08X} pc=0x{:08X} r31=0x{:08X}",
+                handle,
+                thread.entry,
+                core_.r[29],
+                core_.pc,
+                core_.r[31]);
   thread.fiber->resume();
   thread.regs = static_cast<R3000 &>(core_);
   activeSlot_ = 0;

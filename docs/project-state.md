@@ -337,6 +337,26 @@ faults **0 cycles** into its first host turn. So it is not a boundary consulted 
 guest jumps to a non-address from inside the scheduler, which is the `ChangeTh` fiber-switch path the
 original frontier named. **The frontier is the scheduler, not the boundary.**
 
+*3. The fiber SWITCH is also refuted, with a denominator.* `bios_threads.cpp` now censuses every
+`ChangeTh` main->task switch, classifying the saved `pc` and `r[31]` a task is resumed with against
+`Core::currentImageIdentity` and reporting on a stride so a clean run still states what it scanned:
+
+    fiber-switch census: 14000 task resume(s) scanned; 14000 resumed with a pc inside a code image,
+    0 with one outside EVERY code image; of their link registers, 3 were zero (`Service::open` never
+    initialises r[31]), 13997 were in a code image and 0 were not
+
+**Every one of 14,000 task resumes loaded a `pc` that resolves in a code image, and no link register
+was outside one — so the switch is not the source either.** The `3 were zero` is a measured
+confirmation rather than a fault: those are first resumes of tasks that have not run a `jal` yet, so
+`r[31]` is still the zero `Service::open` leaves, and they are benign because the task sets it before
+returning through it. That is why the census counts the zero case separately instead of folding it
+into "not a code image".
+
+**So the corruption is not the boundary, not the saved `pc`, and not the saved `r[31]`.** The task
+resumes valid and then jumps to a non-address from inside its own execution. The next instrument has
+to watch the VALUE appear - in a register or in memory - rather than inspect a register the port
+already sets correctly, and the four-window RAM scan that found nothing is not enough to exclude it.
+
 *Why the boundary defect survived so long, and this is the useful part:* `stream_startup` and
 `movie_cleanup` set `r[31]` to the return address in their own `call` helpers before dispatching, so
 the old guess read the RIGHT value from them by accident of ordering. `vram_rect_queue` did not set
