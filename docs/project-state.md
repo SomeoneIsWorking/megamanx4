@@ -357,6 +357,30 @@ resumes valid and then jumps to a non-address from inside its own execution. The
 to watch the VALUE appear - in a register or in memory - rather than inspect a register the port
 already sets correctly, and the four-window RAM scan that found nothing is not enough to exclude it.
 
+*4. Not in a register either — and the scan that would find it is measurably too slow.* The
+`x4-guest` refusal now scans the whole register file at the fault and names any register already
+holding the faulting address:
+
+    guest call 0x80012600 exited fault at 0x0113D7D0 ... 0 of the 32 general registers already
+    hold that address
+    register file at the fault: ... r29=0x801FFFE0 r30=0x80200000 r31=0x800120EC
+
+**`r31 = 0x800120EC` independently confirms the call site**: it is `PC + 8` for the `jal 0x80012600`
+at `0x800120E4`, the one static caller issue 0036 found. The guest is inside the scheduler, reached
+the documented way. The address is `core.pc` rather than a GPR, so the negative is expected — but it
+does mean the mechanism is a **branch target computed inside the scheduler**, since a `lui`/`ori`
+followed by `jr` would have left the value in a register.
+
+**The memory scan is bounded below the run length, and the arithmetic is recorded so it is not
+re-derived.** Guest RAM is 512,000 words; the `rw` endpoint costs **~18 presented frames per 64-word
+read**, so full coverage needs 8,000 reads ≈ **144,000 frames** against a run that faults at
+**~13,400**. A sliding-slab probe was built and measured rather than assumed: 16,384 words per tick,
+ticks every ~4,500 frames, reaching ~3% of RAM before the product ends. **The earlier four-window scan
+covered 43,520 words — under 1% — so its clean result never supported "it is not in memory", and this
+entry does not claim it.** The next instrument must be cheap per sample: a store observer (the value
+must have been written before it could be loaded), or a static count of the scheduler's `jalr`/`j`
+sites, which finds the offending branch even when its target is dynamic.
+
 *Why the boundary defect survived so long, and this is the useful part:* `stream_startup` and
 `movie_cleanup` set `r[31]` to the return address in their own `call` helpers before dispatching, so
 the old guess read the RIGHT value from them by accident of ordering. `vram_rect_queue` did not set

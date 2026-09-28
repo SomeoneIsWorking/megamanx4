@@ -297,14 +297,63 @@ void callWithoutKnownReturn(Core *core, std::uint32_t address) {
     // boundary defect explained - and the owner-only message could not say which entry it was, so
     // the next measurement had no subject. A refusal that cannot name what it refused about is half
     // a refusal.
+    //
+    // AND THE REGISTERS ARE NAMED TOO, because every structural register the port owns has now been
+    // measured sound at the point it hands control to the guest: the boundary (repaired), the fiber
+    // switch's saved `pc` (0 of 14,000 outside a code image) and its saved `r[31]` (0 of 14,000).
+    // So the remaining question is whether the faulting address is COMPUTED IN A REGISTER, and this
+    // is the one place that can answer it - by naming which register, if any, already holds it.
+    constexpr std::uint32_t kNumGpr = 32u; // R3000::r; r[0] is hardwired zero
+    std::uint32_t holders[kNumGpr] = {};
+    std::uint32_t holderCount = 0u;
+    for (std::uint32_t index = 0; index < kNumGpr; ++index) {
+      if (core->r[index] == first.guestPc) {
+        holders[holderCount++] = index;
+      }
+    }
     lucent::error("x4-guest",
                   "guest call 0x{:08X} exited {} at 0x{:08X} after {} cycles, and this owner has no "
-                  "return point for it: {}",
+                  "return point for it: {}. {} of the {} general registers already hold that "
+                  "address{}",
                   address,
                   psx::cpu::executionExitName(first.reason),
                   first.guestPc,
                   first.cycles,
-                  first.detail);
+                  first.detail,
+                  holderCount,
+                  kNumGpr,
+                  holderCount == 0u ? " - so it was NOT in a register at the fault, which puts its origin upstream "
+                                      "of this Core entirely"
+                                    : "");
+    for (std::uint32_t i = 0; i < holderCount; ++i) {
+      lucent::error("x4-guest",
+                    "  guest call 0x{:08X}: r[{}] == 0x{:08X}, the faulting address itself",
+                    address,
+                    holders[i],
+                    first.guestPc);
+    }
+    lucent::error("x4-guest",
+                  "  guest call 0x{:08X} register file at the fault: r0=0x{:08X} r1=0x{:08X} "
+                  "r2=0x{:08X} r3=0x{:08X} r4=0x{:08X} r5=0x{:08X} r6=0x{:08X} r7=0x{:08X} "
+                  "r8=0x{:08X} r9=0x{:08X} r10=0x{:08X} r11=0x{:08X} r28=0x{:08X} r29=0x{:08X} "
+                  "r30=0x{:08X} r31=0x{:08X}",
+                  address,
+                  core->r[0],
+                  core->r[1],
+                  core->r[2],
+                  core->r[3],
+                  core->r[4],
+                  core->r[5],
+                  core->r[6],
+                  core->r[7],
+                  core->r[8],
+                  core->r[9],
+                  core->r[10],
+                  core->r[11],
+                  core->r[28],
+                  core->r[29],
+                  core->r[30],
+                  core->r[31]);
     std::abort();
   }
   lucent::error("x4-guest",

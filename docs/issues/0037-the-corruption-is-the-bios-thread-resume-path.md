@@ -66,20 +66,47 @@ registers at a switch — a store observer or a register watchpoint on `0x0113D7
 register — because every structural register the port owns is now measured sound at the point where
 it hands control to the guest.
 
+## MEASURED 2026-09-29 — not in a register either, and the RAM scan is measurably too slow to find it
+
+The switch census left one place the port does not own: the value itself. The `x4-guest` refusal now
+scans the whole register file at the fault and names any register that already holds the faulting
+address.
+
+    guest call 0x80012600 exited fault at 0x0113D7D0 after 0 cycles ... 0 of the 32 general
+    registers already hold that address
+    register file at the fault: r0=0x00000000 r1=0x80200000 r2=0x801F8300 r3=0x00000001
+      r4=0x00000000 r5=0xFFFF0000 r6=0x80139554 r7=0x00000000 r8=0x80166D14 r9=0x0000002A
+      r10=0x000000A0 r11=0x00000000 r28=0x8012F418 r29=0x801FFFE0 r30=0x80200000 r31=0x800120EC
+
+**`r31 = 0x800120EC` independently confirms the call site.** That is `PC + 8` for the `jal 0x80012600`
+at `0x800120E4` — the one static caller found in issue 0036 — so the guest is genuinely inside the
+scheduler, reached the documented way, not by a route nobody accounted for.
+
+**And the faulting address is in no GPR.** It is `core.pc`, not a register, so that negative is
+expected rather than surprising — but it does mean the value is not sitting in a register at the
+moment of the jump, which narrows the mechanism to a **branch target** computed by guest code inside
+the scheduler. A `lui`/`ori` pair immediately followed by `jr` would still leave the value in a
+register, so whatever produced `0x0113D7D0` did not leave it there.
+
+**The RAM scan that would find it is NOT feasible with this instrument, and the arithmetic is worth
+recording so nobody re-derives it.** Guest RAM is 512,000 words; the `rw` endpoint's measured cost is
+**~18 presented frames per 64-word read**, so full coverage needs 8,000 reads ≈ **144,000 frames** —
+against a run that faults at **~13,400**. A sliding-slab probe was built and MEASURED to confirm the
+rate rather than assume it: 16,384 words per tick, ticks arriving every ~4,500 frames, reaching only
+~3% of RAM before the product ends. **The earlier four-window scan covered 43,520 words — under 1% —
+so its clean result never supported "it is not in memory", and this issue is not to be read as
+having claimed that.**
+
 ## The next step, named
 
-1. **The scheduler, not the boundary.** `0x80012600` chooses a task and calls `ChangeTh`
-   (`0x800EDDBC`); the fault is 0 cycles after entering it. Instrument the `ChangeTh` fiber switch to
-   report the register file it resumes a task with, specifically the task's `r[31]` and `pc` — the
-   same census that refuted the stale-`$ra` hypothesis here should be pointed at the switch itself,
-   because `Service::open` sets `r[29]`, `r[28]` and `pc` and never `r[31]`.
-   **DONE, and it refuted the switch — see the section above.**
-2. **Watch the value, not the registers at a switch.** Every structural register the port owns is
-   now measured sound where it hands control to the guest, so the next instrument has to catch
-   `0x0113D7D0` *appearing* — in a register or in memory — rather than inspect a register the port
-   already sets correctly. The port already has a store-observer seam (`configureStoreObserver`); a
-   watchpoint on the faulting word's own RAM neighbourhood is the cheaper first attempt, and the
-   earlier wide scan only covered four windows.
+1. **Do not scan memory for it; catch the load.** Scanning is bounded below the run length by the
+   endpoint's per-read cost, so the next instrument must be cheap per sample. A store observer is the
+   right shape, because the value must have been written to RAM before it could be loaded from it —
+   the port already has the `configureStoreObserver` seam.
+2. **Ask which INSTRUCTION branches, not which value.** The scheduler at `0x80012600` is guest code
+   whose `jalr`/`j` sites are countable in the image; the branch that produces a non-address is
+   statically findable even when its target is dynamic, and that is far cheaper than chasing a value
+   that is measurably too fast to sample.
 3. **Supply boundaries for the remaining native-owner calls**, so the refusals become working calls.
    `tools/census_guest_call_sites.py` has the candidates: `kAppendBandsGuest` (0x80015ECD) has **no**
    `jal` site at all, so it needs a pointer/`jalr` reachability answer before a boundary can be
@@ -90,8 +117,16 @@ it hands control to the guest.
    dispatch today, which is why `callWithRegisterReturn` exists as a verified-register compromise.
    One typedef, one owner, and the return address becomes impossible to drop.
 5. Keep the boundary gate. `tools/census_guest_call_sites.py --verify-boundaries` re-derives the two
-   hard-coded constants from the image and was confirmed red on a mutated constant; it is what stops
-   a future edit from silently restoring the defect this repair removed.
+   hard-coded constants from the image and was confirmed red on a mutated constant.
+
+## SUPERSEDED PLANS (kept so they are not re-derived)
+
+*The four fixed RAM windows* (`0x8011C000`, `0x801FE000`, `0x801F8000`, `0x80139000`) were the right
+first move — each region was added because the previous one came back empty — but they cover under 1%
+of RAM and are replaced by a sliding slab, which is in turn bounded by the endpoint's per-read cost.
+
+*Pointing the register census at the fiber switch* — done, and it refuted the switch: 14,000 resumes,
+0 with a `pc` or `r[31]` outside a code image.
 
 ## CORRECTION THE PRODUCT RUN FORCED — the boundary was NOT the cause of `0x0113D7D0`
 

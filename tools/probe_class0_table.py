@@ -60,10 +60,32 @@ PORT = int(sys.argv[1]) if len(sys.argv) == 2 else 6095
 #   0x80139000  the second fault-time register's neighbourhood
 # Measured: 0x0113D7D0 present at 0 of 43,520 word-reads over these, across 34 ticks to frame 13,163.
 BLOCK = 64
-RANGES = ([(0x8011C000 + i * BLOCK, BLOCK) for i in range(8)] +
-          [(0x801FE000 + i * BLOCK, BLOCK) for i in range(8)] +
-          [(0x801F8000 + i * BLOCK, BLOCK) for i in range(8)] +
-          [(0x80139000 + i * BLOCK, BLOCK) for i in range(4)])
+
+# ROTATING SLAB OVER ALL GUEST RAM, and WHY the four fixed windows were replaced.
+#
+# The value is in no register at the fault (0 of 32 general registers hold 0x0113D7D0, measured), it
+# is not an immediate a `jal` could carry from KSEG0 code, and it was absent from the four windows
+# below over 43,520 word-reads. That leaves a LOAD, so it is in RAM - and the four windows covered
+# 43,520 of the 512,000 words the PSX has. A quarter-percent coverage cannot support "it is not in
+# memory".
+#
+# So this scans a slab that SLIDES each tick: 256 blocks of 64 = 16,384 words per tick, covering all
+# 512,000 words in ~32 ticks. The fault lands near tick 33, so full coverage and the fault are close
+# enough to be worth one run. `slab(tick)` keeps the arithmetic in one place so the window a tick
+# reads is a function of the tick, not a statement repeated in the loop.
+SLAB_BLOCKS = 256
+GUEST_RAM_BYTES = 2 * 1024 * 1024
+
+
+def slab(tick: int) -> list[tuple[int, int]]:
+    words = SLAB_BLOCKS * BLOCK
+    start = (tick * words * 4) % GUEST_RAM_BYTES
+    ranges = []
+    for i in range(SLAB_BLOCKS):
+        base = start + i * BLOCK * 4
+        if base + BLOCK * 4 <= GUEST_RAM_BYTES:
+            ranges.append((base, BLOCK))
+    return ranges
 SPOT = [0x801F8300, 0x80139554]
 BAD = 0x0113D7D0
 TERMINATOR = "---END---\n"
@@ -88,8 +110,8 @@ environment.update({
 })
 child = subprocess.Popen([str(EXECUTABLE), str(IMAGE)], cwd=REPO, env=environment,
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-print(f"probe: product pid {child.pid} on 127.0.0.1:{PORT}, scanning {sum(c for _, c in RANGES)} word(s) "
-      f"per tick for 0x{BAD:08X}")
+print(f"probe: product pid {child.pid} on 127.0.0.1:{PORT}, scanning {SLAB_BLOCKS * BLOCK} word(s) "
+      f"per tick, sliding, for 0x{BAD:08X}")
 try:
     deadline = time.time() + 120.0
     sock = None
@@ -151,7 +173,7 @@ try:
             break
         found = []
         total = 0
-        for base, count in RANGES:
+        for base, count in slab(ticks):
             got = block(base, count)
             if got is None:
                 print(f"probe: a block read came back empty at frame {current}; that is a HOLE, "
