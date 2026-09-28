@@ -312,6 +312,16 @@ would convert a diagnosable fault into a refusal without saying where the value 
 re-pointed at the **task stack**, which no earlier scan covered, and found it at **0 of 43,520**
 word-reads, so a stale return address off the task's own stack is refuted.
 
+**CORRECTED — `0x800EA0F4` is INCIDENTAL; the structural claim is the one that survives.** Classifying
+all 1,561 budget resumes by where the continuation lands: **1,261 (80.8%) are BIOS range**, 300
+(19.2%) are game text, 0 anywhere else. `0x800EA0F4` is **6 of 1,561 (0.38%)** and the run survived
+five earlier resumes to the same address, so "the fault followed a BIOS-range resume" carries almost
+no information — the issue's own falsifier fired. What survives is a better claim: this title's BIOS
+is **HLE'd with no ROM**, so a BIOS address is an *HLE entry* and not a continuation point, yet
+`resumeGuestToReturnFrom` is handed it as the continuation. 1,261 measured resumes are exactly that
+case. `0x800ED744` (583 occurrences) is a known entry, so the common path re-enters HLE and
+recovers; the **6 unnamed continuations are the interesting minority**.
+
 **MEASURED 2026-09-29 (issue 0036) — the model attached to that word was wrong twice, and this
 paragraph is the surviving instance of the FIRST correction; the second is stated after it.** A
 register dump at the fault boundary in a headless driven run reads

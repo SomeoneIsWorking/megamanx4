@@ -84,25 +84,71 @@ The product still exited at the fault (the probe's `RC=1` is its BrokenPipe on t
 scan failure). **So a stale return address read off the task's own stack is refuted** — that was the
 most likely mechanism for a fiber-resumed guest task, and it is not it.
 
+## CORRECTED THE SAME DAY — `0x800EA0F4` is NOT shown to be the culprit, and my own falsifier fired
+
+The paragraph above reads as though the resume into `0x800EA0F4` is the causal link. **The log does
+not support that, and the falsifier written into this file fired.** All 1,561 budget-resume lines
+from the run, classified by where the resume address lands:
+
+| resume address lands in | count | share |
+|---|---|---|
+| BIOS range `0x800E0000..0x80100000` | **1,261** | **80.8%** |
+| game text `0x80010000..0x8012F800` | 300 | 19.2% |
+| anywhere else | 0 | 0% |
+
+Distinct BIOS-range resume addresses, with counts:
+
+    0x800ED744 x583   <- a KNOWN framework BIOS constant
+    0x800ED7A0 x349
+    0x800ED628 x115
+    0x800ED7C8 x80    0x800ED7A4 x42    0x800ED784 x26
+    0x800ED730 x24    0x800ED828 x23    0x800ED700 x13
+    0x800EA0F4 x6     <- NOT a known entry
+
+**So "the fault followed a BIOS-range resume" carries almost no information** — four in five resumes
+land there. And `0x800EA0F4` is **6 of 1,561, 0.38%**, not a unique event: the same address was
+resumed five earlier times in this run without faulting. The chain in the previous section is
+therefore **temporal, not causal**, and this file's earlier phrasing overstated it.
+
+**What survives is structural, and it is a different and better claim.** Four in five budget resumes
+land at a BIOS address, and this title's BIOS is **HLE'd with no ROM** — there are no BIOS bytes to
+execute, so a BIOS address is an *HLE entry point*, not a place execution continues from. Yet
+`resumeGuestToReturnFrom` is handed that address as `resumeAddress`, the **continuation point**. The
+question worth asking is not "why 0x800EA0F4 this time" but **"what happens when a resume
+continuation is an HLE entry rather than a mid-function guest address"** — and 1,261 of 1,561
+measured resumes are exactly that case. `0x800ED744` at 583 occurrences is a known entry, which
+suggests the common path re-enters HLE and recovers; the 6 occurrences of an *unnamed* address are
+the interesting minority.
+
+**The port-owned seam reading is unaffected and still stands**, because it is a statement about code
+rather than about this run: `resumeAddress = result.guestPc` is guarded only by
+`result.guestPc == 0u`. What changed is the confidence in `0x800EA0F4` specifically, which is now
+recorded as incidental.
+
 ## The next step, named
 
-1. **Resolve `0x800EA0F4`.** It is a resume address the executor reported, in the BIOS range, that the
-   port's BIOS table does not name. Either it is a BIOS entry the HLE does not intercept — in which
-   case a budget resume should not be landing there at all, because the guest call should have been
-   serviced by the HLE rather than by executing BIOS bytes — or it is not a BIOS entry and the
-   reported `guestPc` is wrong. **These two have opposite fixes and the distinction is one lookup.**
-2. **Only then decide the seam's predicate.** The `guestPc != 0` check is the place a non-address gets
+1. **Ask the structural question, not the address question**: 1,261 of 1,561 resumes continue at an
+   HLE entry rather than mid-function. Establish what a resume does when its continuation is an HLE
+   entry — specifically whether it re-enters the HLE with `$ra` unchanged, and where the HLE then
+   returns to. A guest `$ra` that is stale inside a `ChangeTh`/fiber task is the most likely source
+   of a non-address, and it is consistent with the task's SP descending without ever retiring.
+2. **The 6 unnamed resumes are the minority worth keeping.** Instrument the resume path to REPORT a
+   continuation that is not a known BIOS entry and not in loaded text, with a count. That is a
+   diagnostic with a denominator, and 0.38% is the number it would be watching.
+3. **Only then decide the seam's predicate.** The `guestPc != 0` check is the place a non-address gets
    to become a target, and tightening it is a refusal, not a repair.
-3. **Answer the `gp=0` question** independently. Five of five activations pass a zero global pointer.
-4. Keep the `x4-thread` channel in the standing probe set. The fault's mechanism was in the shipping
-   debug channel the whole time; the earlier frontier spent its effort on a static image scan of a
-   value that is never in the image.
+4. **Answer the `gp=0` question** independently. Five of five activations pass a zero global pointer.
+5. Keep the `x4-thread` channel in the standing probe set. The fault's neighbourhood was in the
+   shipping debug channel the whole time; the earlier frontier spent its effort on a static image scan
+   of a value that is never in the image.
 
 ## Falsifier
 
-* If `0x800EA0F4` turns out to be a valid, named BIOS entry that the HLE legitimately services, then
-  the resume landing there is correct behaviour and the fault lies in what that BIOS code dispatched
-  to — this issue's central claim would be wrong.
-* If a run with a different frame budget faults at a different BIOS-range resume address, the
-  `0x800EA0F4` link is incidental rather than causal. The `1561 of 13420` budget-resume denominator is
-  what a repeat run has to reproduce.
+* **FIRED, and the result is in the correction above.** The falsifier asked whether the
+  `0x800EA0F4` link was incidental. It is: 6 occurrences in 1,561, five of which did not fault, and
+  80.8% of all resumes are BIOS-range.
+* The structural claim stands or falls on its own measurement: if a resume whose continuation is a
+  known HLE entry (`0x800ED744`, 583 occurrences) provably re-enters and recovers, then the HLE
+  entry path is sound and the 6 unnamed continuations need their own explanation. If it does NOT
+  recover cleanly, the 1,261 are all latent instances and the fault is the common case, not the
+  sixth occurrence.
