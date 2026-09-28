@@ -104,14 +104,30 @@ The override entry, `0x80012600`, is unchanged and was right the first time — 
     80012610  7f001124  addiu    $s1, $zero, 0x7f     ; 127
     80012614  1000b0af  sw       $s0, 0x10($sp)
 
-### A NEW discrepancy this correction exposes
+### The return address is CONSISTENT — and I nearly recorded a false anomaly here
 
-**`0x80012600` is the callee of the `jal` at `0x800120E4`, whose return address is `0x800120E8` — and
-the fault reports `returnPc 0x800120EC`.** `0x800120E8` is that call's delay slot, and `0x800120EC`
-is a *different* `jal`. So the override entry recorded in the fault was not reached from the call the
-old listing pointed at. Either it was entered from another site, or the recorded `returnPc` does not
-belong to this chain. **That is now the sharpest open question in this issue**, and it is a better
-question than the one the wrong listing was being used to ask.
+An earlier draft of this section claimed a new discrepancy: that `0x80012600` is the callee of the
+`jal` at `0x800120E4`, that its return address should therefore be `0x800120E8`, and that the fault's
+`returnPc 0x800120EC` "does not belong to this chain". **That was wrong, and it was the same mistake
+as the listing above: a convention applied from memory instead of from the architecture.**
+
+A MIPS `jal` sets `GPR[31] = PC + 8`, not `PC + 4`, because the delay slot executes first. So
+
+    jal at 0x800120E4   ->   $ra = 0x800120E4 + 8 = 0x800120EC
+
+**which is exactly the `returnPc` and `ra` the fault reports.** The framework's `returnPc` is "normally
+the caller's `$r[31]`" (`psxport/runtime/cpu/native_dispatch.h:76`), so the fault's own numbers are
+self-consistent: one static call site, one entry, one return address, all agreeing.
+
+The call surface was also closed rather than assumed:
+
+    static `jal 0x80012600`   1 site   (0x800120E4)
+    `jalr` sites in the text  1,005
+    image words holding 0x80012600 (a pointer to it)   0
+
+So the entry has exactly one static caller, its `$ra` matches, and the corruption question is
+unchanged: the guest dispatched to `0x0113D7D0`, a non-guest word. **There is no new discrepancy
+here, and recording one would have sent the next reader after a bug that does not exist.**
 
 ### The workspace map's stated reason for hand-decoding was itself wrong
 
@@ -145,6 +161,10 @@ stated reason, and the tool that should have been used was already in the reposi
    initialised from a count or an index rather than from a pointer. Those are different defects.
 3. Recover the function that FILLS the table into readable C++ under `game/`, with the byte evidence,
    following the existing owner style.
+
+1. **Find the slot the guest actually dispatched through.** `$v0 = 0x801F8300` and `$a2 = 0x80139554`
+   are live at the fault; read the words at the table bases around `0x8011CB90` and find which one
+   holds or held `0x0113D7D0`. Give the scan a denominator.
 
 ## Note on the instrument
 

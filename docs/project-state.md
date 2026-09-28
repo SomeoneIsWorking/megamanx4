@@ -27,6 +27,19 @@ Lightrec remains the default and no interpreter gameplay selector exists; runtim
 report every bounded JIT-refusal fallback and satisfy its release threshold. That checkpoint is
 followed by representative interactive gameplay.
 
+**Reading the fault's own numbers (issue 0036, corrected).** The stop is a **table dispatch through a
+non-guest word**: the guest read `0x0113D7D0` and called it, and the framework's
+`ambiguous code-image identity` is its honest name for "not a guest address at all". The call site is
+`0x800120EC` and the override entry `0x80012600`, and those two now **agree**: the entry has exactly
+one static `jal` caller, at `0x800120E4`, and a MIPS `jal` sets `$ra = PC + 8 = 0x800120EC`, which is
+precisely the `returnPc` and `ra` the fault reports. That is now a closed question — an earlier draft
+called it a discrepancy, and the discrepancy was the note's own misapplied calling convention, not a
+defect in the port. **Issue 0007 records the three decoding traps this session hit in this title** (a
+PS-X EXE's text loads from file offset `0x800`, a J-type target is not PC-relative, and `jal` links to
+PC+8), each of which produced a *plausible* wrong answer, and corrects the workspace map's false claim
+that `llvm-objdump` "misdecodes" this image when in fact it refuses it — a false claim that had
+pushed a call-site listing to be hand-decoded, and 5 of its 7 targets were wrong.
+
 ## Hosted verification and host gaps
 
 Linux x86_64 is the only currently supported host product boundary. The tracked GitHub Actions job

@@ -9,7 +9,7 @@ created: 2026-09-29
 updated: 2026-09-29
 ---
 
-## Two traps, both of which produce confident nonsense
+## Three traps, all of which produce confident nonsense
 
 ### 1. The text is loaded from file offset 0x800, not from the start of the file
 
@@ -58,6 +58,24 @@ arithmetic, and the two entries that *were* right are the two whose true target 
 page, where the error would have been obvious. **A wrong value that looks like the right kind of
 thing outlives a wrong value that does not.**
 
+### 3. `jal` sets `$ra = PC + 8`, not `PC + 4`
+
+The delay slot executes first, so the link register must point *past* it. A `jal` at `0x800120E4`
+sets `$ra = 0x800120EC`.
+
+This one produced a **false anomaly** in a written record here. The fault reports
+`returnPc = ra = 0x800120EC` for a call to `0x80012600`; the address was checked against
+`0x800120E4 + 4 = 0x800120E8`, found to differ, and recorded as "the recorded returnPc does not
+belong to this chain". It belongs to it exactly. The framework's `returnPc` is "normally the caller's
+`$r[31]`" (`psxport/runtime/cpu/native_dispatch.h:76`), so the fault's own numbers were
+self-consistent all along and the discrepancy did not exist.
+
+**This is the same failure as trap 2, one level up.** There, a branch target was computed from memory
+instead of from the architecture and came out plausible. Here, a calling convention was applied from
+memory instead of from the architecture and came out as a *missing bug*. A wrong convention does not
+only corrupt a number — **it invents a defect**, and the invented defect is more expensive than the
+misreading, because it sends the next reader hunting for something that is not broken.
+
 ## The tool that already answers this
 
 `psxport/tools/disasm.py` — Capstone MIPS32, a locked dependency, gated by
@@ -82,3 +100,8 @@ misdecode it; it refuses it** — *"The file was not recognized as a valid objec
 wants an object file or a recognised container, not a PS-X EXE. Under the framework's tool the same
 range decodes 16 of 16 with zero unknown. The map's claim has been corrected, and so has the listing
 in `megamanx4/docs/issues/0036` that the claim had been used to justify hand-decoding.
+
+The companion lesson, and the one with the longer reach: **when a number disagrees with an
+expectation, find out which of the two is wrong before recording a defect.** Twice in this session the
+expectation was the thing at fault — a hand-written branch offset in a test, and a calling convention
+applied from memory — and both times the tool was right and the note was not.
