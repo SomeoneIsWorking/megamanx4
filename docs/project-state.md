@@ -320,7 +320,21 @@ no information — the issue's own falsifier fired. What survives is a better cl
 is **HLE'd with no ROM**, so a BIOS address is an *HLE entry* and not a continuation point, yet
 `resumeGuestToReturnFrom` is handed it as the continuation. 1,261 measured resumes are exactly that
 case. `0x800ED744` (583 occurrences) is a known entry, so the common path re-enters HLE and
-recovers; the **6 unnamed continuations are the interesting minority**.
+  recovers; the **6 unnamed continuations are the interesting minority**.
+
+**ROOT CAUSE FOUND (psxport issue 0038) — a resume that STARTS on a host-service leaf completes it
+with a STALE `$ra`.** `NativeExecutionScope` captures `continuation_ = core.r[31]` at scope entry and
+its own comment names the assumption: "the address the guest's own `jal` left there". The resume path
+(`resumeGuestToReturnFrom` -> `executeWithBoundary(resumePc, returnPc, dispatchHostServices=true)` ->
+`lightrec_execute(state, resumePc)`) **starts execution on the leaf without executing a `jal`**, so the
+captured `r[31]` is stale and `completeReturn()` makes it the continuation. Since **1,261 of 1,561**
+measured resumes start on a BIOS/HLE entry, four in five resumes take a stale continuation — and the
+run survives only when that stale value happens to be a valid code address. **That is why the value is
+never at rest**: it is a register, briefly, in a leaf that has already returned, which is consistent
+with 0 of 43,520 word-reads and 0 of 294,912 image words finding it. **Not patched yet** — it is
+shared hot-path code on every title, so the measurement (report `r[31]` at resume-entered leaves, with
+the stale share) comes first, and the fix is for the boundary to supply the continuation from
+`returnPc` when the leaf was entered by a resume.
 
 **MEASURED 2026-09-29 (issue 0036) — the model attached to that word was wrong twice, and this
 paragraph is the surviving instance of the FIRST correction; the second is stated after it.** A
