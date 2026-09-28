@@ -186,6 +186,41 @@ this tick` — and would have published a clean absence over a window it had nev
 an empty read as a **HOLE**, names it as not covered, and continues. 64 words is measured to work;
 512 does not.
 
+## REFUTED 2026-09-29 — "the pointer was half-clobbered, 0x8001D7D0 lost its top halfword"
+
+This looked like the answer and is not, and it is recorded because it is the most attractive wrong
+lead this frontier has produced. `0x0113D7D0` and the valid guest address `0x8001D7D0` share their low
+16 bits exactly and differ only in the top halfword (`0x8001` -> `0x0113`). `0x8001D7D0` sits in a
+table at `0x800F2174` that is mostly pointers, interrupted by ASCII (`0x53525150` = `"PQRS"`) and small
+integers — a tagged handler table. A table entry whose top half was overwritten produces *precisely*
+the observed value, and it explains why the dispatch looks like a real call gone wrong.
+
+**Two measurements kill it.**
+
+    1. The low halfword is not a signal. halfword 0xD7D0 occurs 1 time in 294,400 text words.
+       Expected under chance: 294,400 * 2 / 65,536 = 8.98. Ratio 0.11.
+       A random 16-bit value should appear about 9 times here. ONE is BELOW chance.
+       The match is an artifact of not computing the null first.
+
+    2. The misaligned-read mechanism produces the target nowhere. Every byte-aligned 2-byte and
+       4-byte read within +/-128 bytes of that entry: 0 of them yield 0x0113D7D0.
+       A 16-bit-table-read-as-32-bit bug would put the high half in the adjacent entry, and no
+       adjacent halfword in this table is 0x0113.
+
+Supporting negatives, same method: halfword `0x0113` occurs 116 times in text and so constrains
+nothing, and 0 of 294,400 text words equal `0x0113D7D0`.
+
+**The meta-lesson is the one this workspace keeps relearning.** The low-halfword match was visible,
+specific, and felt like a smoking gun — and it sits at 0.11x chance. **Compute the null before
+naming a lead.** `docs/findings/lineage-metric.md` already requires a multiple of the measured
+cross-studio null before a similarity claim means anything; the same rule applied to a single
+halfword is what separates "the pointer lost its top half" from "two numbers share sixteen bits".
+
+**What this leaves.** The value is not in the image, not in the three live RAM windows, and not
+reachable by any read near the only table entry that shares its low half. So it is produced by
+runtime arithmetic, and the next instrument has to be dynamic rather than static: capture the
+register that fed the jump, at the instruction that computed it.
+
 ## The next step, named
 
 1. **Find what computes `0x0113D7D0`, not where it is stored** — it is stored nowhere observable, so a
@@ -194,7 +229,11 @@ an empty read as a **HOLE**, names it as not covered, and continues. 64 words is
 2. **Decide whether `0x0113D7D0` was ever a plausible value.** `0x0113` is nowhere in guest RAM, so
    either the value was assembled from something that is not a pointer, or an index into a table was
    out of range and produced a packed pair. Those are different defects and they have different fixes.
-3. Recover the function that FILLS the class-0 table into readable C++ under `game/`, with the byte
+3. **Instrument the fault boundary to name the register that held `0x0113D7D0`.** The registers already
+   captured at the fault (`v0 = 0x801F8300`, `a2 = 0x80139554`) do not hold it, so the value is
+   consumed or folded before the boundary — the full register file at the boundary, with the
+   dispatching instruction, is the measurement that would name it.
+4. Recover the function that FILLS the class-0 table into readable C++ under `game/`, with the byte
    evidence, following the existing owner style — and per the note below, give it an invocation count
    so the table's state is observable continuously rather than only at a fault.
 
