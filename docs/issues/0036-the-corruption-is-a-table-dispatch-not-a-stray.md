@@ -151,16 +151,52 @@ stated reason, and the tool that should have been used was already in the reposi
 * The write census that issue 0035 ran — every instruction that can WRITE the word — was answering a
   question about a store that is not happening.
 
+## MEASURED 2026-09-29 — the bad word is never seen SITTING anywhere, which retires the slot question
+
+The frontier sentence carried two claims. The second ("the guest dispatched on it, it is not a stray
+store") issue 0036 corrected. **The first — that the table entry at `0x8011CB98` HOLDS
+`0x0113D7D0` — was never checked, and it is wrong.** `tools/probe_class0_table.py` checks it:
+
+    spot series      97 ticks over presented frames ... to 14,297, watching 0x8011CB90..0x8011CBA4
+                     plus the two fault-time registers.  0x0113D7D0 present at 0 of 97 observations.
+                     0x8011CB98 held 0x800DD7FC at every one — a plausible guest address — and at
+                     the fault.
+    wide series      41 ticks x 1,024 word-reads over frames 15 to 13,426, across three windows
+                     (0x8011C000..0x8011C200, 0x801F8000..0x801F8100, 0x80139000..0x80139100).
+                     0x0113D7D0 present at 0 of 41,984 word-reads.
+    static image     0 of 294,912 words of SLUS_005.61 hold 0x0113D7D0, and 0x8011CB90..0x8011CB9C
+                     are ALL ZERO in the file, so the table is filled at runtime and the value is
+                     not one of its entries either.
+
+**So the word is never observed at rest.** It is not a constant in the image, not a slot value, and
+not anywhere in three live RAM windows sampled ~1,000 times. A value that is never seen sitting in
+memory and is nevertheless the address the CPU was told to jump to was **produced transiently** — in
+a register, or across a calculation short enough that a sampler does not land between its halves.
+
+**The frontier question therefore changes shape, and this is the advance:** it is no longer "which
+slot held it" but **"what computes `0x0113D7D0`"**. Its top half is `0x0113`, and a word assembled
+from two halves in that shape is the signature of a packed pair — a colour, a fixed-point value, or
+two bytes that were never a pointer — being read as an address. The live registers at the fault are
+the right place to start: `v0 = 0x801F8300` and `a2 = 0x80139554`, and `*(0x801F8300)` measured
+`0x801F8300` (a self-pointer) while `*(0x80139554)` measured `0`.
+
+**A note on the instrument, because it earned its place the hard way.** The `rw` endpoint **refuses a
+512-word block** and answers 64. The probe's first wide run therefore reported `scanned 0 word(s)
+this tick` — and would have published a clean absence over a window it had never read. It now treats
+an empty read as a **HOLE**, names it as not covered, and continues. 64 words is measured to work;
+512 does not.
+
 ## The next step, named
 
-1. **Find the slot the guest actually dispatched through.** `$v0 = 0x801F8300` and `$a2 = 0x80139554`
-   are live at the fault; read the words at the table bases around `0x8011CB90` and find which one
-   holds or held `0x0113D7D0`. Give the scan a denominator.
-2. **Decide whether `0x0113D7D0` was ever a plausible value.** Its top half is `0x0113`, which is
-   nowhere in guest RAM — so either the table was never initialised for this entry, or it was
-   initialised from a count or an index rather than from a pointer. Those are different defects.
-3. Recover the function that FILLS the table into readable C++ under `game/`, with the byte evidence,
-   following the existing owner style.
+1. **Find what computes `0x0113D7D0`, not where it is stored** — it is stored nowhere observable, so a
+   writer census over the table is answering a question about a value that is not in the table. Start
+   from the dispatch site's own operand: what does the guest load, and from where.
+2. **Decide whether `0x0113D7D0` was ever a plausible value.** `0x0113` is nowhere in guest RAM, so
+   either the value was assembled from something that is not a pointer, or an index into a table was
+   out of range and produced a packed pair. Those are different defects and they have different fixes.
+3. Recover the function that FILLS the class-0 table into readable C++ under `game/`, with the byte
+   evidence, following the existing owner style — and per the note below, give it an invocation count
+   so the table's state is observable continuously rather than only at a fault.
 
 1. **Find the slot the guest actually dispatched through.** `$v0 = 0x801F8300` and `$a2 = 0x80139554`
    are live at the fault; read the words at the table bases around `0x8011CB90` and find which one
