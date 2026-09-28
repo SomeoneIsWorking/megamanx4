@@ -473,6 +473,40 @@ other dead tap in this workspace, in a place where the census looked like covera
 `pc` belongs to the resumed task or to a task `ChangeTh` selects afterwards. The next instrument has
 to cover the field-boundary resume, not the one the census already watches.
 
+## MEASURED 2026-09-29 — the stack pointer is REFUTED as a cause, with a working instrument and a denominator
+
+The fault's own register dump looked damning: `r29 = 0x801FFFE0`, and the retail scheduler's frame
+sits at `0x80200000 - 0x20`, so the scheduler appeared to be entered with `sp = 0x80200000` — about
+`0x1400` bytes above the `0x801FEC00` stack the guest handed `OpenTh`. A task running on a foreign
+stack would explain a clobbered frame.
+
+**The switch census classified `pc` and `r[31]` and said nothing about `r[29]`** — and `Service::open`
+discarded the stack pointer after writing it, so there was no bound to check against. Both are fixed:
+`Thread::stackTop` now retains it, and every resume is classified.
+
+**The instrument then reported an honest zero over 14,000 resumes:**
+
+    14000 task resume(s) scanned; 14000 with a pc inside a code image, 0 outside EVERY code image;
+    of their link registers, 3 zero, 13997 in a code image and 0 not; of their stack pointers,
+    0 were ABOVE the stack top the guest handed OpenTh, and 0 were zero
+
+**So the stack pointer is refuted as a cause.** And on re-reading the dump, `sp = 0x801FFFE0` is
+**main's** stack — its top is `0x801FFFF0` — so the scheduler's frame sits exactly where it should.
+There was no corruption; I read a perfectly valid value as a symptom, which is the same error as the
+self-pointer and the corrupted `j` before it.
+
+**Why this negative is worth landing anyway.** The census is the thing that makes it trustworthy: a
+census that only prints when it is worried is indistinguishable from one that is not running, so the
+new counters are reported on the existing stride, and the run above is "scanned 14,000, matched 0"
+rather than silence. The switch is now measured sound on `pc`, `r[31]` **and** `r[29]`, and
+`sp = 0` or `sp` above the declared top will be reported at the switch, with slot and entry named,
+rather than 13,000 fields later as a bare fault.
+
+**What this leaves open:** the field-boundary resume is still the uncovered path, and the fault's
+preceding line — a task resumed at a host-reported `pc` after 564,486 cycles — is still the only
+thing pointing at it. The next instrument has to observe that resume's register state directly,
+because the switch census by construction cannot see it.
+
 ## The next step, named
 
 1. **Why does the cursor at `0x801F8300` point at itself?** This is now the cheapest open question

@@ -97,6 +97,11 @@ struct SwitchCensus {
   std::uint64_t raZero = 0;
   std::uint64_t raInCodeImage = 0;
   std::uint64_t raNotInCodeImage = 0;
+  // The stack pointer, against the stack the guest handed OpenTh. Added after a product run showed
+  // a task entering the retail scheduler with sp 0x80200000 while its declared stack top was
+  // 0x801FEC00: a pc and an r[31] that both classify as valid, on a task whose stack is not its own.
+  std::uint64_t spAboveDeclaredStack = 0;
+  std::uint64_t spZero = 0;
 };
 
 SwitchCensus switchCensus;
@@ -112,13 +117,17 @@ void reportSwitchCensus() {
   lucent::info("x4-thread",
                "fiber-switch census: {} task resume(s) scanned; {} resumed with a pc inside a code "
                "image, {} with one outside EVERY code image; of their link registers, {} were zero "
-               "(`Service::open` never initialises r[31]), {} were in a code image and {} were not",
+               "(`Service::open` never initialises r[31]), {} were in a code image and {} were not; "
+               "of their stack pointers, {} were ABOVE the stack top the guest handed OpenTh and {} "
+               "were zero",
                switchCensus.resumes,
                switchCensus.pcInCodeImage,
                switchCensus.pcNotInCodeImage,
                switchCensus.raZero,
                switchCensus.raInCodeImage,
-               switchCensus.raNotInCodeImage);
+               switchCensus.raNotInCodeImage,
+               switchCensus.spAboveDeclaredStack,
+               switchCensus.spZero);
 }
 
 void run_guest_entry(Core &core, uint32_t entry) {
@@ -174,7 +183,8 @@ void run_guest_entry(Core &core, uint32_t entry) {
                    "resume(s), {} guest cycles over those budget resumes). It is no longer scheduled. "
                    "Fiber-switch census: {} task resume(s), {} resumed with a pc inside a code image "
                    "and {} with one outside every code image; of their link registers, {} were zero, "
-                   "{} were in a code image and {} were not",
+                   "{} were in a code image and {} were not; {} resumed with sp ABOVE the stack top "
+                   "the guest handed OpenTh, and {} with sp zero",
                    entry,
                    result.guestPc,
                    census.turns,
@@ -186,7 +196,9 @@ void run_guest_entry(Core &core, uint32_t entry) {
                    switchCensus.pcNotInCodeImage,
                    switchCensus.raZero,
                    switchCensus.raInCodeImage,
-                   switchCensus.raNotInCodeImage);
+                   switchCensus.raNotInCodeImage,
+                   switchCensus.spAboveDeclaredStack,
+                   switchCensus.spZero);
       return;
     }
     if (result.reason == psx::cpu::ExecutionExitReason::BudgetExhausted) {
@@ -455,6 +467,7 @@ uint32_t Service::open(uint32_t entry, uint32_t stackPointer, uint32_t globalPoi
     thread.open = true;
     thread.entry = entry;
     thread.regs.r[29] = stackPointer;
+    thread.stackTop = stackPointer;
     thread.regs.r[28] = globalPointer;
     thread.regs.pc = entry;
     lucent::debug("x4-thread",
@@ -535,6 +548,38 @@ bool Service::change(uint32_t handle) {
     ++switchCensus.raZero;
   } else {
     (raIsCode ? switchCensus.raInCodeImage : switchCensus.raNotInCodeImage) += 1u;
+  }
+  // THE STACK POINTER, which pc and r[31] cannot speak for. A task's stack grows down from the
+  // value it passed OpenTh, so a sp above that top is outside the stack the guest allocated for
+  // it. Reported IMMEDIATELY, like the pc case, because a resume with a foreign stack corrupts the
+  // frame the task is about to push rather than failing cleanly later.
+  const std::uint32_t savedSp = thread.regs.r[29];
+  const bool spAboveStack = thread.stackTop != 0u && savedSp > thread.stackTop;
+  if (savedSp == 0u) {
+    ++switchCensus.spZero;
+  } else if (spAboveStack) {
+    ++switchCensus.spAboveDeclaredStack;
+  }
+  if (spAboveStack) {
+    lucent::error("x4-thread",
+                  "resuming task slot {} (entry 0x{:08X}) with sp 0x{:08X}, which is ABOVE the "
+                  "0x{:08X} stack top the guest handed OpenTh - {:+d} byte(s) outside the stack this "
+                  "task was given, while its pc 0x{:08X} ({}) and r[31] 0x{:08X} ({}) both classify "
+                  "as valid. A task whose stack pointer is outside its own stack pushes frames over "
+                  "something else's. Denominator so far: {} resume(s), {} with sp above the declared "
+                  "stack, {} with sp zero",
+                  target,
+                  thread.entry,
+                  savedSp,
+                  thread.stackTop,
+                  static_cast<std::int64_t>(savedSp) - static_cast<std::int64_t>(thread.stackTop),
+                  thread.regs.pc,
+                  pcIsCode ? "in a code image" : "NOT in a code image",
+                  savedRa,
+                  savedRa == 0u ? "zero" : (raIsCode ? "in a code image" : "NOT in a code image"),
+                  switchCensus.resumes,
+                  switchCensus.spAboveDeclaredStack,
+                  switchCensus.spZero);
   }
   if (!pcIsCode) {
     lucent::error("x4-thread",

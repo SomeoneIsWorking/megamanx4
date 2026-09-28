@@ -93,6 +93,12 @@ private:
     bool open = false;
     bool closePending = false;
     uint32_t entry = 0;
+    // The stack top the guest handed OpenTh, kept so a resume can be checked against it. A task's
+    // stack grows DOWN from this value, so a resumed sp ABOVE it is outside the stack the task was
+    // given. Measured 2026-09-29: a task reached the retail scheduler with sp 0x80200000 against a
+    // declared top of 0x801FEC00 - 0x1400 bytes above its own stack - and nothing noticed, because
+    // the census classified pc and r[31] and this register was not one of them.
+    uint32_t stackTop = 0;
     R3000 regs{};
     std::unique_ptr<Coro> fiber;
   };
