@@ -32,6 +32,30 @@ using EntryRunner = std::function<void(Core &, uint32_t)>;
 // retail func_80012600 still chooses a task and calls ChangeTh. This class owns only the missing BIOS
 // context contract underneath it: OpenTh captures entry/SP/GP, ChangeTh ping-pongs between main and a
 // task without destroying either C stack, and CloseTh releases the selected TCB.
+
+// WHICH GLOBAL POINTER A NEW THREAD RUNS WITH, and why it is a named policy rather than an
+// expression buried in a dispatch thunk.
+//
+// MEASURED 2026-09-29 over five OpenTh calls in one product run: SLUS_005.61 passes
+// `a2 = 0x00000000` on every single call. It does not use the BIOS's third argument. The first two
+// of those calls show the creating context's `gp` as 0x8012F418 - the real global base, read from
+// the loaded EXE - and the last three show 0x00000000, because the contexts making them had
+// already been resumed with a null gp by this same defect.
+//
+// So this game relies on a thread inheriting the creating context's global base. Taking the
+// guest's 0 at face value resumed every task with `$gp = 0`, and MMX4's code is `$gp`-relative
+// throughout, so such a task takes every global access to address 0 - reading and writing the low
+// 16 KB of RAM in place of its own statics.
+//
+// A caller that DOES pass an explicit gp still wins, because that is a deliberate choice by the
+// guest. Only the zero case inherits, and a zero caller with a zero request stays zero: the port
+// does not invent a global base, and a thread opened from a context that has already lost its gp
+// is reported by the switch census rather than silently repaired.
+[[nodiscard]] inline constexpr uint32_t resolveThreadGlobalPointer(uint32_t requested,
+                                                                   uint32_t callerGlobalPointer) noexcept {
+  return requested != 0 ? requested : callerGlobalPointer;
+}
+
 class Service {
 public:
   explicit Service(Core &core, EntryRunner entryRunner = {});

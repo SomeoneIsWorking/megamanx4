@@ -423,3 +423,20 @@ if(BUILD_TESTING)
             --binary $<TARGET_FILE:megamanx4_port>
   )
 endif()
+
+# The thread global-pointer policy. It is a header-only constexpr, so the test needs no guest
+# runtime and links nothing: what it pins is the DECISION, and a decision that cannot fail is
+# not a test. The negative case ("the policy is not simply the caller's gp") is the one that
+# would catch a fix which over-corrects into always inheriting.
+add_executable(mmx4_thread_global_pointer_test
+  ${CMAKE_SOURCE_DIR}/tests/test_x4_thread_global_pointer.cpp)
+# `r3000.h`, which bios_threads.h includes, arrives through the same interface every other
+# title test uses. The policy under test is header-only constexpr, so nothing is linked in.
+target_include_directories(mmx4_thread_global_pointer_test PRIVATE
+  game game/core
+  ${PSXPORT_DIR}/runtime/psx)
+set_target_properties(mmx4_thread_global_pointer_test PROPERTIES
+  CXX_STANDARD 20
+  CXX_STANDARD_REQUIRED ON
+)
+add_test(NAME x4_thread_global_pointer COMMAND mmx4_thread_global_pointer_test)

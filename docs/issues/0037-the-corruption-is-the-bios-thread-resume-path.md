@@ -423,6 +423,56 @@ appeared once the mutations ran:
 verdict, single-value verdict, and collapsing `PREDICTED_CURSOR` onto the observed value — and the
 baseline is green. A gate that cannot fail is not a gate; this one now can.
 
+## MEASURED 2026-09-29 — a REAL defect found and fixed (thread `$gp`), and it is NOT the cause of the fault
+
+**FOUND: every thread was being resumed with `$gp = 0`.** Logging the raw `OpenTh` arguments and the
+creating context's own `gp` settles it in one run, over five calls:
+
+    a0(entry)=0x8001D064 a1(sp)=0x801FEC00 a2(gp)=0x00000000 callerGp=0x8012F418
+    a0(entry)=0x80012A3C a1(sp)=0x801FF400 a2(gp)=0x00000000 callerGp=0x00000000
+
+**SLUS_005.61 passes `a2 = 0` on every single OpenTh call.** It does not use the BIOS's third
+argument; it relies on a thread inheriting the creating context's global base. `Service::open` took
+the thread's gp from `r[6]`, so taking that zero at face value resumed **every** task with
+`$gp = 0` — and MMX4's code is `$gp`-relative on the real base `0x8012F418`, so each of those tasks
+read and wrote the low 16 KB of RAM in place of its own statics. The last three lines show the
+**cascade**: contexts already resumed with a null gp creating further null-gp threads.
+
+**FIXED, and it is not a substituted constant.** `resolveThreadGlobalPointer` in
+`game/core/bios_threads.h` inherits the creating context's own `$gp` when the guest passes zero; an
+explicit guest gp still wins, and **two zeros stay zero** — the port does not invent a global base.
+After the change every thread reports `gp=0x8012F418`, including the call that previously inherited
+from an already-broken context, so the cascade is gone.
+
+**AND THE FAULT SURVIVES.** `0x0113D7D0` still appears and the run still exits 139. **So the null-gp
+defect was real and is now fixed, and it is not what produces the corruption.** Recorded as a
+separate fixed defect, not as a root cause — the distinction this investigation has had to relearn
+several times now.
+
+### What the fault now points at, and it is a SECOND resume path
+
+With gp healthy the fault's own log names what immediately precedes it:
+
+    [x4-thread] retail task entry 0x8001DAF8 needed more than one display field of guest CPU
+                and was RESUMED at 0x800EA0F4 after 564486 cycle(s)
+    [native-dispatch:error] guest address 0x0113D7D0 resolves to zero or multiple active code images
+    [x4-guest:error] guest call 0x80012600 exited fault at 0x0113D7D0 after 0 cycles
+      r0=0x00000000 r1=0x80200000 r2=0x801F8300 r3=0x00000001 r4=0x00000000
+
+`r2 = 0x801F8300` is the cursor and `r1 = 0x80200000` is the scheduler's own `lui $a0, 0x8020`, so
+the fault is inside the state-read block, 0 cycles into the dispatch.
+
+**The lead is the resume that precedes it.** A task that overruns one display field is *resumed at
+a host-chosen point*, and the fault lands immediately after. **That is a different resume path from
+`Service::change`, and it is the one the switch census does not cover** — the census counts
+`Service::change` resumes (14,000 of them, 0 with an invalid pc) and never sees this. So the census's
+"0 invalid pc" is TRUE AND IRRELEVANT to this fault, which is the same false-absence shape as every
+other dead tap in this workspace, in a place where the census looked like coverage.
+
+**What is not established:** whether `0x800EA0F4` is a sound resume point, and whether the bad
+`pc` belongs to the resumed task or to a task `ChangeTh` selects afterwards. The next instrument has
+to cover the field-boundary resume, not the one the census already watches.
+
 ## The next step, named
 
 1. **Why does the cursor at `0x801F8300` point at itself?** This is now the cheapest open question

@@ -366,7 +366,37 @@ void run_guest_entry(Core &core, uint32_t entry) {
 }
 
 void open_thread(Core *core) {
-  const uint32_t handle = from(*core).open(core->r[4], core->r[5], core->r[6]);
+  // A THREAD INHERITS THE CREATING CONTEXT'S gp, AND THE GUEST MEANS IT.
+  //
+  // Measured 2026-09-29 over five OpenTh calls in one product run: the guest passes
+  // `a2 = 0x00000000` EVERY time, and never once passes a global pointer. So this game does not
+  // use the BIOS's third argument at all - it relies on the thread running with the same global
+  // base as the context that created it. Two of those five calls show `callerGp=0x8012F418`,
+  // MMX4's real global base from the loaded EXE; the other three show `callerGp=0x00000000`,
+  // because the context making them had ALREADY been resumed with a null gp by this same bug.
+  //
+  // `Service::open` takes the thread's gp from `r[6]`, so taking the guest's 0 at face value made
+  // every thread resume with `$gp = 0`. MMX4's code is `$gp`-relative throughout, so such a
+  // thread takes every global access to address 0: it reads and writes the low 16 KB of RAM
+  // instead of its own statics, and a value read that way is a plausible source of the runtime
+  // branch target 0x0113D7D0 the port faults on. The thread opened at entry 0x80012A3C - adjacent
+  // to the faulting scheduler 0x80012600 - is one of these.
+  //
+  // The fix inherits the creating context's own gp rather than substituting a constant. A
+  // hard-coded 0x8012F418 would be the port inventing guest state; the caller's gp is the value
+  // this program's threads are entitled to, read from the context that is actually running.
+  // A guest that DOES pass an explicit gp still wins, because that is a deliberate choice.
+  const uint32_t requestedGlobalPointer = core->r[6];
+  const uint32_t inheritedGlobalPointer = core->r[28];
+  const uint32_t globalPointer = resolveThreadGlobalPointer(requestedGlobalPointer, inheritedGlobalPointer);
+  lucent::info("x4-thread",
+               "OpenTh entry=0x{:08X} sp=0x{:08X} gp=0x{:08X} (requested 0x{:08X}, inherited 0x{:08X})",
+               core->r[4],
+               core->r[5],
+               globalPointer,
+               requestedGlobalPointer,
+               inheritedGlobalPointer);
+  const uint32_t handle = from(*core).open(core->r[4], core->r[5], globalPointer);
   core->r[2] = handle;
   if (handle == UINT32_MAX) {
     lucent::error("x4-thread", "OpenTh exhausted the four TCBs declared by SYSTEM.CNF");
