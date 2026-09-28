@@ -312,29 +312,35 @@ would convert a diagnosable fault into a refusal without saying where the value 
 re-pointed at the **task stack**, which no earlier scan covered, and found it at **0 of 43,520**
 word-reads, so a stale return address off the task's own stack is refuted.
 
-**CORRECTED — `0x800EA0F4` is INCIDENTAL; the structural claim is the one that survives.** Classifying
-all 1,561 budget resumes by where the continuation lands: **1,261 (80.8%) are BIOS range**, 300
-(19.2%) are game text, 0 anywhere else. `0x800EA0F4` is **6 of 1,561 (0.38%)** and the run survived
-five earlier resumes to the same address, so "the fault followed a BIOS-range resume" carries almost
-no information — the issue's own falsifier fired. What survives is a better claim: this title's BIOS
-is **HLE'd with no ROM**, so a BIOS address is an *HLE entry* and not a continuation point, yet
-`resumeGuestToReturnFrom` is handed it as the continuation. 1,261 measured resumes are exactly that
-case. `0x800ED744` (583 occurrences) is a known entry, so the common path re-enters HLE and
-  recovers; the **6 unnamed continuations are the interesting minority**.
+**CORRECTED TWICE — the "BIOS range" classification was WRONG, and `0x800EA0F4` is GUEST CODE.**
+The EXE loads its text at `0x80010000` with size `0x11F800`, so the loaded image spans
+**`0x80010000..0x8012F800`, which CONTAINS the `0x800E0000..0x80100000` range I had been calling
+"BIOS"**. Every address flagged as BIOS is inside the game's own image, and they decode as clean guest
+code:
 
-**ROOT CAUSE FOUND (psxport issue 0038) — a resume that STARTS on a host-service leaf completes it
-with a STALE `$ra`.** `NativeExecutionScope` captures `continuation_ = core.r[31]` at scope entry and
-its own comment names the assumption: "the address the guest's own `jal` left there". The resume path
-(`resumeGuestToReturnFrom` -> `executeWithBoundary(resumePc, returnPc, dispatchHostServices=true)` ->
-`lightrec_execute(state, resumePc)`) **starts execution on the leaf without executing a `jal`**, so the
-captured `r[31]` is stale and `completeReturn()` makes it the continuation. Since **1,261 of 1,561**
-measured resumes start on a BIOS/HLE entry, four in five resumes take a stale continuation — and the
-run survives only when that stale value happens to be a valid code address. **That is why the value is
-never at rest**: it is a register, briefly, in a leaf that has already returned, which is consistent
-with 0 of 43,520 word-reads and 0 of 294,912 image words finding it. **Not patched yet** — it is
-shared hot-path code on every title, so the measurement (report `r[31]` at resume-entered leaves, with
-the stale share) comes first, and the fix is for the boundary to supply the continuation from
-`returnPc` when the leaf was entered by a resume.
+    800EA0F4  lui  $v0, 0x8012      <- the address the fault followed
+    800EA0F8  lbu  $v0, -0x1e78($v0)
+    800EA0FC  jr   $ra              <- a guest leaf that RETURNS THROUGH $ra
+    800ED744  srl $t0, $v0, 0x13    <- 583 resumes; mid-function decoder code
+
+**The resume-count split is therefore void** — the two buckets overlap. The only honest reading is
+**1,561 of 1,561 budget resumes land inside the loaded guest image, none outside it**. The earlier
+"80.8% resume at an HLE entry" claim is an artifact of overlapping ranges and is withdrawn, as is the
+framework root cause built on it (`psxport/docs/issues/0038`, kept as the record of the wrong
+premise). **The framework is not implicated by this run**: these addresses are guest code, so
+`NativeExecutionScope` is never constructed for them.
+
+**What survives, and it moves the frontier into the title.** The leaf at `0x800EA0F4` ends in
+`jr $ra`, so the continuation after a resume that lands there **is the task's `$ra`**. And
+`game/core/bios_threads.cpp`'s `Service::open` sets `r[29]` (sp), `r[28]` (gp) and `pc` (entry) and
+**never initializes `r[31]`** — so a task's link register is whatever its saved register file held. A
+stale `$ra` there produces exactly the observed 0-cycle fault, and it is consistent with every negative
+this title accumulated: 0 of 43,520 word-reads over four RAM regions, 0 of 294,912 image words, and a
+value that is never at rest because a register is never "at rest".
+
+**The next measurement is now title-local and cheap: report the task's `r[31]` at each of the 1,561
+budget resumes and classify each as guest text / BIOS-and-inside-text / non-address.** The predicted
+shape is that nearly all are valid text, with a small non-address minority.
 
 **MEASURED 2026-09-29 (issue 0036) — the model attached to that word was wrong twice, and this
 paragraph is the surviving instance of the FIRST correction; the second is stated after it.** A

@@ -86,6 +86,19 @@ most likely mechanism for a fiber-resumed guest task, and it is not it.
 
 ## CORRECTED THE SAME DAY — `0x800EA0F4` is NOT shown to be the culprit, and my own falsifier fired
 
+**AND THE CLASSIFICATION UNDERNEATH THIS IS ALSO WRONG — see `psxport/docs/issues/0038`, which
+records the refutation.** `0x800E0000..0x80100000` was called "the BIOS range". It is not: the EXE
+loads text at `0x80010000` size `0x11F800`, so the image spans `0x80010000..0x8012F800` and
+**contains that range entirely**. `0x800EA0F4` decodes as a guest byte-getter ending in `jr $ra`, and
+`0x800ED744` as mid-function decoder code. So the table below has **overlapping buckets** and its
+300/1,261 split is an artifact; the only honest reading is that **1,561 of 1,561 resumes land inside
+the loaded guest image**.
+
+What survives from this section: the leaf at `0x800EA0F4` ends in `jr $ra`, so **the continuation after
+a resume that lands there is the task's `$ra`** — and `Service::open` never initializes `r[31]`.
+
+## The paragraph below assumed a range boundary; it is kept because the wrong premise is the attractive one
+
 The paragraph above reads as though the resume into `0x800EA0F4` is the causal link. **The log does
 not support that, and the falsifier written into this file fired.** All 1,561 budget-resume lines
 from the run, classified by where the resume address lands:
