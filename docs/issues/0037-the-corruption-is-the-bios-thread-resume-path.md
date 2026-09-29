@@ -1323,6 +1323,54 @@ in the port's own guest-call boundary and is fixed there. If it does not, the de
 run with arguments the guest never intended, and the fault is upstream of it. **That is one
 register read and one comparison**, and it decides between two entirely different owners.
 
+## MEASURED 2026-09-29 — THE COPY OVERRUNS ITS DECOMPRESSED SIZE BY ~56 KB, AND THE OVERRUN'S TAIL LANDS ON THE ELEMENT
+
+The register file at the clobbering store, with `ra = 0x80015F5C` proving the store happened during
+the **decompressor's** execution, and the routine at `0x80015ECC` doing `move $s3, $a1`:
+
+    destination at the block ($a1 -> $s3) : 0x8018F676
+    address actually stored               : 0x8013BC00
+    the copy walked DOWN                   : 342,646 bytes  (0x53A76)
+    expected decompressed size             : 286,720 bytes  (0x46000)
+    OVERRUN beyond the decompressed size   :  55,926 bytes  (0xDA76)
+    the element at 0x8013BBF8 sits 8 bytes into the end of that overrun region
+
+**That is the shape of the defect, and it is the first actionable number in this investigation.** A
+decompress that writes 286,720 bytes is walking roughly 342,646 — **about 56 KB further than the
+data it is decompressing** — and the last few bytes of that walk are what land on the interrupt
+element and become `0x0113D7D0`. A fixed-size overrun of this shape is not a wild pointer and not a
+stale register; it is a length or bound defect, and it is the first candidate in this whole
+investigation that a C++ owner can be written against.
+
+**A CORRECTION TO THE MEASUREMENT I ATTEMPTED FIRST, because it nearly became a wrong answer.** I
+first applied the call site's own formula, `dest = $a2 + ($a1 & 0xFFFFF)` at `0x80015F50`, to the
+registers captured at the store — and got `0x0008F676`, nowhere near the element. **That comparison
+was invalid: the formula's operands belong to the CALLER's block and the registers were captured in
+the decompressor's inner block.** Applying a formula from one function to another function's
+registers is the same category of error as the `$s0`-is-the-cell mistake, and it would have produced
+a confident "NO, the range excludes it" from two unrelated subjects. The numbers above use only what
+the captured block actually shows.
+
+### WHAT IS ESTABLISHED, AND WHAT IS STILL A HYPOTHESIS
+
+**Established, each with its own evidence:** the exact address (`0x8013BC00`), the exact value
+(`0x0113D7D0`), the exact field (the element's verifier), the exact field number (14,773), the
+`ra` proving the decompressor was executing, the block-entry destination register, and the size of
+the walk. The value is transient — written and rewritten within one pass — which is why 1.44
+billion sampled words never saw it.
+
+**Still a hypothesis, and deliberately not upgraded:** that the block at `0x80015ECC` is the copy
+routine, and that its destination is `$a1`. The store observer armed on that function's own store
+instructions stayed silent, and while that silence is not trustworthy (the observer is invasive per
+`psxport/docs/issues/0039`, and its coverage of `sb`/`sh` has never been demonstrated), it is also
+not refuted. **The overrun arithmetic above holds for any routine that entered the block with
+`$a1 = 0x8018F676` and walked downward** — the function's identity is not load-bearing for the
+number, only for naming the owner.
+
+**The next step is therefore narrow and specific:** read the decompressor's output length and
+destination at `0x80016FF4` and find the bound that permits 342,646 bytes where 286,720 were
+decompressed. That is a guest-side loop bound in a function this port already owns.
+
 ## The next step, named
 
 1. **Why does the cursor at `0x801F8300` point at itself?** This is now the cheapest open question
