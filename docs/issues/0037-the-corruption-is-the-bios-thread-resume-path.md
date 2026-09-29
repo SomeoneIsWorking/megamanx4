@@ -1371,6 +1371,46 @@ number, only for naming the owner.
 destination at `0x80016FF4` and find the bound that permits 342,646 bytes where 286,720 were
 decompressed. That is a guest-side loop bound in a function this port already owns.
 
+## CORRECTED 2026-09-29 — THE WATCHPOINT'S `pc` IS FORWARD-LOOKING, SO THE 56 KB NUMBER IS NOT A MEASURED WALK
+
+The previous section's "~56 KB overrun" is **withdrawn as a measurement**, and the reason is the
+`pc` field's meaning, which I had wrong.
+
+    void copyLightrecToCore(std::uint32_t nextPc) {
+      ...
+      core.pc = nextPc;          <<< the NEXT block's pc, not the block that just ran
+
+`wwatch_check_slow` reports `pc`, and `core.pc` at a store is **where execution was about to go**,
+not where it was. So `pc = 0x80015ECC` is the block AFTER the store's block. That resolves the
+contradiction that had been sitting unresolved all along:
+
+- The decompressor at `0x80016FF4` **contains zero transfers to `0x80015ECC`** (scanned
+  `0x80016FF4..0x80017400`), and it writes **forward** — `addiu $a1, $a1, 2` at `0x80017020`. So the
+  routine I disassembled at `0x80015ECC`, with its negative offsets and its downward-looking shape,
+  **is not the block that stored**, and never was.
+- The store's own block has **never been observed**, by any instrument in this investigation.
+
+**What this does to the 56 KB figure.** The two numbers it used — `$a1 = 0x8018F676` and the store
+address `0x8013BC00` — do come from the same boundary snapshot, so the *relation* between them is
+real. But calling it "a walk of 342,646 bytes" attributed a direction and a length to a function I
+have now shown is not the writer, and a forward-writing decompressor starting at `0x8018F676` cannot
+reach `0x8013BC00` either. **So the figure is downgraded from "a measured overrun" to "a 342,646-byte
+gap between the destination register and the clobbered address, of unexplained origin".** The
+element, the value, the field, the field number and the `ra` are untouched — those never depended on
+`pc`.
+
+**And the honest generalisation, which is the same lesson as `$s0`-is-the-cell and one level deeper:**
+every register-like field this investigation has read has had to be checked for *when* it is
+sampled. `core.r[]` is a block-boundary snapshot, not mid-block state. `core.pc` is the NEXT block,
+not the current one. The store observer's silence was then unsurprising too — it was armed on the
+stores of a block that never ran.
+
+**What is needed, and it is one instruction of instrumentation:** the store's own PC. The watchpoint
+cannot supply it, because it reads `core.pc`. The store observer can, but it is invasive and its
+coverage of byte and halfword stores has still never been demonstrated — **so the first thing to
+establish is that the observer fires on a `sh` at all**, which is a positive control, not a
+refutation.
+
 ## The next step, named
 
 1. **Why does the cursor at `0x801F8300` point at itself?** This is now the cheapest open question
