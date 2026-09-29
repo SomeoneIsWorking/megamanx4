@@ -1236,6 +1236,44 @@ arguments are `$a0` (source, indexed `+0x47`), `$a1` (destination, saved to `$s3
 watchpoint already shows the call's `ra = 0x80015F5C` — the same return boundary the decompress
 owner was corrected to use earlier today, which is worth checking first.
 
+## MEASURED 2026-09-29 — THE CALL'S ARGUMENTS, AND A CONTRADICTION THAT MUST NOT BE SMOOTHED OVER
+
+`PSXPORT_WWATCH_GPR=1` (added to the watchpoint, opt-in, because the copy's destination is saved to
+`$s3` and incremented in the loop — printing `$a0..$a3` would have shown nothing) gives the
+block-entry register file at the exact store that wrote `0x0113D7D0`:
+
+    r4  ($a0) = 0x80186BAA      r5  ($a1) = 0x8018F676      r6  ($a2) = 0x00000000
+    r18 ($s2) = 0x800F21B0      r19 ($s3) = 0x00000000      r20 ($s4) = 0x00000000
+    pc = 0x80015ECC   ra = 0x80015F5C
+
+**`$s3` is zero here, which is expected and worth saying: `pc` is the BLOCK start, and the prologue
+that does `move $s3, $a1` has not run at a block boundary.** The callee-saved registers being clear
+is the signature of a block-entry snapshot, not of a function that forgot to set its destination.
+
+### THE CONTRADICTION, STATED RATHER THAN RESOLVED
+
+Taking `$a1` as the destination, the copy starts at **`0x8018F676`** and the store landed at
+**`0x8013BC00`** — **`0x53A76` = 342,646 bytes BELOW its start.** A forward byte copy from `$a1`
+cannot reach a lower address. So one of three things is true, and this measurement does not say
+which:
+
+- **(a)** the copy runs backwards, or
+- **(b)** the destination is not `$a1` in this block, or
+- **(c)** `0x80015ECC` is the block START but not the copy loop that was disassembled.
+
+**(c) is the one this investigation has already been bitten by**, in the most expensive way: the
+`$s0`-is-the-cell mistake read `ori $s0,$s0,0x8300` as a table base when it set a pointer to a
+pointer, and 250 addresses were scanned that were not one of them. **A PC from a block-boundary
+snapshot is the block's entry, not the instruction that executed the store**, and treating the
+former as the latter is the same error with the same costume.
+
+**So the disassembly of `0x80015ECC` as "the byte-wise copy" stands only as a hypothesis about the
+block that contains the store, and the store's own PC has still not been observed.** What is NOT
+hypothetical is the chain above it: a store at an exact address, an exact value, an exact field, an
+exact instruction stream, and an exact field number. The next measurement is one instruction long —
+print the **exact** store PC rather than the block start — and until that is done the function
+identity stays marked as unconfirmed rather than quietly upgraded to fact.
+
 ## The next step, named
 
 1. **Why does the cursor at `0x801F8300` point at itself?** This is now the cheapest open question
