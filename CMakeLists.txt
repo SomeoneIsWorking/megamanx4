@@ -134,3 +134,19 @@ add_test(
   NAME megamanx4_cursor_poll_selftest
   COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/probe_cursor_poll.py"
           --selftest)
+
+# probe_dispatch_table.py DECIDES REFUTATIONS, and a refutation from it withdraws a hypothesis, so
+# it is the last tool in this repository that may be ungated. Its first version read 250 addresses
+# that were not slots and produced a WRONG refutation at ~12 s, while the fault it claimed to explain
+# happens at ~40 s (withdrawn in 4f915e5); it also shipped a NameError on any run with a non-zero
+# slot. Both were caught by a human reading output. --selftest drives the sweep's refusal, the
+# sighting-outranks-the-last-sweep decision, the missing-snapshot refusal, the classifier and the
+# table walk, so a mutation to any of them turns the gate red. Guarded, unlike the two probe
+# selftests above, because include(CTest) at the top of this file DOES define BUILD_TESTING, so here
+# the guard is live rather than inert.
+if(BUILD_TESTING)
+  add_test(
+    NAME megamanx4_dispatch_table_probe_selftest
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/probe_dispatch_table.py"
+            --selftest)
+endif()
