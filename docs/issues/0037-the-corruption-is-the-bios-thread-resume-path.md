@@ -611,6 +611,53 @@ schedule happens to reach first.
   absence and is not recorded as any. The coverage limit was measured earlier in this investigation
   and has not changed.
 
+## MEASURED 2026-09-29 — every GUEST-side explanation is refuted; the bad PC is not in a register, not in a `j`, not a resume point
+
+Three independent checks, each with the coverage it earned, and together they close the guest side.
+
+**1. No register holds the fault address.** In the x2 run, where `0x0113D7D0` *was* the fault
+address, the fault-time register file is
+
+    r0=0x00000000 r1=0x80200000 r2=0x801F8300 r3=0x00000001 r4=0x00000000 r5=0xFFFF0000
+    r6=0x80139554 r7=0x00000000 r8=0x80166C74 r9=0x0000002A r10=0x000000A0 r11=0x00000000
+    r28=0x8012F418 r29=0x801FFFE0 r30=0x80200000 r31=0x800120EC
+
+**Not one of the 32 holds `0x0113D7D0`**, and `r31 = 0x800120EC` is the correct return. So the bad PC
+did not come from a `jr $reg`. The registers are internally consistent with the scheduler's
+state-read block: `r1 = 0x80200000` is its `lui $a0, 0x8020`, `r2 = 0x801F8300` is the cursor, `r3`
+is the `sltu` result.
+
+**2. Neither `j` instruction is corrupted.** The call contains exactly two, and for either to name
+`0x0113D7D0` the word would have to be `0x0913D7D0` — the address is below `0x04000000`, so it fits a
+26-bit field. Polled with the histogram tool to the moment the process died:
+
+    0x80012658  -> 0x080049C4  4,704 read(s)  100.0%
+    0x80012674  -> 0x080049C4  5,581 read(s)  100.0%
+
+**Unchanged, and the earlier "the `j` words are intact" claim is now measured at the fault rather
+than thousands of frames before it.**
+
+**3. The resume point is valid.** `"after 0 cycles"` means the fault is in a *resumed* segment, so the
+resume address was the obvious suspect. Every `RESUMED at` address in the x2 run is KSEG0 code, and
+the last before the fault is `0x800EA0F4` — the same task resume point throughout. **The bad PC is
+not the resume point.**
+
+**So the fault PC was produced by neither the guest's registers, nor its instruction stream, nor the
+resume address. That leaves the framework's own `nextPc` at a budget exit** — `nextPc` is
+`state->curr_pc`, and in Lightrec's block loop the cycle check sits *before* the store that updates
+it:
+
+    loop2 = jit_label();
+    boundary_to_end = jit_blei(LIGHTREC_REG_CYCLE, 0);          // exits to `to_end` here ...
+    jit_stxi_i(lightrec_offset(curr_pc), LIGHTREC_REG_STATE, JIT_V0);   // ... but curr_pc is set HERE
+
+**That ordering is a real observation and it is NOT yet a defect**: `curr_pc` still holds the previous
+block's stored pc, which is a valid code address. What is unestablished is whether some other exit
+path leaves `curr_pc` holding something that is not one. **The named next step is a census on the pc
+reported at `BudgetExhausted`** — flag any that is outside every code image, in the framework, next to
+the exit that produces it. That is the same discipline the MMX4 censuses use, applied to the one
+value that is still unaccounted for.
+
 ## The next step, named
 
 1. **Why does the cursor at `0x801F8300` point at itself?** This is now the cheapest open question
