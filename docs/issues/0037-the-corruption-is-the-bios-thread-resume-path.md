@@ -1087,6 +1087,47 @@ window is invisible to the census **by construction**, not by bad luck. The cens
 ("0 words, in 0 of 2,743 sweeps") is true and is not evidence about the last minute of the run; the
 gap is named here so the number is not read as more than it is.
 
+## MEASURED 2026-09-29 — THE INTERRUPT CLASS TABLE IS REFUTED TOO, AND THE REMAINING GAP IS A LINK I ASSUMED
+
+The measurement named above is now a real instrument: `vsync_sync.cpp` reads **every** class in
+`kSetInterruptTable` on a stride of 64 fields, classifies each with `Core::currentImageIdentity`,
+reports the count, and names any class whose handler is not executable. The feeder is shown — a
+census reporting only bad cases cannot be told from one that is not running, so the summary line
+prints every time.
+
+    IRQ table census at field 0:   scanned 16 of 16 classes, 7 populated, 2 outside every code image
+    IRQ table census at field 64:  scanned 16 of 16 classes, 7 populated, 2 outside every code image
+    ... 462 census points in the run
+
+    IRQ class 11 handler at [0x8011CBC4] is 0x0000000D, which is in NO loaded code image
+    IRQ class 15 handler at [0x8011CBD4] is 0x80200000, which is in NO loaded code image
+
+**`0x0113D7D0` appears in NONE of the 16 classes at ANY of the 462 census points** — 0 occurrences.
+The only non-code values ever seen are those two, and they are **stable for the whole run** (two
+distinct values across all 462 points), so neither is a value that arrived and was dispatched.
+**The interrupt class table is refuted as the holder.** That is the fourth origin refuted with a
+denominator, after the budget-exit pc, the boundary `curr_pc`, and the function-pointer table.
+
+### TWO THINGS I AM NOT CLAIMING, because I did not measure them
+
+**The two non-code slots are NOT reported as defects.** `0x0000000D` and `0x80200000` are stable,
+`0x80200000` is main's stack top, and neither looks like a handler. The likeliest explanation is
+that **`kIrqClassCount = 16` is my assumption and the real table is shorter**, so the census is
+reading adjacent globals and calling them handlers. The retail `FUN_800E53F0` stores at
+`0x8011CB98 + 4*class` and the guest demonstrably uses only a few classes; nothing measured here
+establishes the table's extent. Calling these two "corrupt handlers" would be the same mistake this
+whole investigation keeps making — a confident reading of a number whose subject was never
+established.
+
+**AND THE LINK THAT REMAINS IS ONE I ASSUMED.** The caller-naming diagnostic established that the
+supplier is `hle_interrupt.cpp`, which reads `c->mem_r32(elem + 4)` where `elem` comes from
+`irq_elem[i]`. **It has NOT been established that `irq_elem` is MMX4's `kSetInterruptTable`.** The
+census above reads the title's table; the dispatch reads the framework's registered element list.
+If those are the same memory, the hypothesis is dead. If they are not, the search has been pointed
+at the wrong array this whole time. **One question settles it: print `irq_elem[i]` alongside the
+census, and compare the addresses.** Until then the honest state is that the interrupt delivery
+path is the confirmed *supplier* and the *table* is unconfirmed.
+
 ## The next step, named
 
 1. **Why does the cursor at `0x801F8300` point at itself?** This is now the cheapest open question

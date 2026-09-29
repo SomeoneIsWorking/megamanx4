@@ -24,6 +24,7 @@
 
 #include "bios_threads.h"
 #include "core.h"
+#include "image_identity.h"
 #include "execution_control.h"
 #include "game.h"
 #include "guest_execution.h"
@@ -80,6 +81,72 @@ uint32_t g_retraceGateHits = 0u;
 
 } // namespace
 
+// EVERY CLASS IN THE INTERRUPT TABLE, NOT ONLY THE ONE BEING DELIVERED.
+//
+// Measured 2026-09-29. The port faults with a dispatch of 0x0113D7D0, and psxport's caller-naming
+// diagnostic located it: `dispatchGuest` was HANDED that address, and the only live path that
+// dispatches a MEMORY-READ handler is the interrupt delivery loop, which reads
+// `c->mem_r32(elem + 4)`. So the bad value is an interrupt-table HANDLER WORD.
+//
+// The census that had "refuted" the interrupt-slot hypothesis watched 0x8011CB98 and 0x8011CB9C -
+// class 0 and the head of class 1 - and correctly found neither was ever written with that value.
+// `kSetInterruptTable` is a `4 * class` array and delivery reads the slot of whichever class is
+// PENDING, so "the class-0 slot is not corrupted" and "no slot is corrupted" are different claims
+// and only the first had been measured. This reads every class.
+//
+// A STRIDE, NOT EVERY FIELD, and it says so: the report states the stride and the count so a clean
+// run still states what it scanned. The feeder is shown by reporting each distinct non-zero value,
+// because a census that only reports bad cases is indistinguishable from one that is not running.
+constexpr uint32_t kIrqClassCount = 16u;
+constexpr uint32_t kIrqCensusStride = 64u;
+
+void censusIrqTable(Core *c, uint32_t field) {
+  if ((field % kIrqCensusStride) != 0u) {
+    return;
+  }
+  uint32_t populated = 0;
+  uint32_t outside = 0;
+  for (uint32_t cls = 0; cls < kIrqClassCount; ++cls) {
+    const uint32_t handler = c->mem_r32(kSetInterruptTable + 4u * cls);
+    if (handler == 0) {
+      continue;
+    }
+    ++populated;
+    const bool executable = c->currentImageIdentity(handler).has_value();
+    if (!executable) {
+      ++outside;
+      // NAMED IMMEDIATELY, WITH ITS CLASS. A value that is not a code address is never going to
+      // become one, so this is the report that ends the search rather than a summary of it.
+      lucent::error("x4-vsync",
+                    "IRQ class {} handler at [0x{:08X}] is 0x{:08X}, which is in NO loaded code "
+                    "image (the image is 0x80010000..0x8012F800). Delivering this class would fault. "
+                    "field {}",
+                    cls,
+                    kSetInterruptTable + 4u * cls,
+                    handler,
+                    field);
+    } else {
+      lucent::debug("x4-vsync",
+                    "IRQ class {} handler 0x{:08X} is executable; {} of {} classes populated, {} "
+                    "outside a code image",
+                    cls,
+                    handler,
+                    populated,
+                    kIrqClassCount,
+                    outside);
+    }
+  }
+  lucent::info("x4-vsync",
+               "IRQ table census at field {}: scanned {} of {} classes, {} populated, {} outside "
+               "every code image (stride {})",
+               field,
+               kIrqClassCount,
+               kIrqClassCount,
+               populated,
+               outside,
+               kIrqCensusStride);
+}
+
 void deliverField(Core &core) {
   Core *const c = &core;
   const uint32_t before = c->mem_r32(kVblankCounter);
@@ -96,6 +163,8 @@ void deliverField(Core &core) {
                   kVblankHandler);
     std::abort();
   }
+  censusIrqTable(c, before);
+
   const R3000 saved = *static_cast<R3000 *>(c);
   guest::callWithoutKnownReturn(c, vblankHandler);
   *static_cast<R3000 *>(c) = saved;
