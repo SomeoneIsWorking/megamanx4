@@ -1128,6 +1128,56 @@ at the wrong array this whole time. **One question settles it: print `irq_elem[i
 census, and compare the addresses.** Until then the honest state is that the interrupt delivery
 path is the confirmed *supplier* and the *table* is unconfirmed.
 
+## MEASURED 2026-09-29 — FOUND. IT IS THE VERIFIER WORD OF THE GUEST'S INTERRUPT ELEMENT, AND THE ELEMENT IS GARBAGE
+
+    [irq:error] interrupt element 0x8013BBF8 has VERIFIER 0x0113D7D0 at [0x8013BC00],
+      which is in NO loaded code image; dispatching it would fault.
+      handler=0xE1000005 mask=0x0113D7C0
+
+**One occurrence in the entire run, at an exact address.** `0x0113D7D0` is the word at
+**`0x8013BC00`** — the VERIFIER field of the single `InterruptElement` the guest registers. The
+element is `0x8013BBF8`, and all three of its words are garbage:
+
+    [0x8013BBF8] mask     = 0x0113D7C0
+    [0x8013BBFC] handler  = 0xE1000005
+    [0x8013BC00] verifier = 0x0113D7D0     <<< the faulting value
+
+**The mask and the verifier share their top three bytes** (`0x0113D7`) and differ by `0x10` — the
+element is not one bad field, it is a structure the guest registered before it was ever populated.
+The delivery loop reads `elem + 4` and `elem + 8` and dispatches both, so the verifier faults first
+and the handler never runs.
+
+### THE LAST DIAGNOSTIC WAS AIMED AT THE WRONG WORD, AND THE RUN PROVED IT
+
+The previous commit guarded the HANDLER at `elem + 4`. It reported **nothing, all run**, while the
+fault reproduced exactly — because this loop dispatches **two** words and the verifier at `elem + 8`
+goes first. **That is the same partial coverage as the census on one of sixteen classes, one level
+down, and it produced the same confident zero.** A guard on one of two adjacent words is not a
+guard; the zero was a real measurement of the wrong subject, which is the only kind of zero that has
+cost this investigation the most time. Both words are guarded now.
+
+### AND THE TITLE-SIDE CENSUS WAS MEASURING THE WRONG ARRAY
+
+The `kSetInterruptTable` census in `vsync_sync.cpp` read `0x8011CB98 + 4*class`. The element the
+delivery loop actually walks is **not** that table: `irqEnq(a0, a1)` takes the element address
+**from the guest** (`hle.cpp`, the BIOS interrupt-registration HLE), and MMX4 registers exactly one,
+at `0x8013BBF8`. So the class-table census refuted a subject that is not the one being dispatched.
+Its two non-code slots were, as suspected, adjacent data rather than handlers.
+
+**The useful thing that census did establish stands, though:** `0x0113D7D0` is in none of those 16
+words at any of 462 census points, and the RAM census's "0 of 1,438,562,048 words" is consistent —
+because the real location, `0x8013BC00`, is a **.bss** address the cadence sweeps sampled only
+between fields, and the value was evidently short-lived at the moment of delivery.
+
+### WHAT IS STILL OPEN, AND IT IS NOW ONE ADDRESS
+
+Not *where* — that is settled at `0x8013BC00` — but **who wrote it, and when**. The value is not in
+the loaded image, is not in a register, and is not produced by a guest branch; it is written into a
+guest structure that is then registered and dispatched. The next instrument is a **store** watch on
+`0x8013BC00` and the two words below it, armed for the whole run, which names the writing
+instruction and its field. Everything before this turn was searching for a location; from here the
+question is a single store.
+
 ## The next step, named
 
 1. **Why does the cursor at `0x801F8300` point at itself?** This is now the cheapest open question
