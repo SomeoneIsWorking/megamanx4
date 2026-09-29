@@ -231,11 +231,44 @@ void runToReturn(Core &core,
 // `r[31]` is SET to the boundary as well as passed as the return address, because the guest entry is
 // a leaf that returns through `jr $ra`: with `r[31]` left alone, the leaf would dispatch to whatever
 // the guest last left there and never reach the boundary this call is running under.
+namespace {
+
+// A GUEST ENTRY MUST BE AN ADDRESS THE PORT CAN NAME, and this is where that is enforced.
+//
+// Measured 2026-09-29: the port faulted with a dispatch of 0x0113D7D0, an address in no loaded code
+// image, and the framework's own diagnostic named the path - `dispatchGuest` was HANDED that
+// address, rather than the guest branching to it. Tracing it here found the asymmetry that let it
+// through: `callWithRegisterReturn` validates the LINK REGISTER against `currentImageIdentity` and
+// refuses with the owner's name, but the ADDRESS every entry point dispatches was passed straight
+// through, unchecked, by all three of them.
+//
+// That is the same class of defect `callWithRegisterReturn` was written to stop - an owner handing
+// the dispatcher a value it inherited instead of one it set - applied to the other half of the same
+// call. A bad address reaching the dispatcher produced a framework-level fault naming an address and
+// no owner, which is the least actionable form this failure can take. It is refused HERE, at the
+// boundary that owns it, naming the owner, so the log says which call site was wrong.
+void requireExecutableEntry(Core *core, std::uint32_t address, std::string_view owner) {
+  if (core->currentImageIdentity(address)) {
+    return;
+  }
+  lucent::error("x4-guest",
+                "{} is dispatching guest entry 0x{:08X}, which is in NO loaded code image. The guest "
+                "image is 0x80010000..0x8012F800, so this is not a guest address at all: it is a "
+                "value this owner passed through unexamined. Refused here rather than at the "
+                "dispatcher, which could only have named the address.",
+                owner,
+                address);
+  std::abort();
+}
+
+} // namespace
+
 void call(Core *core, std::uint32_t address, std::uint32_t returnPc) {
   if (!core) {
     lucent::error("x4-guest", "guest call 0x{:08X} received a null Core", address);
     std::abort();
   }
+  requireExecutableEntry(core, address, "x4::guest::call");
   core->r[31] = returnPc;
   runToReturn(*core,
               address,
@@ -255,6 +288,7 @@ void callWithRegisterReturn(Core *core, std::uint32_t address) {
   // set it is named instead of silently resuming against a stale value. Measured 2026-09-29: the
   // decompress owner did not set it, inherited 0x80022060 - the return address of an unrelated
   // `jal 0x80015ecc` - and ran 757,804 cycles off the end of its function.
+  requireExecutableEntry(core, address, "x4::guest::callWithRegisterReturn");
   const std::uint32_t returnPc = core->r[31];
   if (!core->currentImageIdentity(returnPc)) {
     lucent::error("x4-guest",
@@ -285,6 +319,7 @@ void callWithoutKnownReturn(Core *core, std::uint32_t address) {
   // The first segment, honestly bounded. If it returns, the boundary was never needed and the stale
   // `r[31]` was harmless. If it ends BudgetExhausted, the boundary WOULD be needed and there is none,
   // so this refuses instead of resuming against a guess.
+  requireExecutableEntry(core, address, "x4::guest::callWithoutKnownReturn");
   const psx::cpu::ExecutionResult first =
       psx::cpu::dispatchGuest(*core, address, psx::cpu::ExecutionBudget::currentTurn(*core));
   if (first.reason != psx::cpu::ExecutionExitReason::BudgetExhausted) {
