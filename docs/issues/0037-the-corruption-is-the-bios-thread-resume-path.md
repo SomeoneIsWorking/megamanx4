@@ -1178,6 +1178,64 @@ guest structure that is then registered and dispatched. The next instrument is a
 instruction and its field. Everything before this turn was searching for a location; from here the
 question is a single store.
 
+## MEASURED 2026-09-29 — THE WRITER IS NAMED: A BYTE-WISE COPY RUNS OVER THE ELEMENT, AND THE VALUE IS TRANSIENT
+
+`PSXPORT_WWATCH=0x8013BBF8,0x8013BC04` armed for the whole run closes the last question. The
+element is initialised correctly, and then **one instruction stream overwrites it at field 14,773**:
+
+    f1     store [8013BBF8]=00000000  by pc=800DAE8C  ra=DEAD0000      <- clean init, correct
+    f14773 store [8013BBF8]=00000027  by pc=80015ECC  ra=80015F5C
+    f14773 store [8013BBF8]=0113D7C0  by pc=80015ECC  ra=80015F5C      <- the mask, clobbered
+    f14773 store [8013BBFA]=00000058  by pc=80015ECC  ra=80015F5C
+    f14773 store [8013BBFB]=00000001  by pc=80015ECC  ra=80015F5C
+    f14773 store [8013BBFC]=00000000  by pc=80015ECC  ra=80015F5C
+    f14773 store [8013BBFC]=E1000005  by pc=80015ECC  ra=80015F5C      <- the handler, clobbered
+    f14773 store [8013BBFD]=000000B0  by pc=80015ECC  ra=80015F5C
+    f14773 store [8013BBFE]=00007841  by pc=80015ECC  ra=80015F5C
+    f14773 store [8013BC00]=0113D7D0  by pc=80015ECC  ra=80015F5C      <<< THE FAULTING VALUE
+    f14773 store [8013BC00]=0313AE20  by pc=80015ECC  ra=80015F5C      <- overwritten again
+    f14773 store [8013BC03]=00000001  by pc=80015ECC  ra=80015F5C
+    f14773 store [8013BC03]=00000003  by pc=80015ECC  ra=80015F5C
+
+**`0x80015ECC` IS A BYTE-WISE COPY.** The watch addresses `0x8013BBFA`, `0x8013BBFB`, `0x8013BBFD`,
+`0x8013BBFE` and `0x8013BC03` are misaligned, and only a byte-granular writer produces those, and
+the disassembly agrees:
+
+    80015ECC  addiu $sp, $sp, -0x28
+    80015ED0  sw    $s2, 0x18($sp)          a full register-save prologue: not a leaf
+    80015ED4  move  $s2, $a2
+    80015EE8  lbu   $v1, 0x47($a0)         byte loads through a pointer
+    80015EF4  beq   $v0, $v1, 0x80015fe4    and a byte COMPARE branching to a return
+
+**So a `memcpy`-family routine is writing decompressed or copied bytes straight over the guest's
+registered interrupt element, and the element is then delivered.**
+
+### THIS IS WHY 1,438,562,048 SAMPLED WORDS NEVER SAW IT
+
+Look at the two lines for `0x8013BC00`: it is written `0x0113D7D0` and then **immediately rewritten**
+`0x0313AE20` by the same instruction. **`0x0113D7D0` exists only between two byte stores of one
+pass.** A census sampling every 64th field is not unlucky to miss that — it is arithmetically
+certain to. The RAM census's zero was a true measurement of the wrong instants, and its cadence was
+the reason, exactly as the coverage gap predicted once it was named. **A value that lives for
+microseconds cannot be found by a sampler; it can only be found by a watchpoint.**
+
+### WHERE THE FAULT NOW STANDS
+
+Complete, and every earlier refutation is a consequence of it rather than a separate fact:
+
+1. The guest registers an `InterruptElement` at `0x8013BBF8`, correctly initialised.
+2. At field 14,773 a byte-wise copy at `pc=0x80015ECC` (returning to `0x80015F5C`) runs **over**
+   that element, replacing its mask, handler and verifier with data.
+3. The next interrupt delivery reads `elem + 4` and `elem + 8` and dispatches both; the verifier now
+   holds `0x0113D7D0`, which is in no code image, and the dispatch faults with 0 cycles.
+
+**The remaining question is a single one and it is about the copy, not the interrupt: what buffer
+and length is `0x80015ECC` given, and why does its destination range include `0x8013BBF8`?** Its
+arguments are `$a0` (source, indexed `+0x47`), `$a1` (destination, saved to `$s3`) and `$a2`
+(saved to `$s2`). Those three values at the call are the whole remaining measurement, and the
+watchpoint already shows the call's `ra = 0x80015F5C` — the same return boundary the decompress
+owner was corrected to use earlier today, which is worth checking first.
+
 ## The next step, named
 
 1. **Why does the cursor at `0x801F8300` point at itself?** This is now the cheapest open question
