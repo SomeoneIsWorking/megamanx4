@@ -692,6 +692,48 @@ single block - and the evidence I offered against it cannot exclude it. **The cl
 from refuted to not-established**, and the refutation of the *framework's* budget-exit pc above is
 unaffected, because that value is a genuine block-boundary quantity.
 
+### THE STALE-`curr_pc` CANDIDATE IS REFUTED, AND THE TRACED PATH IS SHORT
+
+The candidate named at the end of the last section was that a host-service boundary could capture a
+`curr_pc` never stored for the current block, because the cycle check precedes the store:
+
+    loop2 = jit_label();
+    boundary_to_end = jit_blei(LIGHTREC_REG_CYCLE, 0);
+    jit_stxi_i(lightrec_offset(curr_pc), LIGHTREC_REG_STATE, JIT_V0);
+
+**Traced, and it does not hold.** The two later patches close it:
+
+    jit_patch_at(jit_bnei(JIT_V1, 0), loop);      /* V1 != 0, no boundary: jump to `loop` */
+    jit_ldxi_ui(JIT_V0, LIGHTREC_REG_STATE, lightrec_offset(curr_pc));
+    ...
+    jit_patch(to_end);
+    jit_patch(boundary_to_end);                   /* both skip the callback entirely */
+    if (state->ops.block_boundary)
+      jit_patch(boundary_exit);
+    jit_stxi_i(lightrec_offset(curr_pc), LIGHTREC_REG_STATE, JIT_V0);   /* the exit store */
+    jit_retr(LIGHTREC_REG_CYCLE);
+
+**The argument, precisely.** Reaching the `jit_ldxi_ui` reload of `V0` from `curr_pc` requires
+`V1 == 0`, i.e. the boundary really fired. The only way to arrive there is to fall through
+`boundary_to_end`, and falling through that branch is exactly the case where the cycle budget was
+NOT exhausted, which is exactly the case where the store at `loop2+1` DID run. **The stale read is
+therefore unreachable: the store and the reload are guarded by the same condition, in opposite
+phases.** When the budget IS exhausted, `boundary_to_end` forwards past both the store and the
+callback, and the exit store at the bottom re-stores `V0` - the correct value - before returning.
+
+**So the block's exit pc is a real value from the guest's control flow, and it is not a stale
+framework quantity.** On the exit path that value is the register the block's terminating jump
+produced, and that register was flushed at the block end, which is what the earlier live-register
+measurement covers.
+
+**Where this leaves the frontier, honestly.** Every framework-side origin is now refuted with a
+denominator: the budget-exit pc (500+ exits), the boundary's `curr_pc` provenance (control-flow
+trace), the resume point the title logs, both `j` words, and the register file at the fault. **The
+value is genuinely produced by the guest's own terminating jump inside a block, and nothing so far
+says why that jump computed it.** The next step is therefore not another framework census but the
+block itself: identify which block ends at the host-dispatch boundary and read the guest
+instructions that compute its exit target.
+
 **What would settle it:** the fault has to be reported with the failing block's live register
 values, not `core.r[]`. That is a framework change in the fault path, beside the census just
 added, and it is the next piece of work.
