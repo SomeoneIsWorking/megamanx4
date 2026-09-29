@@ -24,10 +24,10 @@
 
 #include "bios_threads.h"
 #include "core.h"
-#include "image_identity.h"
 #include "execution_control.h"
 #include "game.h"
 #include "guest_execution.h"
+#include "image_identity.h"
 #include "input_path.h"
 #include "snapshot.h"
 #include <cstdlib>
