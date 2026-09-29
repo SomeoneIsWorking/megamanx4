@@ -1429,39 +1429,39 @@ the spot probe as the instrument so the claim has a name and not just a number. 
 result and is only as strong as the words it covered: it covers the two `j` words and the two `lui`
 words beside them, and it says nothing about any other transfer in the block.
 
-## MEASURED 2026-09-29 — THE FAULT REPRODUCES WITH **ZERO** `OpenTh` CALLS, SO IT IS NOT DOWNSTREAM OF THREAD CREATION
+## CORRECTED 2026-09-29 — A NARROWING I PUBLISHED WAS WRONG: THE COUNTER I USED IS NOT EMITTED
 
-A fresh run on the current build, with a log path unique to the run so nothing stale could be read
-back:
+An earlier revision of this section claimed the fault "reproduces with **zero** `OpenTh` calls, so it
+is not downstream of thread creation". **That claim is withdrawn.** It came from counting a log line
+the current build does not emit.
 
-    OpenTh calls in this run: 0
-    [x4-guest:error] guest call 0x80012600 exited fault at 0x0113D7D0 after 0 cycles
+The current build writes, from `game/core/bios_threads.cpp:413`:
 
-**This is the narrowing that matters.** The fault is the same `0x0113D7D0` and the same entry
-`0x80012600`, but it is reached with **no thread ever created** and after **0 cycles**. Every line
-of work in this issue so far - the `$gp` resolution, the `Thread::stackTop` retention, the stack-
-pointer census over 14,000 resumes, the scheduler cursor analysis - sits on the thread-resume path.
-**None of it is upstream of this reproduction.**
+    OpenTh entry=0x{:08X} sp=0x{:08X} gp=0x{:08X} (requested 0x{:08X}, inherited 0x{:08X})
 
-Two older logs are the source of the apparent contradiction, and both are the trap this file keeps
-recording:
+The count I took was `grep -c "OpenTh args"` - a string from an **older** build. It returns 0 on
+current logs **whether or not threads exist**, so a 0 from it is not a measurement of thread
+creation. It is the same error this file has now recorded seven times: a counter whose feeder was
+never verified, read as a clean zero.
 
-- An earlier log from the same day showed **5** `OpenTh` calls before the same fault. So the fault
-  is reachable both with and without thread creation.
-- The log files in `scratch/args/` were **appended**, so `grep | head -6` returned the *oldest*
-  lines from a 23:41 run rather than the current run's. Read as a live measurement, that produced a
-  confident "today's build crashes earlier than it used to" from a file today's build had not
-  written to at all.
+**What the run actually shows**, on a log whose mtime matches the run that produced it:
 
-**What is ruled out:** that the corruption originates in, or requires, the BIOS thread path. What
-is **not** ruled out: that both routes reach the same clobbered verifier word at `0x8013BC00`, which
-is still the only confirmed write site.
+    OpenTh entry lines : 0   ("OpenTh args" - a string this build never writes)
+    gp resolutions     : 5   (the real thread-creation counter)
+    fault              : guest call 0x80012600 exited fault at 0x0113D7D0 after 0 cycles
+    every resolved gp  : 0x8012F418 (requested 0x00000000, inherited 0x8012F418)
 
-**A note on provenance, because it is the same class of error:** this run was taken with the
-framework at `7981f596` and `shared/lightrec` at `e1a6a09b`. That revision is the **revert** of the
-store-observer branch-backup fix, and `git diff 3fddb23 e1a6a09b` is **empty** - the content is
-identical to the revision the ports ran against before, so this reproduction is not attributable to
-the reverted change or to the re-pin.
+**So: five threads were created, every `$gp` resolved correctly, and the fault still occurred.**
+
+**What this does and does not establish.** It confirms what the `$gp` work already established - the
+fix is correct and the fault is not downstream of it. It does **not** narrow the frontier off the
+thread path, which is what the withdrawn claim asserted. An earlier log from 23:41 showed the fault
+after 5 `OpenTh` calls too, so both logs agree, and the honest summary is simply: **the corruption
+survives the `$gp` repair, and the thread path is neither the cause nor cleared of suspicion.**
+
+**Provenance, checked before recording either version:** this run used framework `7981f596` and
+`shared/lightrec` `e1a6a09b`, the revert of the store-observer fix. `git diff 3fddb23 e1a6a09b` is
+empty, so neither the reverted change nor the re-pin is implicated.
 
 ## The next step, named
 
