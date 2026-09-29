@@ -536,27 +536,12 @@ ending in `jr $ra`. The "80.8% of resumes continue at an HLE entry" claim was an
 overlapping buckets and is withdrawn, and the framework root cause built on it is refuted in
 `psxport/docs/issues/0038`.
 
-**A PREDICTION THAT WAS REFUTED ON THE WAY, and the measurement that refuted it is now shipping.**
-The stale-`$ra` hypothesis was tested by a new census in `guest_execution.cpp` that classifies the
-link register at the instant of every resume, using `Core::currentImageIdentity` — the framework's own
-rule, and the criterion the fault message itself quotes. A 20,000-field run:
-
-    guest call 0x800ED574 to return 0x80018AA0 ... 1 of 278 completed guest call(s) resumed
-      Link register at the resume point: 1 in a code image, 0 in RAM outside one, 0 outside RAM
-    guest call 0x80016FF4 to return 0x80022060 ... 2 of 46715 completed guest call(s) resumed
-      Link register at the resume point: 2 in a code image, 0 in RAM outside one, 0 outside RAM
-
-**Both were valid code addresses, so the stale-`$ra` mechanism is refuted** — the defect is the
-boundary, not the link register. The census also produced two denominators worth keeping: only **2 of
-46,715** guest calls ever need a resume, and the first is `0x800ED574` at 610,746 cycles, matching the
-`DecDCTvlc` figure already recorded in `bios_threads.cpp`.
-
-**Also corrected earlier today:** the "BIOS range" classification was wrong. The EXE loads text at
-`0x80010000` size `0x11F800`, so the image spans `0x80010000..0x8012F800` and **contains** the
-`0x800E0000..0x80100000` range I had been calling BIOS; `0x800EA0F4` decodes as a guest byte-getter
-ending in `jr $ra`. So the earlier "80.8% of resumes continue at an HLE entry" claim is an artifact of
-overlapping buckets and is withdrawn, and the framework root cause built on it is refuted in
-`psxport/docs/issues/0038`. The framework is not implicated: these addresses are guest code.
+**The stale-`$ra` mechanism is REFUTED and is not the root cause.** It was the headline finding
+for part of today and is recorded here once, in refuted form, because the measurement that refuted
+it is the one that also produced the two denominators above. The fault's origin is OPEN: the
+framework-side origins are each refuted with a denominator (see issue 0037), and the remaining
+candidate is the guest's own terminating jump inside the block that ends at the host-dispatch
+boundary.
 
 **MEASURED 2026-09-29 (issue 0036) — the model attached to that word was wrong twice, and this
 paragraph is the surviving instance of the FIRST correction; the second is stated after it.** A
