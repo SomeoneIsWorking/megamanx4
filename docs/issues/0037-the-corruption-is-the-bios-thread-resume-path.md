@@ -1039,6 +1039,54 @@ matters is `$ra` at that leaf, and the census has not yet classified `$ra` at th
 execution rather than at the moment of resume.** That is the specific gap the next measurement has
 to close.
 
+## MEASURED 2026-09-29 — THE VALUE IS AN INTERRUPT-TABLE HANDLER WORD, AND THE CENSUS THAT REFUTED THE INTERRUPT SLOT WATCHED ONE CLASS
+
+Naming the supplier took one more instrument, and it is the first that points at a WORD rather than
+at a mechanism. `dispatchGuest` now records which of its four callers handed it the address:
+
+    dispatchGuest was handed 0x0113D7D0, which is in no loaded code image, via the entry
+    classify path (not a host-dispatch boundary); caller: guest_call.cpp: callGuest
+
+`callGuest` is `dispatchGuestWithArguments`, whose only callers are `dispatchGuest0..4` — and of
+those, exactly one site is reached at fault time, in the interrupt delivery path:
+
+    runtime/psx/hle_interrupt.cpp
+      for (int i = 0; i < irq_n; i++) {
+        const uint32_t elem     = irq_elem[i];
+        const uint32_t handler  = c->mem_r32(elem + 4);      <<< THE VALUE IS READ HERE
+        const uint32_t verifier = c->mem_r32(elem + 8);
+        ...
+        const auto result = psx::cpu::dispatchGuest0(*c, handler, ...);
+
+**So `0x0113D7D0` is the HANDLER WORD of an interrupt-table element.** That is a location, and it
+explains every awkward fact at once: it is not in a guest register (0 of 32), not a branch the
+guest took (0 transfer occurrences in a whole run), not in the dispatch table, and not in RAM at any
+of the 2,743 sweeps — because it is read out of the interrupt table at the instant of delivery,
+which is exactly the kind of value a cadence census samples *between* rather than *at*.
+
+### WHY ISSUE 0038'S REFUTATION IS CORRECT AND STILL MISSES IT
+
+Issue 0038 armed `PSXPORT_WWATCH=8011CB98,8011CB9C` and measured **6 stores, none of them
+`0x0113D7D0`**, concluding the class-0 interrupt slot is not corrupted. **That census is sound and
+its conclusion is true — of class 0.** `kSetInterruptTable = 0x8011CB98` is a `4 * class` array
+(`bios_threads.cpp` and `vsync_sync.cpp` both index it that way), and delivery reads
+`elem + 4` for **whichever class is pending**. One class's slot being provably clean says nothing
+about the others, so "the interrupt slot is not corrupted" and "no interrupt slot is corrupted" are
+different claims and only the first was measured.
+
+**The next measurement is therefore four words, not a census:** read every `kSetInterruptTable +
+4 * class` at the moment of delivery and name which class carries the bad handler. That is a bounded
+question against a known base, and it is the first one in this investigation whose subject is
+stated rather than searched for.
+
+### AND THE CADENCE CENSUS HAS A NAMED COVERAGE GAP
+
+2,743 sweeps at a stride of 64 fields cover 175,552 fields, and the fault is at field 175,501 — so
+the final ~50 fields, including the one that matters, were never sampled. A value written in that
+window is invisible to the census **by construction**, not by bad luck. The census's own conclusion
+("0 words, in 0 of 2,743 sweeps") is true and is not evidence about the last minute of the run; the
+gap is named here so the number is not read as more than it is.
+
 ## The next step, named
 
 1. **Why does the cursor at `0x801F8300` point at itself?** This is now the cheapest open question
