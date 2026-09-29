@@ -110,6 +110,53 @@ inline constexpr std::int32_t kFullBandWidth = 0x40;
 // `addiu $17,$17,0x800` at 0x80015FC4 — one band's decompressed source advance, 16 pixels of 4-bit
 // TIM data as 16-bit words.
 inline constexpr std::uint32_t kFullBandSourceBytes = 0x800u;
+
+// ── the register file each guest body leaves behind ──────────────────────────────────────────
+//
+// The override differential (psxport 0138) compares `v0`, `v1` and the callee-saved set, and it
+// found this owner's first version leaving `v1` and `v0` holding whatever the CALLER had. That is a
+// real fidelity defect and not a formal one: these are three guest functions replacing three guest
+// functions, and a body that does not leave the registers its original leaves is a different
+// function. The values below are the loop counters' terminal values, read out of the bytes.
+//
+// `sp` and `s0`-`s3` are NOT listed: the guest's own epilogue reloads them from the frame
+// (`lw ra,32(sp)` / `lw s3,28(sp)` / `lw s2,24(sp)` / `lw s1,20(sp)` / `lw s0,16(sp)` at
+// 0x80015FE4-0x80015FF4), so the guest leaves them at their ENTRY values and so does this owner by
+// not touching them.
+//
+// The clearer, 0x80015E0C-0x80015E4C. Its loop runs exactly kEntryCapacity times, so the counters
+// are terminal by construction rather than by observation:
+//   a0 = kQueueBase + 8*12     `lui a0,0x8016` / `addiu a0,a0,0x59D0` then 8x `addiu a0,a0,0xc` (0x80015E48)
+//   a1 = 8                      8x `addiu a1,a1,1` (0x80015E3C)
+//   v0 = 0                      `sltiu v0,a1,8` (0x80015E40) with a1 already 8
+//   v1 = kQueueBase + 8 + 8*12  `addiu v1,a0,8` (0x80015E20) then 8x `addiu v1,v1,0xc` (0x80015E38)
+//   at = 0x8014                 `lui at,0x8014` (0x80015E14)
+inline constexpr std::uint32_t kClearFinalA0 = kQueueEnd;      // == kQueueBase + 8*12
+inline constexpr std::uint32_t kClearFinalV1 = kQueueEnd + 8u; // == kQueueBase + 8 + 8*12
+inline constexpr std::uint32_t kClearFinalV0 = 0u;
+inline constexpr std::uint32_t kClearFinalA1 = kEntryCapacity;
+// The page both the clearer and the uploader leave in `at`, from `lui at,0x8014`.
+inline constexpr std::uint32_t kGuestPage8014 = 0x8014u;
+
+// The uploader, 0x80015E54-0x80015EB4. `a0`/`a1` need no publishing: the guest sets them to the
+// entry and its source pointer and then `jal`s LoadImage, so the BIOS B-call clobbers them, and this
+// owner makes the same call with the same arguments and gets the same clobber.
+inline constexpr std::uint32_t kUploadFinalV0 = kQueueBase; // `lui v0,0x8016` / `addiu v0,v0,0x59d0` (0x80015EA4/8)
+inline constexpr std::uint32_t kUploadFinalV1 = kQueueEnd;  // `addiu v1,s0,0x60` (0x80015E64), never rewritten
+
+// The appender, 0x80015ECC-0x80015FFC, on BOTH exits from its band loop. The loop's back edge is
+// `bnez v0,0x80015F74` at 0x80015FD0 with `sll v0,s0,0x10` at 0x80015FCC, so on exit `v0` is zero in
+// both the trailing-band arm (which sets `s0` to zero at 0x80015F8C) and the full-band arm (which
+// subtracts the band height until it reaches zero). `v1` is whatever the LAST loop head read, so it
+// is the band count that iteration was entered with — the owner has to hand that back, and it is
+// the register the differential compares.
+inline constexpr std::uint32_t kAppendFinalV0 = 0u;
+inline constexpr std::uint32_t kAppendFinalA2 = kFullBandWidth; // `addiu a2,zero,0x40` (0x80015F68)
+inline constexpr std::uint32_t kAppendFinalA3 = kBandHeight;    // `addiu a3,zero,0x10` (0x80015F64)
+// The appender's EARLY return, taken at 0x80015EF4 before it decompresses anything, leaves the two
+// bytes it just compared: `lbu v1,0x47($a0)` and `lbu v0,0x48($a0)` at 0x80015EE8/0x80015EEC.
+inline constexpr std::uint32_t kCurrentAnimRegister = 3;  // $v1
+inline constexpr std::uint32_t kPreviousAnimRegister = 2; // $v0
 // `lbu $3,0x47($4)` / `lbu $2,0x48($4)` at 0x80015EE8-0x80015EEC and `beq $2,$3,0x80015FE4` at
 // 0x80015EF4: the appender returns immediately when the object's animation index has not changed.
 inline constexpr std::uint32_t kCurrentAnimOffset = 0x47u;

@@ -135,6 +135,16 @@ if(BUILD_TESTING)
     NAME x4_vram_rect_queue_evidence
     COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/tools/verify_vram_rect_queue.py --check --selftest
   )
+  # The WRITER CENSUS for the libetc SetInterrupt class-0 slot (0x8011CB98), which docs/issues/0035
+  # and RE-10 recorded as holding 0x0113D7D0 at the run's stop. A runtime store observation shows it
+  # holds 0x800DD7FC there and that 0x0113D7D0 is a control-transfer PC instead, so the census is
+  # what stops the next session re-deriving that misread. It is hermetic (image bytes only) and its
+  # --selftest plants one store per class, because a census that reports zero has to be able to
+  # report non-zero on the same image.
+  add_test(
+    NAME x4_irq_slot_writer_census
+    COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/tools/census_irq_slot_writers.py --check --selftest
+  )
   # The live-play apparatus: the front-end state model and the transport that reads it. Both selftests
   # drive NOTHING and launch no product, so they are hermetic — but they are in the gate because a
   # census that cannot say "the park is still the park", or a differencer that cannot say "nothing

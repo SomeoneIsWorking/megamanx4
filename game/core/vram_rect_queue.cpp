@@ -51,7 +51,12 @@ void emitBands(
     Core &core, std::uint32_t source, std::int32_t x, std::int32_t y, std::int32_t remaining, Append &record) {
   std::uint32_t cursor = core.mem_r32(kCursorGlobal);
   std::int32_t top = y;
+  // The band count the LAST loop head read into `$v1` (`sra $3,$2,0x10` at 0x80015F74). It is the
+  // register the override differential compares, and it is not a function of anything the caller can
+  // see — a two-band call ends with 0 and a 48-band call ends with 16 — so it has to be tracked.
+  std::int32_t lastHeadCount = remaining;
   while (remaining != 0) {
+    lastHeadCount = remaining;
     // THE BOUND, and the whole reason this owner exists. The guest's loop has no capacity test in
     // its 75 instructions; `kQueueEnd` is `item_objects[0]`, so an entry written at index
     // kEntryCapacity overwrites the first record of the next guest structure. The guest states eight
@@ -102,6 +107,19 @@ void emitBands(
     core.mem_w32(cursor + 8, 0u);
   }
   core.mem_w32(kCursorGlobal, cursor);
+
+  // The guest's register file on the band-loop exit. `v0` is zero because the back edge's
+  // `sll $2,$16,0x10` (0x80015FCC) computes it from a zero band count in both arms; `$5` and `$4` are
+  // the advanced cursor (the record-walk pointer `$4` is `$5 + 6` at the loop head and steps with
+  // it, so the two differ by 6 at ENTRY to an iteration and are equal at EXIT); `$6` and `$7` are the
+  // two literals the loop set up before entering; `at` is the page the publish used.
+  core.r[1] = kGuestPage8014;
+  core.r[2] = kAppendFinalV0;
+  core.r[3] = static_cast<std::uint32_t>(lastHeadCount);
+  core.r[4] = cursor;
+  core.r[5] = cursor;
+  core.r[6] = kAppendFinalA2;
+  core.r[7] = kAppendFinalA3;
 }
 
 // `lui $17,0x8017 / addiu $17,$17,-0x2158` at 0x80015F24 for the shared slot, and
@@ -117,12 +135,22 @@ std::uint32_t decompressedBuffer(Core &core, std::uint32_t object) {
 
 void runGuest(
     Core &core, std::uint32_t entry, std::uint32_t returnPc, std::uint32_t a0, std::uint32_t a1, std::uint32_t caller) {
+  // `$31` is the caller's link register while the nested call runs, and it is RESTORED afterwards.
+  // Restoring it is not tidiness: the guest body saves and reloads `$ra` from its own frame
+  // (`sw ra,0x20(sp)` at 0x80015ED8 / `lw ra,0x20(sp)` at 0x80015FE4), so the guest leaves `$31`
+  // exactly as it found it, and the override differential compares `ra` as a continuation register.
+  // Leaving `$31` holding the decompressor's return point was measured as a mismatch on the first
+  // sampled call that did any work — 1 mismatch in 32 samples, 31 matches, and ZERO memory bytes
+  // differing. A register clobber that only appears when the sampled call does real work is
+  // precisely what a per-call gate catches and a run-time observation cannot.
+  const std::uint32_t savedLink = core.r[31];
   core.r[4] = a0;
   core.r[5] = a1;
   // The nested guest call returns to the return address the OVERRIDE was entered with, so a `jr $ra`
   // out of the callee lands on the dispatcher's boundary exactly as the guest's own `jal` would.
   core.r[31] = caller;
   guest::call(&core, entry, returnPc);
+  core.r[31] = savedLink;
 }
 
 } // namespace
@@ -138,6 +166,13 @@ void clear(Core &core) {
     core.mem_w16(entry + 6, 0u);
     core.mem_w32(entry + 8, 0u);
   }
+  // The register file the guest's loop leaves. See the header for each value's instruction: without
+  // this the override differential reports `v1` differing, and it is right to.
+  core.r[1] = kGuestPage8014;
+  core.r[2] = kClearFinalV0;
+  core.r[3] = kClearFinalV1;
+  core.r[4] = kClearFinalA0;
+  core.r[5] = kClearFinalA1;
 }
 
 void upload(Core &core) {
@@ -156,6 +191,11 @@ void upload(Core &core) {
     stats.uploadedEntries += 1;
   }
   core.mem_w32(kCursorGlobal, kQueueBase);
+  // `at` and `v0` from 0x80015EAC/0x80015EA4/8, `v1` from 0x80015E64. `a0`/`a1` are the last BIOS
+  // B-call's clobber in both paths, so publishing them here would BREAK the match.
+  core.r[1] = kGuestPage8014;
+  core.r[2] = kUploadFinalV0;
+  core.r[3] = kUploadFinalV1;
 }
 
 void append(Core &core, std::uint32_t object, std::int32_t x, std::int32_t y) {
@@ -172,7 +212,13 @@ void append(Core &core, std::uint32_t object, std::int32_t x, std::int32_t y) {
   // decompresses anything when the object's animation index has not moved this field. `sb $3,0x48($4)`
   // at 0x80015F04 is the latching that makes "moved" mean "moved".
   const std::uint32_t current = core.mem_r8(object + kCurrentAnimOffset);
-  if (current == core.mem_r8(object + kPreviousAnimOffset)) {
+  const std::uint32_t previous = core.mem_r8(object + kPreviousAnimOffset);
+  // The early return still executes the `beq`'s delay slot, `move $19,$5` at 0x80015EF8, and `$19` is
+  // reloaded from the frame by the epilogue, so only the two compared bytes survive. Publishing them
+  // is what makes the early return register-identical to the guest's.
+  core.r[kCurrentAnimRegister] = current;
+  core.r[kPreviousAnimRegister] = previous;
+  if (current == previous) {
     return;
   }
   core.mem_w8(object + kPreviousAnimOffset, static_cast<std::uint8_t>(current));

@@ -429,6 +429,51 @@ def verify(image: Image) -> Report:
                  "the record is RECT at +0 and the source pointer at +8, i.e. 12 bytes",
                  image.decode(0x80015F7C) + " / " + image.decode(0x80015F88))
     report.check(FIELD_COUNTER == 0x80141BD8, "kFieldCounter is the guest's own field word")
+
+    # ── 9. the register file each replaced body leaves, which the override differential compares ──
+    # psxport 0138's differential compares v0, v1 and the callee-saved set, and it found this
+    # owner's first version leaving v1 and v0 holding the CALLER's values. These claims are what
+    # stop that coming back: each one is the loop counter's terminal value, derived from the
+    # instruction that produces it rather than from a value observed in a run.
+    report.check(image.is_op(CLEAR_STRIDE_INSN, 0x09) and image.rt(CLEAR_STRIDE_INSN) == 3
+                 and image.s16(CLEAR_STRIDE_INSN) == QUEUE_STRIDE,
+                 "the clearer walks its second pointer with `addiu $v1,$v1,0xc`",
+                 image.decode(CLEAR_STRIDE_INSN))
+    report.check(image.s16(CLEAR_STRIDE_INSN + 4) == 1 and image.rt(CLEAR_STRIDE_INSN + 4) == 5,
+                 "and its trip counter with `addiu $a1,$a1,1`", image.decode(CLEAR_STRIDE_INSN + 4))
+    report.check(image.s16(CLEAR_STRIDE_INSN + 16) == QUEUE_STRIDE and image.rt(CLEAR_STRIDE_INSN + 16) == 4,
+                 "and its entry pointer with `addiu $a0,$a0,0xc`", image.decode(CLEAR_STRIDE_INSN + 16))
+    report.check(image.rt(CLEAR_TRIP_INSN) == 2,
+                 "so the clearer ends with $a0 = kQueueBase + 8*12 = kQueueEnd",
+                 image.decode(CLEAR_TRIP_INSN))
+    report.check(image.s16(0x80015E20) == 8 and image.rt(0x80015E20) == 3,
+                 "and $v1 = kQueueBase + 8 + 8*12 = kQueueEnd + 8, which is where it ends",
+                 image.decode(0x80015E20))
+    report.check(image.s16(0x80015E14) == -0x5AEC or image.imm(0x80015E14) == 0x8014,
+                 "the clearer leaves the page of its own publish in $at", image.decode(0x80015E14))
+    report.check(image.is_op(UPLOAD_END_INSN, 0x09) and image.rt(UPLOAD_END_INSN) == 3,
+                 "the uploader's $v1 is `addiu $v1,$s0,0x60` and is never rewritten, so it ends at kQueueEnd",
+                 image.decode(UPLOAD_END_INSN))
+    report.check(image.s16(0x80015EA8) == QUEUE_BASE - 0x80160000 and image.rt(0x80015EA8) == 2,
+                 "and its $v0 is re-materialised as kQueueBase at the tail", image.decode(0x80015EA8))
+    report.check(image.is_op(0x80015EAC, 0x0F) and image.imm(0x80015EAC) == 0x8014,
+                 "the uploader also leaves 0x8014 in $at", image.decode(0x80015EAC))
+    report.check(image.is_op(0x80015FCC, 0x00) and image.sa(0x80015FCC) == 0x10
+                 and image.rd(0x80015FCC) == 2,
+                 "the appender's back edge computes $v0 from the band count, so $v0 is zero on exit",
+                 image.decode(0x80015FCC))
+    report.check(image.is_op(0x80015F74, 0x00) and image.funct(0x80015F74) == 0x03
+                 and image.sa(0x80015F74) == 0x10 and image.rd(0x80015F74) == 3
+                 and image.rt(0x80015F74) == 2,
+                 "and $v1 is the band count the LAST loop head read (a shift's DESTINATION is rd)",
+                 image.decode(0x80015F74))
+    report.check(image.s16(FULL_BAND_WIDTH_INSN) == FULL_BAND_WIDTH and image.rt(FULL_BAND_WIDTH_INSN) == 6,
+                 "the appender's $a2 is the full-band width literal", image.decode(FULL_BAND_WIDTH_INSN))
+    report.check(image.s16(BAND_HEIGHT_INSN) == BAND_HEIGHT and image.rt(BAND_HEIGHT_INSN) == 7,
+                 "and its $a3 is the band height literal", image.decode(BAND_HEIGHT_INSN))
+    report.check(image.rt(0x80015EE8) == 3 and image.rt(0x80015EEC) == 2,
+                 "the early return leaves the two animation bytes in $v1 and $v0",
+                 image.decode(0x80015EE8) + " / " + image.decode(0x80015EEC))
     return report
 
 

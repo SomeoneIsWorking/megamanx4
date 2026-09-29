@@ -49,7 +49,7 @@ GUEST_ENTRIES: dict[str, int] = {
     "kLoadImageGuest": 0x800EA4D0,       # BIOS LoadImage, the uploader
     "kClearQueueGuest": 0x80015E0C,
     "kUploadQueueGuest": 0x80015E54,
-    "kAppendBandsGuest": 0x80015ECD,
+    "kAppendBandsGuest": 0x80015ECC,
     "music_stream entry": 0x800E5D90,
     "display_init 0": 0x800E9D4C,
     "display_init 1": 0x800EA3A0,
