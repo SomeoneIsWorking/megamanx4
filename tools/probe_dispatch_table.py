@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/ usr / bin / env python3
 """Scan Mega Man X4's scheduler dispatch table for the corrupted function pointer.
 
 DERIVED, NOT ASSUMED. Every constant below comes from the decoded guest instructions at
@@ -15,9 +15,12 @@ that never ran, which is the dead-tap failure this project treats as worst. So t
 not only searched for the target: it is searched for a value that is DEFINITELY there -- the
 cursor's own base 0x801F8300 appears in slot 0's neighbourhood only if the table is real -- and
 more importantly every slot's value is printed, so the reader sees 250 actual words rather than
-a count. A refused or empty scan FAILS; it does not report a clean zero.
+a count. A refused or empty scan FAILS;
+it does not report a clean zero.
 
-Exit codes: 0 the scan ran and the table was read; 1 the target was found in the table;
+    Exit codes : 0 the scan ran and
+    the table was read;
+1 the target was found in the table;
 2 the scan could not run (no port, no media, unreadable table).
 """
 from __future__ import annotations
@@ -61,9 +64,9 @@ class DebugLink:
             try:
                 chunk = self._sock.recv(8192)
             except OSError:
-                # THE PORT DIED. That is the NORMAL end of this run - it faults on purpose, and the
-                # OS resets the socket. It is reported as "no more lines", not raised, so the sweeps
-                # already completed are kept and reported instead of being lost to a traceback.
+#THE PORT DIED.That is the NORMAL end of this run - it faults on purpose, and the
+#OS resets the socket.It is reported as "no more lines", not raised, so the sweeps
+#already completed are kept and reported instead of being lost to a traceback.
                 return None
             if not chunk:
                 return None
@@ -152,12 +155,12 @@ def main() -> int:
             return 2
 
         slots = slot_addresses()
-        # THE SCAN RUNS UNTIL THE FAULT, NOT ONCE. A single sweep taken ~12 s into the run reads a
-        # table that is 245/250 zero with four VALID code pointers in it, and the fault does not
-        # happen until ~40 s. That zero looks exactly like a clean refutation and is one -- it is a
-        # measurement of the wrong moment. So the table is swept continuously and BOTH answers are
-        # kept: whether any sweep ever saw the target, and the last complete sweep before the
-        # process died, which is the state the faulting dispatch actually read.
+#THE SCAN RUNS UNTIL THE FAULT, NOT ONCE.A single sweep taken ~12 s into the run reads a
+#table that is 245 / 250 zero with four VALID code pointers in it, and the fault does not
+#happen until ~40 s.That zero looks exactly like a clean refutation and is one-- it is a
+#measurement of the wrong moment.So the table is swept continuously and BOTH answers are
+#kept : whether any sweep ever saw the target, and the last complete sweep before the
+#process died, which is the state the faulting dispatch actually read.
         sweeps = 0
         ever_saw_target: list[tuple[int, int, int]] = []
         last_values: dict[int, int] = {}
