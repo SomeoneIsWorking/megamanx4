@@ -1411,6 +1411,24 @@ coverage of byte and halfword stores has still never been demonstrated — **so 
 establish is that the observer fires on a `sh` at all**, which is a positive control, not a
 refutation.
 
+## MEASURED 2026-09-29 — THE SCHEDULER'S `j` FIELDS ARE INTACT AT RUNTIME, WITH A DENOMINATOR
+
+The corruption mechanism that best fits a `0x011xxxxx` fault is a corrupted 26-bit `j` field, since
+`0x0113D7D0` is below `0x04000000` and would be a legal `j` target. The two `j` instructions in the
+scheduler's state-read block are the only `j`s in `0x80012600..0x80012740`, and the fault entry is
+`0x80012600`. **Read at runtime through the spot probe, not just from the static image:**
+
+    0x80012654 = 3C03801F   lui  $v1, 0x801F
+    0x80012658 = 080049C4   j    0x80012710      identical to the static image
+    0x80012670 = 3C03801F   lui  $v1, 0x801F
+    0x80012674 = 080049C4   j    0x80012710      identical to the static image
+
+**So the fault does not come from a corrupted `j` field in the scheduler.** This agrees with the
+earlier poll-through-process-death (4,704/4,704 reads of `0x080049C4`), and it is recorded here with
+the spot probe as the instrument so the claim has a name and not just a number. It is a **negative**
+result and is only as strong as the words it covered: it covers the two `j` words and the two `lui`
+words beside them, and it says nothing about any other transfer in the block.
+
 ## The next step, named
 
 1. **Why does the cursor at `0x801F8300` point at itself?** This is now the cheapest open question
