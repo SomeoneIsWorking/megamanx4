@@ -565,6 +565,52 @@ defect or is compensated inside the end-of-block wrapper has **not** been establ
 the sharpest remaining lead: it would explain a guest register being stale specifically at a
 segment boundary, which is exactly the boundary a budget resume re-enters through.
 
+## CORRECTION 2026-09-29 — the dose-response does NOT show the fault disappearing; it shows it MOVING
+
+The previous section read the four budget runs as "the fault tracks the resume count". **That is the
+wrong reading, and the runs themselves refute it** once their terminal state is compared:
+
+| run | resumes | task turns reached | failure |
+|---|---|---|---|
+| x2 | 155 | 14,141 | `0x0113D7D0` in the scheduler |
+| x8 | 38 | 14,024 | `guest task 0x8001DAF8 faulted`, vblank `0x783C` |
+| x400 | 0 | ~14,000 | `guest task 0x8001DAF8 faulted`, vblank `0x77F4` |
+
+**All three reach the same depth — within 1% on task turns, vblank ~`0x7800` — and all three fail.**
+The x8 run did not escape; it failed at a different address. So the budget does not decide whether
+the corruption happens, only **which** corruption is observed.
+
+### It is ONE corruption, and it is a pointer the guest jumped through
+
+The x2 fault register file and the x8 fault register file share a value:
+
+    x2: r4=0x0114BED0        (the run that faults at 0x0113D7D0)
+    x8: r4=0x0114BED0  r2=r3=0x00139C30  r5=0x00FFFFFF  r6=0xFF000000
+
+`r4 = 0x0114BED0` appears in **both**, and `0x0113D7D0` and `0x0114BED0` are the same shape:
+`0x011xxxxx`. **This game's text spans `0x80010000..0x8012F800`, so `0x011xxxxx` is RAM, not code.**
+The guest is fetching at a value it read from memory as though it were an address — **a corrupted
+function pointer, return address, or jump-table entry.** `r6 = 0xFF000000` in the same dump is a
+thread handle, which is legitimate, so the register file is not uniformly garbage.
+
+**The common factor across every run is the same task: `0x8001DAF8`.** It is the task that needs more
+than one display field, the one the budget resumes at `0x800EA0F4`, and the one whose entry the x8
+and x400 runs fault at. One task, one corruption, surfacing at whichever address the current
+schedule happens to reach first.
+
+### What is refuted, so it is not repeated
+
+- **The register cache is NOT the cause.** `emitter.c` flushes before the jump — `lightrec_clean_regs`
+  runs at the end-of-block path *before* `lightrec_jump_to_eob`, and only then
+  `lightrec_regcache_reset` resets the compiler's model. I reported an asymmetry there by reading the
+  reset without seeing the flush twenty lines above it.
+- **The GTE round-trip is symmetric.** `copyCoreToLightrec` calls `gte_export_registers` and
+  `copyLightrecToCore` calls `gte_import_registers`, so no GTE state is lost across a segment.
+- **A memory scan for the value is not currently possible.** A scan for `0x0114BED0` covered 16,384
+  words — about 3% of RAM — and the run never reached the fault, so its zero is not evidence of
+  absence and is not recorded as any. The coverage limit was measured earlier in this investigation
+  and has not changed.
+
 ## The next step, named
 
 1. **Why does the cursor at `0x801F8300` point at itself?** This is now the cheapest open question

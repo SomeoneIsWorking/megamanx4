@@ -43,7 +43,7 @@ IMAGE = REPO / "scratch/bin/megamanx4/SLUS_005.61"
 if "--help" in sys.argv or "-h" in sys.argv:
     print(__doc__.strip())
     raise SystemExit(0)
-PORT = int(sys.argv[1]) if len(sys.argv) == 2 else 6095
+PORT = int(sys.argv[1]) if len(sys.argv) >= 2 else 6095
 # A WIDE window, because 0x0113D7D0 was not in the eight words an earlier record named, and the
 # question is now "where is that word at all" rather than "what is in this slot".
 #
@@ -96,7 +96,18 @@ SPOT = [0x801F8300, 0x801F8304, 0x801F8308, 0x801F8380, 0x80139554,
         # corrupted field of that exact value jumps to the fault address. The static image says
         # 0x080049C4 / 0x080049C8; if the RUNTIME word differs, the fault is a corrupted `j`.
         0x80012654, 0x80012658, 0x80012670, 0x80012674]
-BAD = 0x0113D7D0
+# THE VALUE BEING HUNTED, and why it is a parameter now.
+#
+# Originally this was hard-coded to 0x0113D7D0, the first corrupted pointer found. Measuring the
+# turn budget then showed the SAME corruption surfacing as 0x0114BED0 in another run's register
+# file - both of the form 0x011xxxxx, which is RAM, not a code address (this game's text spans
+# 0x80010000..0x8012F800). So the subject is not one address: it is "a word the guest executed
+# that is not code". Hard-coding one instance made the tool answer a question that had been
+# superseded, and every run of it would re-ask about 0x0113D7D0 while the real value moved.
+#
+# Pass the value to hunt on the command line, after the port. With no value, fall back to the
+# original so the tool still has a defined default.
+BAD = int(sys.argv[2], 16) if len(sys.argv) > 2 else 0x0113D7D0
 TERMINATOR = "---END---\n"
 
 for required in (EXECUTABLE, IMAGE, SETTINGS):
