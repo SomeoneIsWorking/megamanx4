@@ -822,6 +822,55 @@ that were hardest:
 - **The resume point and the budget-exit pc were both valid** — correct, because neither is the
   quantity at fault. The bad value is a table entry read by the guest.
 
+### THE FUNCTION-POINTER TABLE IS REFUTED — MY OWN HYPOTHESIS FROM THE PREVIOUS SECTION
+
+The table is not a guess. Decoding the scheduler gives every constant:
+
+    80012618  lui $s0, 0x801f ; 8001261C  ori $s0,$s0,0x8300   cursor base 0x801F8300
+    80012710  lw  $v0, ($s0) ; 80012718  addiu $v0,$v0,0x80     advance 0x80 per entry
+    800126A0  lw  $a0, 8($v0)                                    the dispatch argument is cursor+8
+    80012708  sw  $v0, 8($v1)                                    a delay slot writes cursor+8 back
+    80012714  ori $v1,$v1,0x82ff ; 8001271C sltu $v1,$v1,$v0    loop while cursor <= 0x801F82FF
+
+`tools/probe_dispatch_table.py` therefore sweeps **250 slots** (`0x801F8308`..`0x801FFF88`, stride
+`0x80`) continuously until the port faults, and keeps both answers: whether any sweep ever saw the
+target, and the last complete sweep before death.
+
+    completed 6 sweep(s) of 250 slots (0x801F8308..0x801FFF88, stride 0x80)
+    LAST sweep before the port ended: 250 words, 5 distinct values, 5 non-zero
+      non-zero slot 0x801FEA88 = 0x800ED1C0
+      non-zero slot 0x801FEB08 = 0x8018A000
+      non-zero slot 0x801FEB88 = 0x8018A000
+      non-zero slot 0x801FFF08 = 0x80139618
+      non-zero slot 0x801FFF88 = 0x80019168
+    NO SWEEP of 6 saw 0x0113D7D0 in the table (0 matches of 1500 words read)
+
+**0 of 1,500 words, across 6 sweeps spanning the run up to the fault, ever held `0x0113D7D0`, and
+every non-zero slot holds a valid code address. The function-pointer table is REFUTED as the
+holder.** The previous section's "the corruption is a bad entry in a function-pointer table" is my
+own hypothesis and it is wrong; it is kept above only so it is not rediscovered.
+
+**Two measurement traps were hit and defeated while producing this, both worth naming.**
+
+- **A single sweep is a measurement of the wrong MOMENT.** The first run read the table once, ~12 s
+  in, and reported zero matches. That looked exactly like this refutation and was not one: the fault
+  is at ~40 s. The probe now sweeps until the port dies and reports the last complete sweep, which
+  is the state the faulting dispatch actually read.
+- **THE CONTROL CHANNEL DESYNCHRONISES, AND A NAIVE CLIENT RECORDS CONFIDENTLY WRONG VALUES.** It
+  interleaves unsolicited telemetry (`guest:`, `fallback:`, `---END---`) with command replies.
+  Taking "the next line" returned the data line for `0x801F8308` in answer to a request for
+  `0x801F8300` — so every slot would have been recorded one address out, and the resulting table
+  would have been a confident, entirely fabricated answer. The probe now matches the reply's own
+  format AND checks the address against the request, refusing anything else.
+
+**WHAT THE TABLE ACTUALLY SHOWS, which is the useful part.** The live entries are at indices
+**207, 208, 209, 248, 249** — clustered at the very top of the table, against main's stack top at
+`0x801FFFF0` — and the rest are zero. **The cursor at the fault was `0x801F8300`, which is index 0,
+and index 0 is ZERO.** So the scheduler was reading an entry that has never been initialised, and
+`lw $a0, 8($v0)` handed `0` to `ChangeTh` as its argument. That is a real defect with a real
+address, and it is NOT `0x0113D7D0` — which is why the table was the wrong place to look, and why
+the value must be produced somewhere the guest computes it rather than reads it.
+
 ### THE NEXT STEP IS NOW A TABLE, NOT A TRAP
 
 The scheduler's dispatch reads its cursor from `0x801F8300` and advances by `0x80`. The table is
