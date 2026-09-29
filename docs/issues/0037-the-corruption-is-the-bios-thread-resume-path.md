@@ -1429,6 +1429,40 @@ the spot probe as the instrument so the claim has a name and not just a number. 
 result and is only as strong as the words it covered: it covers the two `j` words and the two `lui`
 words beside them, and it says nothing about any other transfer in the block.
 
+## MEASURED 2026-09-29 — THE FAULT REPRODUCES WITH **ZERO** `OpenTh` CALLS, SO IT IS NOT DOWNSTREAM OF THREAD CREATION
+
+A fresh run on the current build, with a log path unique to the run so nothing stale could be read
+back:
+
+    OpenTh calls in this run: 0
+    [x4-guest:error] guest call 0x80012600 exited fault at 0x0113D7D0 after 0 cycles
+
+**This is the narrowing that matters.** The fault is the same `0x0113D7D0` and the same entry
+`0x80012600`, but it is reached with **no thread ever created** and after **0 cycles**. Every line
+of work in this issue so far - the `$gp` resolution, the `Thread::stackTop` retention, the stack-
+pointer census over 14,000 resumes, the scheduler cursor analysis - sits on the thread-resume path.
+**None of it is upstream of this reproduction.**
+
+Two older logs are the source of the apparent contradiction, and both are the trap this file keeps
+recording:
+
+- An earlier log from the same day showed **5** `OpenTh` calls before the same fault. So the fault
+  is reachable both with and without thread creation.
+- The log files in `scratch/args/` were **appended**, so `grep | head -6` returned the *oldest*
+  lines from a 23:41 run rather than the current run's. Read as a live measurement, that produced a
+  confident "today's build crashes earlier than it used to" from a file today's build had not
+  written to at all.
+
+**What is ruled out:** that the corruption originates in, or requires, the BIOS thread path. What
+is **not** ruled out: that both routes reach the same clobbered verifier word at `0x8013BC00`, which
+is still the only confirmed write site.
+
+**A note on provenance, because it is the same class of error:** this run was taken with the
+framework at `7981f596` and `shared/lightrec` at `e1a6a09b`. That revision is the **revert** of the
+store-observer branch-backup fix, and `git diff 3fddb23 e1a6a09b` is **empty** - the content is
+identical to the revision the ports ran against before, so this reproduction is not attributable to
+the reverted change or to the re-pin.
+
 ## The next step, named
 
 1. **Why does the cursor at `0x801F8300` point at itself?** This is now the cheapest open question
