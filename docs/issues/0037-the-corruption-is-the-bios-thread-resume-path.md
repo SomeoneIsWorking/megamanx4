@@ -696,6 +696,36 @@ unaffected, because that value is a genuine block-boundary quantity.
 values, not `core.r[]`. That is a framework change in the fault path, beside the census just
 added, and it is the next piece of work.
 
+### THE DOWNGRADE ABOVE WAS ALSO WRONG, and the path proves it
+
+Tracing the fault's own path in `psxport` shows the host dispatch is a **block boundary**:
+
+    if (flags & LIGHTREC_EXIT_BLOCK_BOUNDARY) {
+      switch (boundary.reason) {
+      case BoundaryReason::HostDispatch:
+        ...
+        ExecutionResult result = dispatchGuestHostService(impl.core, boundary.pc);
+
+and in the segment loop `impl.copyLightrecToCore(nextPc)` runs **before** that handling, and that
+copy is fed by a `lightrec_clean_regs` flush at every block end. **So `core.r[]` at the fault IS the
+live register state, and the downgrade is withdrawn.** "No register holds `0x0113D7D0`" stands as a
+refutation of a `jr $reg` with a mid-block load.
+
+**Which relocates the suspect rather than removing it.** The bad pc is `boundary.pc` — the value the
+executor captured for the host-dispatch boundary — and it is not any guest register, not either `j`
+word, and not a budget-exit pc. **Its provenance inside Lightrec's block loop is the one thing in this
+investigation that has not been traced**, and the loop is known to update `curr_pc` at a point where
+the cycle check runs first:
+
+    loop2 = jit_label();
+    boundary_to_end = jit_blei(LIGHTREC_REG_CYCLE, 0);      // may exit BEFORE curr_pc is stored
+    jit_stxi_i(lightrec_offset(curr_pc), LIGHTREC_REG_STATE, JIT_V0);
+
+Whether a host-service boundary can capture a `curr_pc` that was never stored for the current block
+is **not established**, and it is now the single remaining candidate. Naming it precisely is worth more
+than another black-box probe: the next step is to log `boundary.pc` together with the `curr_pc` the
+JIT stored, at the boundary, and compare them.
+
 ## The next step, named
 
 1. **Why does the cursor at `0x801F8300` point at itself?** This is now the cheapest open question
