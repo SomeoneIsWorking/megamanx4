@@ -507,6 +507,64 @@ preceding line — a task resumed at a host-reported `pc` after 564,486 cycles �
 thing pointing at it. The next instrument has to observe that resume's register state directly,
 because the switch census by construction cannot see it.
 
+## MEASURED 2026-09-29 — `0x0113D7D0` is produced by the BUDGET-RESUME path, established by dose-response
+
+Four runs, changing only the guest turn budget, counting the budget resumes each one takes and
+whether the fault appears:
+
+| turn budget | budget resumes | `0x0113D7D0` | vblank reached |
+|---|---|---|---|
+| x1 (564,480 cycles — one display field) | 13,420 | **present** | — |
+| x2 | 155 | **present** | — |
+| x8 | 38 | **absent** | `0x783C` |
+| x400 | 0 | **absent** | `0x77F4` |
+
+**The fault tracks the resume COUNT, not the size of the budget.** The x8 run is a fair comparison
+and not a different program: it still resumed 38 times — so the path was genuinely exercised — and
+it reached `0x783C` against the x400 run's `0x77F4`, essentially the same point in the game. The
+fault disappears between 155 resumes and 38.
+
+**The x400 bisect on its own was WEAK evidence and is recorded as such.** It changed the guest's
+entire timeline, and the run failed *differently* (`guest task 0x8001DAF8 faulted`, `r9 = 0xFF000000`,
+`vblank = 0x77F4`). A single run that faults somewhere else is not a controlled result. The
+dose-response above is what makes the claim, because the independent variable is the resume count
+and the x8 point holds total runtime roughly constant.
+
+### A comment of mine in the shipping source is REFUTED by the bytes
+
+`game/core/guest_execution.cpp` asserts that the resume point "`0x800EA0F4` ... IS such a leaf" — a
+`jr $ra`. Decoded, it is not:
+
+    800EA0EC  jr    $ra
+    800EA0F0  nop
+    800EA0F4  lui   $v0, 0x8012      <- the resume point: a function ENTRY
+    800EA0F8  lbu   $v0, -0x1e78($v0)
+    800EA0FC  jr    $ra
+
+`0x800EA0F4` is the first instruction of a three-instruction getter, with its `jr $ra` eight bytes
+later. **So resuming there is an ordinary continuation, and the "a `jr $ra` is one-shot, so
+re-executing it re-dispatches" hypothesis is refuted.** The comment is left to be corrected with the
+defect rather than edited now, so the refutation stays visible next to the claim it kills.
+
+### What has been checked and cleared, so the next reader does not repeat it
+
+- **The exit lands on a block boundary.** `lightrec_execute` hands the remaining cycles to the
+  generated dispatcher, so the limit is enforced between blocks and `state->curr_pc` is a block
+  entry. Re-entering there is a sound continuation.
+- **Registers are committed before the budget is examined.** In `LightrecExecutor`'s segment loop,
+  `copyLightrecToCore(nextPc)` runs immediately after `lightrec_execute` and before the
+  `BudgetExhausted` return, so there is no stale-register window at the exit itself.
+
+**The one asymmetry found, and it is unproven.** `copyLightrecToCore` copies
+`lightrec_get_registers(state)` with no register-cache flush, and `store-observer.c` proves the
+regcache is not flushed at a store by default — it has to call `lightrec_clean_regs` explicitly. In
+`emitter.c` the end-of-block path does `lightrec_jump_to_eob(...)` then
+`lightrec_regcache_reset(reg_cache)` — **a reset with no preceding `lightrec_storeback_regs`**,
+where the sync path at `emitter.c:3047` correctly stores back *then* resets. Whether that is a
+defect or is compensated inside the end-of-block wrapper has **not** been established, and it is
+the sharpest remaining lead: it would explain a guest register being stale specifically at a
+segment boundary, which is exactly the boundary a budget resume re-enters through.
+
 ## The next step, named
 
 1. **Why does the cursor at `0x801F8300` point at itself?** This is now the cheapest open question
