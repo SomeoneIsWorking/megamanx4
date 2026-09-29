@@ -768,6 +768,68 @@ is **not established**, and it is now the single remaining candidate. Naming it 
 than another black-box probe: the next step is to log `boundary.pc` together with the `curr_pc` the
 JIT stored, at the boundary, and compare them.
 
+## MEASURED 2026-09-29 — THE FATAL TRANSFER IS NOT A HOST DISPATCH. IT IS A NESTED CALL TO A CORRUPTED FUNCTION POINTER.
+
+A new `psxport` diagnostic reports the block that produced any control transfer to an address no
+code image claims. It fires constantly and harmlessly on this run:
+
+    guest transferred control to 0x000000A0 ... the block that produced this target began at 0x800EDCDC
+    guest transferred control to 0x000000A0 ... the block that produced this target began at 0x8001810C
+    guest transferred control to 0x00000000 ... the block that produced this target began at 0x800DD7FC
+
+**Those are the guest jumping to a null BIOS table pointer (`0xA0`/`0xB0`/`0xC0` are the BIOS entry
+addresses) and are not fatal — the run continues past dozens of them.** They are a separate class and
+are not this fault.
+
+### THE DIAGNOSTIC WAS SILENT ON THE FATAL CASE, and that is worth more than the fix
+
+The first version fired only when `currentImageIdentity` found NO image. **It never fired for
+`0x0113D7D0`** — and the reason is the finding below, not a bug in the condition. The condition is now
+unconditional, and the fault names its own verdict:
+
+    [native-dispatch] guest address 0x0113D7D0 resolves to zero or multiple active code images;
+        image identity lookup: claimed by none
+
+**A diagnostic that reports the ordinary case and stays silent on the one that kills the program is
+the dead-tap shape again, and it is exactly why the verdict is now printed on every fault rather
+than inferred by the caller from which line appeared.**
+
+### WHAT THE PATH ACTUALLY IS, and why every earlier refutation is consistent with it
+
+The fatal fault is **not** raised at a host-dispatch boundary. `dispatchGuest` classifies first and
+calls `dispatchGuestHostService` directly:
+
+    const GuestHostDispatchKind kind = classifyGuestHostDispatch(core, guestAddress);
+    if (kind != GuestHostDispatchKind::ExecuteGuest) {
+      return dispatchGuestHostService(core, guestAddress);
+    }
+
+so the segment-loop diagnostic could never see it. And MMX4's own line says what asked:
+
+    [x4-guest] guest call 0x80012600 exited fault at 0x0113D7D0 after 0 cycles,
+        and this owner has no return point for it
+
+**`0x80012600` is the scheduler.** So the scheduler performs a **call through a function pointer whose
+value is `0x0113D7D0`**, and psxport is asked to run guest code at it. **The corruption is a bad entry
+in a function-pointer table, reached by `jalr $reg` — not a corrupted branch, not a stale return, and
+not a framework pc.** This is consistent with every refuted hypothesis at once, and explains the two
+that were hardest:
+
+- **No register held `0x0113D7D0` at the fault** — correct, and now unsurprising: the fault is
+  reported in the scheduler's OUTER frame, whose registers are the scheduler's, not the callee's.
+  The register holding the bad pointer was consumed by the `jalr` in an inner frame that had already
+  returned by the time the fault surfaced.
+- **The resume point and the budget-exit pc were both valid** — correct, because neither is the
+  quantity at fault. The bad value is a table entry read by the guest.
+
+### THE NEXT STEP IS NOW A TABLE, NOT A TRAP
+
+The scheduler's dispatch reads its cursor from `0x801F8300` and advances by `0x80`. The table is
+therefore a `0x80`-strided array of function pointers in the image's data, and **`0x0113D7D0` is a slot
+in it.** The next measurement is to locate the slot the scheduler was on when it dispatched, and ask
+what wrote it — which is a bounded, indexable question against the image's own data rather than a
+full-RAM scan, and is therefore finally within the cost that was blocking the earlier attempts.
+
 ## The next step, named
 
 1. **Why does the cursor at `0x801F8300` point at itself?** This is now the cheapest open question
