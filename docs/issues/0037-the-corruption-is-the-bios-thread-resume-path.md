@@ -871,6 +871,62 @@ and index 0 is ZERO.** So the scheduler was reading an entry that has never been
 address, and it is NOT `0x0113D7D0` — which is why the table was the wrong place to look, and why
 the value must be produced somewhere the guest computes it rather than reads it.
 
+### CORRECTION: MY OWN SCAN READ 250 ADDRESSES, NONE OF THEM A DISPATCH SLOT
+
+The previous section's refutation is **void and withdrawn**, because the probe behind it was wrong in
+a way the disassembly did not show. It took the table base from `ori $s0, $s0, 0x8300` at
+`0x8001261C`. That instruction does not set the table base. `$s0` holds the **CELL**, and the table
+base is stored *into* that cell one instruction later:
+
+    80012604  lui  $v0, 0x801f
+    80012608  ori  $v0, $v0, 0x8100      v0 = 0x801F8100      <- the TABLE base
+    80012624  lui  $at, 0x8020
+    80012628  sw   $v0, -0x7d00($at)     [0x80200000-0x7d00 = 0x801F8300] = 0x801F8100
+    80012630  lw   $a0, -0x7d00($a0)     a0 = the entry, loaded back out of the cell
+    80012638  lhu  $v1, ($a0)            state halfword at entry+0
+    800126A0  lw   $a0, 8($v0)           the dispatch argument is entry+8
+
+**So the table is FOUR entries, not 250**, and the probe's 250 addresses (`0x801F8308`..`0x801FFF88`)
+do not contain a single one of them. A constant lifted from a listing is not a derivation; only
+checking the arithmetic against the loop's own walk catches this. The probe now derives the entries
+by walking `while LOOP_END >= entry + 0x80`, which is the guest's own test.
+
+**Two smaller defects in the same file, both worth recording.** A single sweep is a measurement of
+the wrong moment — the fault is at ~40 s and the first read was at ~12 s, so the table is now swept
+until the port dies. And **the control channel desynchronises**: it interleaves unsolicited
+telemetry (`guest:`, `fallback:`, `---END---`) with replies, so a client taking "the next line"
+received the data line for `0x801F8308` in answer to a request for `0x801F8300`, which would have
+recorded every slot one address out. The probe now matches the reply's own format **and** checks the
+address it answers against the one asked.
+
+### THE CORRECTED SCAN: REFUTED, AND THE TABLE IS NOT EVEN FUNCTION POINTERS
+
+    completed 423 sweep(s) of 4 slots (0x801F8108..0x801F8288, stride 0x80)
+    LAST sweep before the port ended: 4 words, 3 distinct values, 2 non-zero
+      non-zero slot 0x801F8108 = 0xFF000001
+      non-zero slot 0x801F8208 = 0xFF000002
+    NO SWEEP of 423 saw 0x0113D7D0 (0 matches of 1692 words read)
+
+**0 of 1,692 words, over 423 sweeps spanning the run to the fault, ever held `0x0113D7D0`.** The
+whole table, for the record:
+
+    entry 0x801F8100   entry+8 = 0xFF000001
+    entry 0x801F8180   entry+8 = 0x00000000
+    entry 0x801F8200   entry+8 = 0xFF000002
+    entry 0x801F8280   entry+8 = 0x00000000
+
+**`0xFF000001` and `0xFF000002` are not addresses at all** — the image is `0x80010000..0x8012F800`,
+so both are outside it. They read as a handle or tag pair (high byte `0xFF`, id 1 and 2), not code.
+And the call that consumes them is direct: `jal 0x800eddbc` is `ChangeTh`, whose target is a fixed
+address in the listing. **So `entry+8` is a handle passed to `ChangeTh`, and the scheduler does not
+call through a pointer at all.**
+
+**This relocates the frontier one level deeper, and it is the first time the scheduler has been
+cleared rather than blamed.** The chain is `scheduler -> ChangeTh(handle) -> ...`, and whatever
+computes `0x0113D7D0` is downstream of `ChangeTh` at `0x800EDDBC` — reached through a handle, not
+through a table of addresses. That is a different search with a different tool, and it is the first
+one where the table is not the place to look.
+
 ### THE NEXT STEP IS NOW A TABLE, NOT A TRAP
 
 The scheduler's dispatch reads its cursor from `0x801F8300` and advances by `0x80`. The table is

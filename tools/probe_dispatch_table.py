@@ -1,27 +1,31 @@
-#!/ usr / bin / env python3
+#!/usr/bin/env python3
 """Scan Mega Man X4's scheduler dispatch table for the corrupted function pointer.
 
-DERIVED, NOT ASSUMED. Every constant below comes from the decoded guest instructions at
-0x80012600, quoted in the docstring, so a wrong table cannot be produced by a wrong guess:
+DERIVED FROM THE DECODED GUEST INSTRUCTIONS, and corrected once already. The first version of this
+probe read 250 addresses and NONE of them was a dispatch slot, because it took the table base from
+`ori $s0, $s0, 0x8300` at 0x8001261C. That instruction does not set the table base: `$s0` holds the
+CELL at 0x801F8300, and the table base is stored INTO that cell one instruction later:
 
-    80012618  lui   $s0, 0x801f          8001261C  ori $s0, $s0, 0x8300   cursor base 0x801F8300
-    80012710  lw    $v0, ($s0)           80012718  addiu $v0, $v0, 0x80   advance 0x80
-    800126A0  lw    $a0, 8($v0)                                          the slot is cursor+8
-    80012708  sw    $v0, 8($v1)                                          a delay slot writes it back
-    80012714  ori   $v1, $v1, 0x82ff     8001271C  sltu $v1, $v1, $v0    loop while cursor <= 0x801F82FF
+    80012604  lui   $v0, 0x801f
+    80012608  ori   $v0, $v0, 0x8100      v0 = 0x801F8100   <- the TABLE base
+    80012624  lui   $at, 0x8020
+    80012628  sw    $v0, -0x7d00($at)     [0x80200000-0x7d00 = 0x801F8300] = 0x801F8100
+    80012630  lw    $a0, -0x7d00($a0)     a0 = the entry, loaded back from the cell
+    80012638  lhu   $v1, ($a0)            state halfword at entry+0
+    80012698  lw    $v0, ($s0)            v0 = the entry
+    800126A0  lw    $a0, 8($v0)           the dispatch argument is entry+8
+    80012718  addiu $v0, $v0, 0x80        advance 0x80 per entry
+    8001271C  sltu  $v1, 0x801F82FF, $v0  the loop ends when entry+0x80 passes 0x801F82FF
 
-THE FEEDER MUST BE SHOWN. A scan that reports "0 matches" is indistinguishable from a scan
-that never ran, which is the dead-tap failure this project treats as worst. So the table is
-not only searched for the target: it is searched for a value that is DEFINITELY there -- the
-cursor's own base 0x801F8300 appears in slot 0's neighbourhood only if the table is real -- and
-more importantly every slot's value is printed, so the reader sees 250 actual words rather than
-a count. A refused or empty scan FAILS;
-it does not report a clean zero.
+which is FOUR entries, not 250. The lesson is recorded in the code because it is the same failure
+as every other one in this investigation: a constant lifted from a disassembly listing is not a
+derivation, and the only thing that catches it is checking the arithmetic against the loop's
+behaviour.
 
-    Exit codes : 0 the scan ran and
-    the table was read;
-1 the target was found in the table;
-2 the scan could not run (no port, no media, unreadable table).
+THE FEEDER MUST BE SHOWN. A scan reporting "0 matches" is indistinguishable from a scan that never
+ran, so every slot's value is printed and a scan that cannot read all of them FAILS rather than
+reporting a clean zero. The scan also runs until the port faults, because a single sweep taken
+before the fault is a measurement of the wrong moment.
 """
 from __future__ import annotations
 
@@ -32,19 +36,40 @@ import subprocess
 import sys
 import time
 
-CURSOR_BASE = 0x801F8300
+# THE TABLE BASE IS 0x801F8100, the value `ori $v0,$v0,0x8100` produces and `sw $v0,-0x7d00($at)`
+# stores into the cell. 0x801F8300 is the CELL, not the table.
+TABLE_BASE = 0x801F8100
 STRIDE = 0x80
-SLOT_OFFSET = 8
-TABLE_LIMIT = 0x801FFFF0
+STATE_OFFSET = 0
+POINTER_OFFSET = 8
+LOOP_END = 0x801F82FF          # sltu (LOOP_END, entry+STRIDE) ends the loop
 TARGET_DEFAULT = 0x0113D7D0
 
 
+def entry_addresses() -> list[int]:
+    """Walk the loop the guest actually walks, rather than guessing an extent.
+
+    The loop runs while `LOOP_END >= entry + STRIDE`, so the entries are the multiples of STRIDE
+    from TABLE_BASE up to the first one that passes LOOP_END. Deriving them by walking reproduces
+    the guest's own arithmetic, which is the check that the previous 250-slot guess failed.
+    """
+    entries = []
+    entry = TABLE_BASE
+    while True:
+        entries.append(entry)
+        if LOOP_END < entry + STRIDE:
+            return entries
+        entry += STRIDE
+
+
 def slot_addresses() -> list[tuple[int, int]]:
-    """Every dispatch slot, derived from the decoded cursor arithmetic."""
-    return [
-        (index, CURSOR_BASE + index * STRIDE + SLOT_OFFSET)
-        for index in range((TABLE_LIMIT - CURSOR_BASE - SLOT_OFFSET) // STRIDE + 1)
-    ]
+    """Every dispatch slot: the word at entry+8 for each entry the loop walks."""
+    return [(index, entry + POINTER_OFFSET) for index, entry in enumerate(entry_addresses())]
+
+
+def state_addresses() -> list[tuple[int, int]]:
+    """The state halfword of each entry, at entry+0, for context in the report."""
+    return [(index, entry + STATE_OFFSET) for index, entry in enumerate(entry_addresses())]
 
 
 class DebugLink:
@@ -194,7 +219,7 @@ def main() -> int:
         )
         distinct = len(set(values.values()))
         print(f"completed {sweeps} sweep(s) of {len(slots)} slots "
-              f"(0x{CURSOR_BASE + SLOT_OFFSET:08X}..0x{slots[-1][1]:08X}, stride 0x{STRIDE:X})")
+              f"(0x{TABLE_BASE + POINTER_OFFSET:08X}..0x{slots[-1][1]:08X}, stride 0x{STRIDE:X})")
         print(f"LAST sweep before the port ended: {len(values)} words, {distinct} distinct values, "
               f"{sum(1 for v in values.values() if v)} non-zero")
         non_zero = [(a, values[a]) for _, a in slots if values[a] != 0]
