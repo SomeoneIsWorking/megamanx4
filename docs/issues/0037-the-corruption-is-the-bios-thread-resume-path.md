@@ -1274,6 +1274,55 @@ exact instruction stream, and an exact field number. The next measurement is one
 print the **exact** store PC rather than the block start — and until that is done the function
 identity stays marked as unconfirmed rather than quietly upgraded to fact.
 
+## MEASURED 2026-09-29 — THE CALL SITE IS THE DECOMPRESSOR, AND MY OWN INSTRUMENT'S SILENCE IS NOT EVIDENCE
+
+`ra = 0x80015F5C` puts the call immediately before it, and it is the decompressor this port already
+owns:
+
+    80015F44  lui   $a0, 0xf
+    80015F48  ori   $a0, $a0, 0xffff
+    80015F4C  and   $a0, $a1, $a0          $a0 = $a1 & 0xFFFFF
+    80015F50  addu  $a0, $a2, $a0          DESTINATION = $a2 + ($a1 & 0xFFFFF)
+    80015F54  jal   0x80016FF4              kDecompressGfxGuest — the RLE decompressor
+    80015F58  move  $a1, $s1                SOURCE, set in the delay slot
+    80015F5C  lui   $a1, 0x8014
+
+**So the store that wrote `0x0113D7D0` belongs to the decompressor's output, and the port already
+owns that boundary** — `0x80016FF4` is `kDecompressGfxGuest`, invoked from `0x80015F54`, returning to
+`0x80015F5C`, which is exactly the return this port was corrected to use earlier today.
+
+### AND I AM NOT TREATING MY OWN INSTRUMENT'S SILENCE AS A REFUTATION
+
+The store observer was armed on all **7** store instructions inside `0x80015ECC..0x80016020`
+(`sb 0x48($a0)`, `sh ($a1)`, `sh -4($a0)`, `sw 2($a0)`, `sh -2($a0)`, `sh ($a0)`, `sh -2($a0)`), and
+it produced **no per-hit observation**, while the memory watchpoint fired **3 times in the same
+run** on `0x8013BC00`. That looks like a clean refutation of "the writer is in that function".
+
+**It is not one, and the reason is the same discipline this whole investigation has been about —
+applied to my own tool rather than to the guest.** Two things are unverified about that silence:
+
+1. **A run with the store observer armed is NOT the program being measured.** Arming it invalidates
+   every compiled block, instruments every store in every block, and flushes the register cache
+   (`psxport/docs/issues/0039`). Its telemetry is evidence about a *modified* execution.
+2. **I have never verified that the observer reports `sb` and `sh` at all.** Its own banner says it
+   watches "STORE-INSTRUCTION PCs" and the armed set here is almost entirely byte and halfword
+   stores. **A zero from an instrument whose coverage of the relevant store width has never been
+   demonstrated is a zero about the instrument.**
+
+So the honest statement is: the writer has not been shown to be in `0x80015ECC`, and the evidence
+that would show it either way — the exact store PC — is still missing. **What did not change: the
+decompressor is on the call path with a destination of `$a2 + ($a1 & 0xFFFFF)`, and its output is
+what lands on the element.**
+
+### THE ONE MEASUREMENT THAT WOULD SETTLE IT, AND IT IS NO LONGER GUESSWORK
+
+Disarming nothing and adding nothing: the decompressor's **destination and length** at
+`0x80015F54` are `$a2 + ($a1 & 0xFFFFF)` and the routine's own loop bound. If the destination range
+that the decompressor is given **includes `0x8013BBF8`**, the fault is a destination/length defect
+in the port's own guest-call boundary and is fixed there. If it does not, the decompressor is being
+run with arguments the guest never intended, and the fault is upstream of it. **That is one
+register read and one comparison**, and it decides between two entirely different owners.
+
 ## The next step, named
 
 1. **Why does the cursor at `0x801F8300` point at itself?** This is now the cheapest open question
