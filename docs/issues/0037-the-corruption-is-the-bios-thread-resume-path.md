@@ -935,6 +935,61 @@ in it.** The next measurement is to locate the slot the scheduler was on when it
 what wrote it — which is a bounded, indexable question against the image's own data rather than a
 full-RAM scan, and is therefore finally within the cost that was blocking the earlier attempts.
 
+## MEASURED 2026-09-29 — TWO CLAIMS ABOUT WHERE THE VALUE CAME FROM ARE BOTH UNSUPPORTED, AND ONE IS A NULL-VALUE ERROR
+
+Two other origin claims now exist for `0x0113D7D0`. Neither survives, and they fail in *different*
+ways, which is why both are recorded.
+
+### 1. THE `0xD7D0` UNIQUENESS IS AT OR BELOW THE NULL, so it supports no derivation
+
+Issue 0038 reports that the halfword `0xD7D0` occurs exactly once in the loaded image, at
+`0x800F2194`, where the word is `0x8001D7D0` — and concludes the producing instruction is "a
+halfword load of that table entry". **The uniqueness is exactly true and I verified it independently
+(1 hit over 588,800 halfwords). The inference is not supported, because uniqueness here is not
+remarkable:**
+
+    4-byte-aligned words scanned: 294400
+    observed sharing low halfword 0xD7D0: 1   -> 0x800F2194
+    expected by CHANCE alone:        4.49      (294400 / 65536)
+    words with high halfword 0x0113:  4         (chance expectation 4.49)
+
+**Observed is BELOW the chance expectation.** A bare match count means nothing without its null
+distribution: 294,400 words should produce ~4.5 incidental low-halfword matches, and this image has
+one. **So `0x8001D7D0` is exactly the kind of coincidence chance predicts, and the fault value being
+derived from it by a high-half corruption is a hypothesis, not evidence.** I also looked for code
+that materialises the table address (`lui $rt,0x800f` + `addiu $rt,$rt,0x2170/0x2194`) and found
+**0 sites in 294,400 instructions**, so the region is not reached the ordinary way either.
+
+### 2. NO BUDGET EXIT EVER CARRIED IT, and the log says what did
+
+Issue 0038 also states "the segment before it ended as `BudgetExhausted` carrying `guestPc =
+0x0113D7D0`". **The log does not contain that.** The three lines around the fault are:
+
+    [x4-thread]      retail task entry 0x8001DAF8 ... RESUMED at 0x800EA0F4 after 564486 cycles
+    [native-dispatch] guest address 0x0113D7D0 resolves to ... claimed by none
+    [x4-guest]       guest call 0x80012600 exited fault at 0x0113D7D0 after 0 cycles
+
+**There is no budget-exit line carrying that address; the event immediately before the fault is a
+task RESUME at `0x800EA0F4`, a valid code address** — which is the same "adjacent line of the same
+log" misread that issue 0038 itself retracts in its own §1, one paragraph earlier. The framework
+census is the authority that closes it, and its coverage is complete rather than partial: **exactly
+two sites in the entire runtime create a `BudgetExhausted` result** — the cycle budget at
+`lightrec_executor.cpp:842` and the host-dispatch budget through `recordBudgetExit` — and both are
+instrumented. The other three matches for that enum are a name string and two consumers.
+
+### WHAT IS ACTUALLY LEFT
+
+The memory hypothesis is closed, and it is closed **well**: issue 0038's RAM census read
+**1,438,562,048 words over 2,743 sweeps** and found zero, *with the feeder proven* by a near-miss
+family firing 47 times with real heap addresses. That is the strongest single measurement in this
+investigation and it should not be weakened by the two claims above.
+
+So the value is **computed in a register at run time** and never exists anywhere to be read. The
+sequence is a valid task resume at `0x800EA0F4`, then a guest call to the scheduler at `0x80012600`
+that faults at `0x0113D7D0` having consumed 0 cycles. **The next step is a translation watch — which
+instruction writes `0x0113D7D0` into a register — and it must be counted against a measured null,
+not against a match count.**
+
 ## The next step, named
 
 1. **Why does the cursor at `0x801F8300` point at itself?** This is now the cheapest open question
