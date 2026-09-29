@@ -658,6 +658,44 @@ reported at `BudgetExhausted`** — flag any that is outside every code image, i
 the exit that produces it. That is the same discipline the MMX4 censuses use, applied to the one
 value that is still unaccounted for.
 
+## MEASURED 2026-09-29 — the framework's budget-exit pc is REFUTED, and that weakens one of my OWN refutations
+
+`psxport` now classifies the pc every budget exit reports, against the loaded code images, and
+publishes it through the debug server so a live run can be asked. On MMX4, rebuilt against it:
+
+    budget_exit: exits=466 pc_in_code_image=466 pc_outside_code_image=0
+    budget_exit: exits=488 pc_in_code_image=488 pc_outside_code_image=0
+    budget_exit: exits=509 pc_in_code_image=509 pc_outside_code_image=0
+
+**The denominator moves, the partition holds, and 500+ budget exits reported a pc inside a code
+image. So `nextPc` at a budget exit is REFUTED as the source of `0x0113D7D0`.**
+
+**A near-miss worth recording, because it is the exact shape this investigation has been about.** The
+first attempt at this measurement reported zero - and the zero was worthless, because MMX4's binary
+was still linked against the previous psxport build and **did not contain the census at all**. An
+instrument that is not in the product reports "0 of 0" and looks identical to a clean result. It was
+caught only by asking for the *denominator* over the debug server and finding the line missing
+entirely. "The number is zero" and "the thing that counts the number is not running" must be told
+apart, and the only way is to see the counter move.
+
+### WHICH OF MY REFUTATIONS WAS WEAKER THAN I SAID
+
+**"No register holds the fault address" does not refute what I used it to refute.** The
+"register file at the fault" is `core.r[]`, which `copyLightrecToCore` fills **at a block
+boundary**. A guest `jr $reg` whose `$reg` was written by a load *in the same block* has a value
+that is still sitting in the JIT's register cache and **has never been spilled into `core.r[]` at
+all**. So the dump is a snapshot of the boundary state, not of the fault-instant state, and a bad
+value produced and consumed inside one block is structurally invisible to it.
+
+That is the most natural remaining explanation - a corrupted pointer loaded and jumped to within a
+single block - and the evidence I offered against it cannot exclude it. **The claim is downgraded
+from refuted to not-established**, and the refutation of the *framework's* budget-exit pc above is
+unaffected, because that value is a genuine block-boundary quantity.
+
+**What would settle it:** the fault has to be reported with the failing block's live register
+values, not `core.r[]`. That is a framework change in the fault path, beside the census just
+added, and it is the next piece of work.
+
 ## The next step, named
 
 1. **Why does the cursor at `0x801F8300` point at itself?** This is now the cheapest open question
