@@ -990,6 +990,55 @@ that faults at `0x0113D7D0` having consumed 0 cycles. **The next step is a trans
 instruction writes `0x0113D7D0` into a register — and it must be counted against a measured null,
 not against a match count.**
 
+## MEASURED 2026-09-29 — THE THREAD PATH IS CLEARED END TO END, AND A COMMENT OF MINE WAS WRONG
+
+The scheduler's only dispatch is `jal 0x800eddbc`, a **direct** call to `ChangeTh`, and `$a0` **is**
+`$r[4]`. So the word the scheduler loads at `cursor+8` is the handle `change_thread` receives, and
+the chain is fully first-party from there:
+
+    change_thread:  handle = core->r[4];  core->r[2] = handle;  Service::change(handle)
+    Service::slotForHandle:  slot = handle & 0xFF, valid if slot < kThreadCount
+    kMainThreadHandle = 0xFF000000
+
+The measured handles `0xFF000001` and `0xFF000002` are **legitimate** — slots 1 and 2 — not wild
+pointers. And `Service::open` stores what it is given with **no validation at all**:
+
+    thread.entry = entry;
+    thread.regs.pc = entry;
+
+which made the entry the obvious next thing to check, since a bad one would be stored and resumed
+later. **It is not the source.** Every `OpenTh` in the run, from the port's own log line:
+
+    3 x  entry=0x80012A3C  sp=0x801FF400  gp=0x8012F418
+    1 x  entry=0x8001DAF8  sp=0x801FEC00  gp=0x8012F418
+    1 x  entry=0x8001D064  sp=0x801FEC00  gp=0x8012F418
+    3 distinct entries; 0 outside the loaded image 0x80010000..0x8012F800
+
+**Five calls, three distinct entries, all valid, and every one reporting the correct
+`gp = 0x8012F418`** — which is the `resolveThreadGlobalPointer` fix confirmed working in a live
+product run rather than only in a unit test.
+
+### A COMMENT OF MINE WAS OFFERING A FIXED DEFECT AS THE EXPLANATION
+
+`bios_threads.cpp` carried a comment I wrote at the time of the `$gp` fix: a thread resumed with a
+null `$gp` takes every global access to address 0, "and a value read that way is a plausible source
+of the runtime branch target `0x0113D7D0`". **That is refuted. The fault survived the fix.** The
+defect was real, the fix is right, and the claim about the fault was an offer rather than a
+measurement — the exact shape this investigation keeps punishing. It is corrected in place, with
+the correction kept visible, because a comment that names a closed path sends the next reader down
+it.
+
+### WHERE THE THREAD PATH NOW STANDS
+
+Cleared, with denominators: the scheduler's dispatch (direct `jal`, no pointer), the handle
+resolution (both live handles are valid slots), the stored entry (3 of 3 valid), the stored link
+register (13,997 of 14,000 in a code image, 3 zero, 0 invalid), the budget-exit pc (500+ exits, 0
+outside), and RAM (1.44 billion words, 0 hits, feeder proven). **The value is computed in a
+register after a valid resume at `0x800EA0F4`, which is a `jr $ra` leaf — so the register that
+matters is `$ra` at that leaf, and the census has not yet classified `$ra` at the moment of
+execution rather than at the moment of resume.** That is the specific gap the next measurement has
+to close.
+
 ## The next step, named
 
 1. **Why does the cursor at `0x801F8300` point at itself?** This is now the cheapest open question
