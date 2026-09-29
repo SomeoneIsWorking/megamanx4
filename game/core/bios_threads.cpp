@@ -390,9 +390,17 @@ void open_thread(Core *core) {
   // `Service::open` takes the thread's gp from `r[6]`, so taking the guest's 0 at face value made
   // every thread resume with `$gp = 0`. MMX4's code is `$gp`-relative throughout, so such a
   // thread takes every global access to address 0: it reads and writes the low 16 KB of RAM
-  // instead of its own statics, and a value read that way is a plausible source of the runtime
-  // branch target 0x0113D7D0 the port faults on. The thread opened at entry 0x80012A3C - adjacent
-  // to the faulting scheduler 0x80012600 - is one of these.
+  // instead of its own statics.
+  //
+  // CORRECTED 2026-09-29: an earlier version of this comment claimed the null-`$gp` read was
+  // "a plausible source of the runtime branch target 0x0113D7D0". That is REFUTED and the claim
+  // is withdrawn. The defect was real, the fix is right, and the measurement above stands, but
+  // the fault SURVIVED it: with every thread now reporting gp=0x8012F418 the port still faults
+  // at 0x0113D7D0. A comment that offers a fixed defect as the explanation for a fault that
+  // outlived the fix sends the next reader down a closed path, so it is corrected here rather
+  // than left to be rediscovered. The thread opened at entry 0x80012A3C - adjacent to the
+  // faulting scheduler 0x80012600 - is one of the five OpenTh calls measured in issue 0037, and
+  // its entry and gp are both valid.
   //
   // The fix inherits the creating context's own gp rather than substituting a constant. A
   // hard-coded 0x8012F418 would be the port inventing guest state; the caller's gp is the value
