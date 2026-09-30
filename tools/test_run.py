@@ -110,7 +110,7 @@ class LauncherTest(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(stderr, "")
         self.assertIn("launching Mega Man X4", stdout)
-        self.assertIn([LOCKED_PYTHON, "tools/psxport_sync.py", "--auto"], commands)
+        self.assertIn([LOCKED_PYTHON, "tools/psxport_fetch.py", "--auto"], commands)
         self.assertIn(
             [LOCKED_PYTHON, "tools/extract_exe.py", "Mega Man X4.chd"], commands
         )
@@ -321,7 +321,7 @@ class LauncherTest(unittest.TestCase):
 
         self.assertEqual(code, 0)
         self.assertEqual(stderr, "")
-        self.assertNotIn([LOCKED_PYTHON, "tools/psxport_sync.py", "--auto"], commands)
+        self.assertNotIn([LOCKED_PYTHON, "tools/psxport_fetch.py", "--auto"], commands)
         provision_index = commands.index([LOCKED_PYTHON, "tools/extract_exe.py"])
         self.assertEqual(
             host.commands[provision_index][1]["env"]["PSXPORT_DIR"], str(framework)

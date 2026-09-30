@@ -39,7 +39,7 @@ facts and the next evidence step, `docs/issues/` for atomic work, and `docs/code
   that boundary. Sony PSY-Q headers in the reference are not available for copying. Fetch only
   `external/mmx4`, without recursively initializing its build-tool submodules.
 - `external/psxport` resolves to the shared writable checkout or a private clone at `psxport.pin`.
-  `tools/psxport_sync.py --auto` establishes it; framework changes land in psxport and a verified
+  `tools/psxport_fetch.py --auto` establishes it; framework changes land in psxport and a verified
   consumer pin is updated with `tools/psxport_sync.py --bump`.
 - Disc resolution is implemented once in `tools/resolve_disc.py`: explicit argument,
   `PSXPORT_X4_DISC`, `.env`, then an unambiguous repository-root CHD. The exact executable must pass

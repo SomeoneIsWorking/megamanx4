@@ -40,7 +40,7 @@ def find(build_if_missing=True):
     if not os.path.isfile(os.path.join(px, "cmake", "psxport.cmake")):
         print(
             f"[discdump] PSXPORT_DIR={px} is not a psxport checkout — run "
-            "`python3 tools/psxport_sync.py --auto`, or set PSXPORT_DIR.",
+            "`python3 tools/psxport_fetch.py --auto`, or set PSXPORT_DIR.",
             file=sys.stderr,
         )
         raise SystemExit(2)
