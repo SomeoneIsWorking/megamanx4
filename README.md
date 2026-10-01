@@ -44,9 +44,10 @@ cp .env.example .env && $EDITOR .env                # point it at your own disc 
 uv run --frozen python tools/re_frontier.py next    # what to work on
 ```
 
-`tools/psxport_sync.py` resolves the framework and initializes its required direct vendors without
-recursing into Beetle's URL-less `gnulib` path. Do not recursively initialize `external/mmx4`; its
-nested build-tool submodules are not needed by this port.
+`tools/psxport_fetch.py` resolves the framework at the recorded pin and initializes its required
+direct vendors without recursing into Beetle's URL-less `gnulib` path. The pin tool itself
+(`external/psxport/tools/psxport_sync.py --repo .`) is owned by the framework. Do not recursively
+initialize `external/mmx4`; its nested build-tool submodules are not needed by this port.
 
 `run.sh` is the play launcher. It enters the repository's frozen `uv.lock` environment through
 `bootstrap.py`; non-trivial policy lives in `tools/run.py`. This player

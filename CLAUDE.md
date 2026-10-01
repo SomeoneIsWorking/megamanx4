@@ -40,7 +40,7 @@ facts and the next evidence step, `docs/issues/` for atomic work, and `docs/code
   `external/mmx4`, without recursively initializing its build-tool submodules.
 - `external/psxport` resolves to the shared writable checkout or a private clone at `psxport.pin`.
   `tools/psxport_fetch.py --auto` establishes it; framework changes land in psxport and a verified
-  consumer pin is updated with `tools/psxport_sync.py --bump`.
+  consumer pin is updated with `external/psxport/tools/psxport_sync.py --repo . --bump`.
 - Disc resolution is implemented once in `tools/resolve_disc.py`: explicit argument,
   `PSXPORT_X4_DISC`, `.env`, then an unambiguous repository-root CHD. The exact executable must pass
   `tools/extract_exe.py` identity validation. Do not package game data.
