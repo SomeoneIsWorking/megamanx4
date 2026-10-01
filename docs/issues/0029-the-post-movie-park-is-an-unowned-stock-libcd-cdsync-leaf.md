@@ -3,7 +3,7 @@ id: 29
 title: The post-movie park is an UNOWNED stock libcd CdSync leaf, and the whole 6→5→1 chain gates on it
 status: open
 symptom: Post-movie fields present a flat clear colour; the guest sits at game state 1 / sub-state 2 forever
-tags: RE-02,RE-04,RE-11,frame-loop,cd,vsync,widescreen
+tags: frame-loop,cd,vsync,widescreen
 created: 2026-09-27
 updated: 2026-09-27
 ---

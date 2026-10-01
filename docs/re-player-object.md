@@ -1,4 +1,4 @@
-# RE-07 — the player-object system, MEASURED (2026-08-24)
+# The player-object system, as measured against SLUS_005.61
 
 Every fact below was verified against BOTH sources: the AGPL reference decomp
 (`external/mmx4`, pin `1922fcd3`, whose `check.us.txt` target SHA-1 equals our extracted
@@ -86,11 +86,11 @@ the exact parallax math inside `FUN_80028690`.
 ## 3. Input routing
 
 Measured end-to-end on our binary; the router body matches mmx4's `InitPAD` arguments
-exactly (RE-06's unique call at `0x80012194`).
+exactly (the executable's unique InitPAD call at `0x80012194`).
 
 | stage | address | evidence |
 |---|---|---|
-| libpad packet buffer P1 | `0x80166D68`, cap `0x22` | RE-06 measured InitPAD call; referenced at `0x80012180` (materialise), `0x80012328` (router), `0x8001FFD0` (scan floor) |
+| libpad packet buffer P1 | `0x80166D68`, cap `0x22` | the measured InitPAD call; referenced at `0x80012180` (materialise), `0x80012328` (router), `0x8001FFD0` (scan floor) |
 | libpad packet buffer P2 | `0x8012F46C`, cap `0x22` | same call; referenced at `0x8001218C`, `0x800123A0` |
 | **Router** | **`func_80012328`**, called once per gameMain iteration before the scheduler | mmx4 `2824.c` main loop order; our Ghidra decompile of the whole body |
 | validity check | `buf[0] == 0xFF || buf[1] != 0x41 ('A')` → buttons treated as 0 (pad absent) | Ghidra `FUN_80012328` |
@@ -145,7 +145,7 @@ yet attributed); the checkpoint/respawn writer (`engine_obj_checkpoint @ 0x80172
   (constants + offsets pinned by static_assert + a hermetic test,
   `tests/test_x4_player_object.cpp`, ctest `x4_player_object`). No guest write, no override,
   no behavior change ships from this step.
-- Byte-match gate prerequisite (RE-10): ANY native body transplanted from mmx4 must first
+- Byte-match prerequisite: ANY native body transplanted from mmx4 must first
   have a byte-gate proving the substrate body it replaces matches. Nothing here imports one.
 - Co-op remains force-suppressed in typed comparison roles (`tools/behavior.py check`); the co-op
   evidence question is still OPEN and unchanged by this doc.

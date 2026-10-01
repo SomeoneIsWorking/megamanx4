@@ -3,7 +3,7 @@ id: 28
 title: After both STR movies the guest parks in game state 1 / sub-state 2 on an unfinished CD read
 status: open
 symptom: Post-movie fields present a flat clear colour and the retail task never ends a turn
-tags: RE-09,RE-04,frame-loop,cd,vsync,widescreen
+tags: frame-loop,cd,vsync,widescreen
 created: 2026-09-27
 updated: 2026-09-27
 ---

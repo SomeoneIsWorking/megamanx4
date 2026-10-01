@@ -27,8 +27,8 @@ a human action at a live console after launch, later and more specific than the 
 | `PSXPORT_X4_DISC` | path (port fact, not a CVar) | — | — | `GameConfig::discEnvVar` | `tools/resolve_disc.py` host-side; the framework's disc resolver guest-side |
 | `PSXPORT_X4_CARD` | path (port fact, not a CVar) | `scratch/saves/megamanx4.mcr` | — | `GameConfig::cardEnvVar` / `cardDefaultPath` | the framework's memory-card backend |
 | `PSXPORT_X4_WIDESCREEN` | Bool | `true` | yes | `x4::cv_widescreen` | **`x4::enh(x4::cv_widescreen)`** |
-| `PSXPORT_X4_COOP` | Bool | `false` | yes | `x4::cv_coop` | **`x4::enh(x4::cv_coop)`** — no consumer yet (RE-07) |
-| `PSXPORT_X4_FASTWAIT` | Bool | `true` | yes | `x4::cv_fastwait` | **`x4::enh(x4::cv_fastwait)`** — consumer: game/core/fast_wait.cpp (loading-coroutine conversion, RE-09 job B) |
+| `PSXPORT_X4_COOP` | Bool | `false` | yes | `x4::cv_coop` | **`x4::enh(x4::cv_coop)`** — no consumer yet |
+| `PSXPORT_X4_FASTWAIT` | Bool | `true` | yes | `x4::cv_fastwait` | **`x4::enh(x4::cv_fastwait)`** — consumer: game/core/fast_wait.cpp (loading-coroutine conversion) |
 
 ## Title render policy: Native and synthetic 60fps are not player options
 
@@ -46,7 +46,7 @@ The no-argument policy is therefore unambiguous. `PSXPORT_X4_WIDESCREEN` is the 
 that the title has a typed guest
 projection consumer; a persisted or launch/runtime `false` still supplies the exact 4:3 control.
 Default-on is not a pixel-verification claim: the framework candidates must still land and the
-deterministic off/on capture must classify culling and 2D layout before RE-08 is complete.
+deterministic off/on capture must classify culling and 2D layout before the widescreen work is complete.
 
 ## Native-override differential checks
 
@@ -122,7 +122,7 @@ Declaring these three as CVars rather than reading them with `cfg_on` is precise
 that UNKNOWN list and puts them in the REPL `cvars` dump.
 
 **AND THAT IS A COST, NOT ONLY A WIN — so this port pays it back explicitly.** Co-op and fast-wait are
-still `planned` (RE-07/09) and have no call site outside `enhancements.{h,cpp}`; widescreen is consumed
+still `planned` and have no call site outside `enhancements.{h,cpp}`; widescreen is consumed
 by `WidescreenPolicy`. `UNKNOWN … it did NOTHING in this run` is precisely the signal the framework had
 for "you set a knob and nothing consumed it", and registering a name is what silences it: a registered
 CVar with zero consumers resolves silently to `true`, the exit audit says `0 UNKNOWN`, and a user or a
@@ -135,7 +135,7 @@ So `game/core/enhancements.cpp` carries a `kUnimplemented` list (knob → fronti
 every knob the user turned ON through the chokepoint, producing one line per knob:
 
 ```
-[cfg:warn] PSXPORT_X4_COOP is DECLARED but NO feature reads it yet (RE-07) — this run did NOTHING with it. Enabling it is not evidence that the enhancement works.
+[cfg:warn] PSXPORT_X4_COOP is DECLARED but NO feature reads it yet — this run did NOTHING with it. Enabling it is not evidence that the enhancement works.
 ```
 
 The audit exists because the read-time check alone cannot fire: a knob nothing reads never reaches

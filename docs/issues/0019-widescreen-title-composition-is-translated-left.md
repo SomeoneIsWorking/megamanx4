@@ -3,7 +3,7 @@ id: 19
 title: Widescreen title composition is translated left because its 2D primitives never consume OFX
 status: investigating
 symptom: The 16:9 title image moves 162 host pixels left instead of exposing newly composed margins
-tags: widescreen,title,2d,composition,RE-08
+tags: widescreen,title,2d,composition
 state_items: S006
 created: 2026-08-24
 updated: 2026-08-26
