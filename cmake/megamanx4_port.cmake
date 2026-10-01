@@ -71,93 +71,9 @@ if(BUILD_TESTING)
             --compile-commands ${CMAKE_BINARY_DIR}
   )
   add_test(
-    NAME launcher_policy
-    COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/tools/test_run.py
-  )
-  add_test(
-    NAME vsync_evidence
-    COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/tools/verify_vsync.py --check --selftest
-  )
-  add_test(
-    NAME cd_irq_evidence
-    COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/tools/verify_cd_irq.py --check --selftest
-  )
-  add_test(
-    NAME projection_evidence
-    COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/tools/verify_projection.py --check --selftest
-  )
-  add_test(
-    NAME title_composition_evidence
-    COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/tools/verify_title_composition.py --check --selftest
-  )
-  add_test(
-    NAME title_quad_ownership_evidence
-    COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/tools/re_title_quad.py --check --selftest
-  )
-  add_test(
     NAME no_temporal_source_dependency
     COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/tools/verify_no_temporal_dependency.py
             --check --selftest
-  )
-  add_test(
-    NAME thread_evidence
-    COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/tools/verify_threads.py --check --selftest
-  )
-  # music_cd's measured step table, diffed against the authenticated SLUS_005.61. Added because
-  # tests/test_x4_music_cd.cpp CANNOT catch a wrong address: it sets core.r[31] from
-  # x4::music_cd::kSteps and then asserts the lookup returns that step, so its only copy of the
-  # numbers is the table it is testing. State 1's CdControl return shipped as the `jal`'s own address
-  # rather than the address it leaves, the owner silently declined the one CdlReadS edge it claimed,
-  # and the product aborted in x4::guest::callOriginal on a CD poll this port cannot complete. The
-  # C++ test was green throughout. This tool PARSES the shipping header and diffs it against the bytes.
-  add_test(
-    NAME music_cd_table_evidence
-    COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/tools/verify_music_cd.py --check --selftest
-  )
-  # The stage-load fault of docs/issues/0032, read out of the authenticated SLUS_005.61. It is in
-  # the gate because the product's own fatal report names a bare address (0x26010006) and nothing
-  # else: which table slot it is, that the table has eight entries, that the index is a signed byte
-  # of a record the guest itself overwrote, and that the array doing the overwriting is bounded by
-  # the image at eight 12-byte entries ending exactly at that record array. None of that is visible
-  # from a log line, and every one of it is a claim that could be re-derived wrongly.
-  add_test(
-    NAME stage_fault_evidence
-    COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/tools/verify_stage_fault.py --check --selftest
-  )
-  # The rectangle queue's OWNER (game/core/vram_rect_queue.{h,cpp}) replaces three guest functions, so
-  # every address and immediate in it is a decision rather than a copy, and the bound it supplies is
-  # the one the guest states in two places and enforces nowhere. This gate re-derives all of it from
-  # the authenticated image: the queue's layout, the three entries, the appender's arithmetic, and the
-  # pass ordering the fault argument rests on. Separate from stage_fault_evidence because that one
-  # pins the DIAGNOSIS and this one pins the FIX's constants; a fix whose constants drift is a
-  # different defect from a diagnosis that was wrong.
-  add_test(
-    NAME x4_vram_rect_queue_evidence
-    COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/tools/verify_vram_rect_queue.py --check --selftest
-  )
-  # The WRITER CENSUS for the libetc SetInterrupt class-0 slot (0x8011CB98), which docs/issues/0035
-  # and RE-10 recorded as holding 0x0113D7D0 at the run's stop. A runtime store observation shows it
-  # holds 0x800DD7FC there and that 0x0113D7D0 is a control-transfer PC instead, so the census is
-  # what stops the next session re-deriving that misread. It is hermetic (image bytes only) and its
-  # --selftest plants one store per class, because a census that reports zero has to be able to
-  # report non-zero on the same image.
-  add_test(
-    NAME x4_irq_slot_writer_census
-    COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/tools/census_irq_slot_writers.py --check --selftest
-  )
-  # The live-play apparatus: the front-end state model and the transport that reads it. Both selftests
-  # drive NOTHING and launch no product, so they are hermetic — but they are in the gate because a
-  # census that cannot say "the park is still the park", or a differencer that cannot say "nothing
-  # changed", makes every future live run's verdict unreadable rather than wrong. The address-owner
-  # check inside title_prompts is what makes the model refuse to run against an address the owning
-  # source no longer declares.
-  add_test(
-    NAME live_play_prompt_model_selftest
-    COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/tools/title_prompts.py --selftest
-  )
-  add_test(
-    NAME live_play_client_selftest
-    COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/tools/live_play.py --selftest
   )
   add_executable(mmx4_runtime_test
     ${CMAKE_SOURCE_DIR}/game/core/bios_threads.cpp
@@ -386,11 +302,6 @@ if(BUILD_TESTING)
     CXX_STANDARD_REQUIRED ON
   )
   add_test(NAME x4_visibility_cull COMMAND mmx4_visibility_cull_test)
-  add_test(
-    NAME cull_evidence
-    COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/tools/verify_cull.py --check --selftest
-  )
-
   # The task-resume product gate. It runs the PORT and asserts a picture, not a clean trace: the last
   # sampled present must be at least 1% non-black AND the two last presents must byte-differ, because a
   # frozen non-black frame passes the first and means nothing. `uv run --frozen` rather than

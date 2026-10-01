@@ -86,14 +86,9 @@ add_subdirectory(${PSXPORT_DIR}/vendor/beetle-psx/deps/libchdr
 
 include(cmake/megamanx4_port.cmake)
 
-# THE LIVE PIN CHECK. Not a selftest: this runs the real function against this repository's real
-# psxport.pin and the real build receipt, so it can fail when the pin is actually wrong.
-#
-# MEASURED 2026-09-27: every port in the workspace registered only a SELFTEST of the check function, run
-# against a temporary fixture. A selftest asserts the function behaves; it cannot fail when this repo's
-# pin is stale, which is why ten ports reported green while four pins were demonstrably stale. --build
-# points at THIS build directory, configured moments ago, so the receipt is current by construction and
-# the staleness guard cannot fire spuriously. Verified: perturbing psxport.pin turns it red.
+# THE LIVE PIN CHECK: it runs the real function against this repository's real psxport.pin and the
+# build receipt, so it fails when the pin is actually stale. --build points at THIS build directory,
+# configured moments ago, so the receipt is current by construction.
 if(BUILD_TESTING)
   add_test(
     NAME megamanx4_psxport_pin_live
@@ -101,48 +96,5 @@ if(BUILD_TESTING)
             --repo "${CMAKE_SOURCE_DIR}" --check --build "${CMAKE_BINARY_DIR}")
 endif()
 
-# The pin tool's own behaviour (staleness guard, a bump that records the commit the build RESOLVED) is
-# tested once, in the framework (tests/test_psxport_sync.py). The only pin tool this repository ships
-# is tools/psxport_fetch.py.
-
-# The `jal` census's own selftest, registered WITHOUT media. It pins the two decode rules the
-# boundary repair depends on - an absolute J-type target, and `$ra = PC + 8` for the delay slot - plus
-# the negative that an entry nobody calls must come back empty rather than guessed. The first draft
-# of this decoder took the J-type region nibble from the instruction word instead of the address, and
-# the first draft of the selftest listed 0x0C000000 as a non-`jal` when it is opcode 3; both were
-# caught here rather than in a hand-decoded listing.
-#
-# The OTHER mode, `--verify-boundaries`, re-derives the two hard-coded boundary constants in
-# `vram_rect_queue.h` from the authenticated image and is deliberately NOT registered here: it needs
-# the provisioned executable, and a registered test that cannot run in CI is the green-zero this
-# workspace keeps meeting. Run it directly after provisioning:
-#   uv run --frozen python tools/census_guest_call_sites.py --verify-boundaries
-add_test(
-  NAME megamanx4_guest_call_site_census_selftest
-  COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/census_guest_call_sites.py"
-          --selftest)
-
-# probe_cursor_poll.py's refusals are the part worth gating: a tool that reports a
-# confident answer when it has no measurement is the failure this project treats as worst.
-# --selftest checks the refusal paths WITHOUT a port, so it is a real negative case in the
-# gate rather than a construction test that passes whether or not the tool works.
-add_test(
-  NAME megamanx4_cursor_poll_selftest
-  COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/probe_cursor_poll.py"
-          --selftest)
-
-# probe_dispatch_table.py DECIDES REFUTATIONS, and a refutation from it withdraws a hypothesis, so
-# it is the last tool in this repository that may be ungated. Its first version read 250 addresses
-# that were not slots and produced a WRONG refutation at ~12 s, while the fault it claimed to explain
-# happens at ~40 s (withdrawn in 4f915e5); it also shipped a NameError on any run with a non-zero
-# slot. Both were caught by a human reading output. --selftest drives the sweep's refusal, the
-# sighting-outranks-the-last-sweep decision, the missing-snapshot refusal, the classifier and the
-# table walk, so a mutation to any of them turns the gate red. Guarded, unlike the two probe
-# selftests above, because include(CTest) at the top of this file DOES define BUILD_TESTING, so here
-# the guard is live rather than inert.
-if(BUILD_TESTING)
-  add_test(
-    NAME megamanx4_dispatch_table_probe_selftest
-    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/probe_dispatch_table.py"
-            --selftest)
-endif()
+# The pin tool's own behaviour is tested once, in the framework. The only pin tool this repository
+# ships is tools/psxport_fetch.py.

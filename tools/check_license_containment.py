@@ -24,7 +24,7 @@ WHAT IT CAN DETECT (independent classes, reported separately; A/B/C are HARD, A2
                  minus every identifier in the decomp's bundled Sony PSY-Q headers (those names are
                  Sony's SDK and appear in any PSX code), minus every identifier that also appears in a
                  BASELINE of unrelated port trees. Every subtraction prints its count. That baseline is
-                 a TRACKED file (docs/info/containment-baseline.txt, regenerate with
+                 a TRACKED file (docs/containment-baseline.txt, regenerate with
                  --write-baseline), because it used to be read from sibling port trees OUTSIDE this
                  repo: a bare clone then subtracted nothing and 27 generic words read as leaks.
   B2 MAP-NAME (advisory) — a name found ONLY in the decomp's symbol map and never in its C sources.
@@ -238,7 +238,7 @@ def phrases_from(text):
 # NOT INCLUDED, on purpose: psxport's own vocabulary. Subtracting the SCAN TARGET's words from the
 # signature set would remove by construction whatever a leak would look like — the circular error the
 # workspace already rejected once (WORKSPACE.md, `--sdk-filter K`).
-BASELINE_FILE = os.path.join("docs", "info", "containment-baseline.txt")
+BASELINE_FILE = os.path.join("docs", "containment-baseline.txt")
 
 
 def load_baseline_file(path):

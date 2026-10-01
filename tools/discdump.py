@@ -153,9 +153,8 @@ def _main(argv):
             total += size
             print(f"{path:<32} LBA {lba:<8} {size:>12} bytes")
         print(f"\n[discdump] {len(files)} files, {total} bytes total, on {disc}")
-        print("[discdump] DENOMINATOR: this is every entry discdump's ISO9660 walk returned. It says "
-              "nothing about what is INSIDE any of them — for 'is there code in here?' use "
-              "tools/code_scan.py, which prints its own denominators and blind spots.")
+        print("[discdump] This is every entry discdump's ISO9660 walk returned; it says nothing "
+              "about what is INSIDE any of them.")
         return 0
     if len(argv) < 3:
         print("usage: discdump.py get <PATH/ON/DISC> <outdir> [disc]", file=sys.stderr)
