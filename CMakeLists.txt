@@ -22,10 +22,9 @@ project(megamanx4 CXX C)
 
 # PSXPORT_DIR — WHERE THE FRAMEWORK SOURCE COMES FROM. Defaults to external/psxport, which is no
 # longer a git submodule (2026-08-16): tools/psxport_fetch.py --auto (called by run.sh) makes it a
-# SYMLINK to the workspace's shared framework clone when one exists, or a private clone at this
-# repo's psxport.pin on a fresh machine. So a fresh clone of this repo alone still builds standalone:
-# that property is what "each game is its own project using psxport as the framework" means, and it
-# must stay testable.
+# SYMLINK to the workspace's live framework checkout when one exists, or clones psxport main on a
+# machine that has none. So a fresh clone of this repo alone still builds standalone: that property is
+# what "each game is its own project using psxport as the framework" means, and it must stay testable.
 #
 # Point it at a specific framework checkout to build against in-progress framework work:
 #
@@ -42,26 +41,11 @@ if(NOT EXISTS "${PSXPORT_DIR}/cmake/psxport.cmake")
 endif()
 message(STATUS "psxport framework: ${PSXPORT_DIR}")
 
-# RECORD WHAT THIS CONFIGURE RESOLVED, so `external/psxport/tools/psxport_sync.py --check` can compare the framework
-# you actually BUILT against with the one psxport.pin RECORDS. The framework is no longer a git
-# submodule (external/psxport is a symlink to the workspace's shared clone, or a private clone at the
-# pin — see tools/psxport_fetch.py); the pin is provenance, and this file is what keeps it honest.
-execute_process(COMMAND git -C "${PSXPORT_DIR}" rev-parse HEAD
-                OUTPUT_VARIABLE PSXPORT_RESOLVED_SHA OUTPUT_STRIP_TRAILING_WHITESPACE
-                ERROR_QUIET RESULT_VARIABLE _psxport_rev_rc)
-if(NOT _psxport_rev_rc EQUAL 0)
-  set(PSXPORT_RESOLVED_SHA "unknown")   # honest: never silently record a plausible-looking sha
-endif()
-file(WRITE "${CMAKE_BINARY_DIR}/psxport_resolved.txt"
-     "dir = ${PSXPORT_DIR}\ncommit = ${PSXPORT_RESOLVED_SHA}\n")
-message(STATUS "psxport commit: ${PSXPORT_RESOLVED_SHA}")
-
-# The framework's OWN nested vendors (vendor/lucent, vendor/beetle-psx/deps/libchdr) are the SHARED
-# clone's concern now: they were initialized once in the dev clone, and external/psxport is a symlink
-# to it. A fresh machine's private clone at the pin gets them from tools/psxport_fetch.py (which
-# inits them non-recursively). If they are somehow missing, the error comes from inside psxport with a
-# clear "does not contain a CMakeLists.txt", and the fix is `git -C external/psxport submodule update
-# --init <vendor>` in the dev clone.
+# The framework's OWN nested vendors (vendor/lucent, vendor/beetle-psx/deps/libchdr) belong to the
+# checkout tools/psxport_fetch.py resolved: it initialises them non-recursively wherever it got the
+# framework from. If they are somehow missing, the error comes from inside psxport with a clear "does
+# not contain a CMakeLists.txt", and the fix is `git -C external/psxport submodule update --init
+# <vendor>` in that checkout.
 if(NOT EXISTS "${PSXPORT_DIR}/vendor/lucent/CMakeLists.txt")
   message(FATAL_ERROR "psxport's vendor/lucent is not checked out in the shared clone — run "
                       "`git -C ${PSXPORT_DIR} submodule update --init vendor/lucent` there once.")
@@ -85,16 +69,3 @@ add_subdirectory(${PSXPORT_DIR}/vendor/beetle-psx/deps/libchdr
                  ${CMAKE_BINARY_DIR}/libchdr_build EXCLUDE_FROM_ALL)
 
 include(cmake/megamanx4_port.cmake)
-
-# THE LIVE PIN CHECK: it runs the real function against this repository's real psxport.pin and the
-# build receipt, so it fails when the pin is actually stale. --build points at THIS build directory,
-# configured moments ago, so the receipt is current by construction.
-if(BUILD_TESTING)
-  add_test(
-    NAME megamanx4_psxport_pin_live
-    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/external/psxport/tools/psxport_sync.py"
-            --repo "${CMAKE_SOURCE_DIR}" --check --build "${CMAKE_BINARY_DIR}")
-endif()
-
-# The pin tool's own behaviour is tested once, in the framework. The only pin tool this repository
-# ships is tools/psxport_fetch.py.

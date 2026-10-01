@@ -2,7 +2,8 @@
 
 Factual capability coverage for the Mega Man X4 enhancement port. Epic intent lives in
 `docs/project-goals.md`, ownership in `docs/codemap.md`, open defects and missing features in
-`docs/issues/`.
+`docs/issues/`, and the reverse-engineering step chain in `docs/re-frontier.md` (read through
+`tools/re_frontier.py`).
 
 | ID | Capability | State | Evidence or gap |
 |---|---|---|---|

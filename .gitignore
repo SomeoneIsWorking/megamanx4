@@ -14,8 +14,8 @@ scratch/
 # `scratch/bin/megamanx4/`, ignored above, which is where the tooling puts it; a copy dropped loose in
 # the repo root is caught by review.
 
-# The framework. Not tracked: either a symlink to the workspace shared clone (local) or a
-# private clone at psxport.pin (fresh machine). Managed by tools/psxport_sync.py.
+# The framework. Not tracked: either a relative symlink to the workspace's live psxport checkout
+# (local) or a clone of its main (fresh machine). Managed by tools/psxport_fetch.py.
 /external/psxport
 # The vendored AGPL decomp is a REFERENCE; we never build it here, but a curious session might.
 # external/mmx4/disks/ matters specifically: upstream's README says the retail SLUS_005.61 goes in

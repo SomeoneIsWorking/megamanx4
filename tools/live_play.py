@@ -2177,12 +2177,8 @@ def main() -> int:
     if others:
         raise Refusal("REFUSED: refusing to start a second product instance; already running:\n  "
                       + "\n  ".join(others))
-    resolved = EXECUTABLE.parent.parent / "psxport_resolved.txt"
-    if resolved.is_file():
-        fields = dict(line.split("=", 1) for line in resolved.read_text(errors="replace").splitlines()
-                      if "=" in line)
-        print(f"[live] product: {EXECUTABLE.relative_to(REPO)}  framework {fields.get('commit', '?')[:12]}"
-              f" ({fields.get('dir', '?')})")
+    framework_dir = (REPO / "external" / "psxport").resolve()
+    print(f"[live] product: {EXECUTABLE.relative_to(REPO)}  framework {framework_dir}")
     print(f"[live] boot image: {IMAGE.relative_to(REPO)}  settings: {SETTINGS.relative_to(REPO)}")
     print(f"[live] log: {LOG.relative_to(REPO)}  audio sink: {WAV.relative_to(REPO)}  "
           f"screenshots: {SHOT_DIR.relative_to(REPO)}")

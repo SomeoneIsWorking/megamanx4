@@ -40,9 +40,9 @@ features, and `docs/codemap.md` for ownership.
   repository and never enters psxport; `LICENSING.md` and `tools/check_license_containment.py` own
   that boundary. Sony PSY-Q headers in the reference are not available for copying. Fetch only
   `external/mmx4`, without recursively initializing its build-tool submodules.
-- `external/psxport` resolves to the shared writable checkout or a private clone at `psxport.pin`.
-  `tools/psxport_fetch.py --auto` establishes it; framework changes land in psxport and a verified
-  consumer pin is updated with `external/psxport/tools/psxport_sync.py --repo . --bump`.
+- `external/psxport` resolves to the workspace's live framework checkout, or to a clone of its main
+  where there is none. `tools/psxport_fetch.py --auto` establishes it; there is no framework pin, so a
+  framework change in psxport is immediately this port's framework.
 - Disc resolution is implemented once in `tools/resolve_disc.py`: explicit argument,
   `PSXPORT_X4_DISC`, `.env`, then an unambiguous repository-root CHD. The exact executable must pass
   `tools/extract_exe.py` identity validation. Do not package game data.
@@ -51,7 +51,7 @@ features, and `docs/codemap.md` for ownership.
 
 - `tools/verify.py` is the gate (`uv run --frozen python tools/verify.py`). It configures the build,
   builds `megamanx4_port`, and runs the CTest set: the C++ style policy, the temporal-dependency
-  source and shipping-binary checks, the `x4_*` hermetic seam tests, and the live psxport pin check.
+  source and shipping-binary checks, and the `x4_*` hermetic seam tests.
 - `tools/live_play.py` and `tools/title_prompts.py` drive a headless run over the control channel:
   input, front-end state, presents, and frame captures. That is how the product is exercised.
 - `tools/verify_task_resume.py` runs the product to its frame cap and asserts a non-frozen picture.
