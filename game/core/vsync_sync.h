@@ -24,7 +24,7 @@ inline constexpr std::uint32_t kVSync = 0x800E4DB0u;
 inline constexpr std::uint32_t kVSyncEntryEnd = 0x800E4DB4u;
 
 // The measured state libetc VSync keeps. Each of these is a word the retail body at 0x800E4DB0
-// reads or writes, named here so the owner and tools/verify_vsync.py read the same numbers.
+// reads or writes, named here so the owner and its tests read the same numbers.
 //
 //   kVblankCounter  0x8011DC50  the VBlank field counter. The IRQ-0 handler 0x800E56FC increments
 //                                it once per field (0x800E5700 read / 0x800E5728 write), the init

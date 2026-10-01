@@ -18,16 +18,16 @@ using NativeFunction = void (*)(Core *);
 // exits remain explicit at their owning boundaries.
 //
 // `returnPc` IS the boundary the call must reach to return, and it is NOT optional for a native
-// owner. Measured 2026-09-29 (`docs/issues/0037`): a one-argument form that took the boundary from
+// owner. Measured against the image: a one-argument form that took the boundary from
 // `core->r[31]` gave the RLE decompress call at 0x80016FF4 the boundary 0x80022060 — the return
 // address of an UNRELATED `jal 0x80015ecc` at 0x80022058. The decompressor cannot return there, so
 // it ran 757,804 cycles past its own end and faulted at a non-address. A `r[31]` is a return address
 // only when GUEST code executed the `jal`, and no native owner can supply one that way.
 //
 // The return address is a property of the guest call this owner is standing in for, so it comes from
-// the guest image: `tools/census_guest_call_sites.py` reports every `jal` that targets an entry, and
-// the boundary is `jal + 8` (a `jal` links `$ra` to PC+8, because of the delay slot). Supply it
-// explicitly rather than letting it be guessed.
+// the guest image: the boundary is `jal + 8` for the `jal` that targets an entry (a `jal` links
+// `$ra` to PC+8, because of the delay slot). Supply it explicitly rather than letting it be
+// guessed.
 void call(Core *core, std::uint32_t address, std::uint32_t returnPc);
 
 // Call a guest entry WITHOUT a known return point. This is honest only while the call is PROVEN to

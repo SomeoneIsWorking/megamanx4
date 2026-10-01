@@ -47,8 +47,8 @@ Reserved`). sozud's AGPL LICENSE covers sozud's work; it cannot relicense Sony's
 **We redistribute none of it.** A submodule is a gitlink: this repo records a 40-char commit SHA and a
 URL, so zero bytes of mmx4 — and therefore zero bytes of Sony's headers — enter this repo's object
 database or its history. That is the strongest argument for the submodule over vendoring a copy or a
-subtree merge, both of which would put those headers in our history where `tools/go_public.py` would
-have to flag them forever.
+subtree merge, both of which would put those headers in our history permanently, where every future
+review has to flag them forever.
 
 Treat the subtree as read-only reference documentation, like a PDF of the SDK manual. Do not copy it
 into `game/`, and do not vendor it into `psxport` "to make the types line up" — psxport has **no PSY-Q

@@ -17,14 +17,14 @@
 //   * emitting exactly 8 entries — the queue's DESIGNED capacity — and then running the terminator
 //     store zeroes `item_objects[0].x_pos` at +8.
 //
-// Neither is a hypothetical. The first is the measured fatal fault of docs/issues/0032/0033/0034. The
+// Neither is a hypothetical. The first is the stage-load fault of docs/issues/0034. The
 // second fires on every field that fills the queue, and is a property of the appender rather than of
 // any particular object state. The bound is a LAYOUT fact, not a guess: `kQueueEnd` is exactly eight
 // 12-byte records past `kQueueBase`, and the guest's own `clear` (`sltiu $2,$5,8` at 0x80015E40) and
 // `upload` (`addiu $3,$s0,0x60` at 0x80015E64) both state eight.
 //
-// Every constant below is gated against the authenticated SLUS_005.61 by
-// tools/verify_vram_rect_queue.py, which fails if any word, immediate or address disagrees. The
+// Every constant below names the instruction in the authenticated SLUS_005.61 that materialises it,
+// so any word, immediate or address can be checked against the image. The
 // AGPL-3.0 reference decompilation (external/mmx4) supplied the structure NAMES and the loop shape;
 // the C++ here is this repository's own, and no decompiled text is shipped.
 #pragma once
@@ -70,8 +70,8 @@ inline constexpr std::uint32_t kLoadImageGuest = 0x800EA4D0u;
 
 // The return points for the two guest calls this owner stands in for. A `jal` links `$ra` to PC+8
 // because of the delay slot, so the return address is `jal + 8`; both values below are the call
-// sites this owner's own comments already named, and `tools/census_guest_call_sites.py` reproduces
-// both from the image independently - the decompressor's is the ONLY `jal` targeting 0x80016FF4 in
+// sites this owner's own comments already named, and both are reproducible from the image:
+// the decompressor's is the ONLY `jal` targeting 0x80016FF4 in
 // 294,400 words, so it is the call and not a candidate; LoadImage has 11 sites, and this is the one
 // at 0x80015E8C that this owner documents.
 //
@@ -79,7 +79,7 @@ inline constexpr std::uint32_t kLoadImageGuest = 0x800EA4D0u;
 // which is a return address only when GUEST code executed the `jal`; a native owner inherited
 // whatever the guest last left, and the decompress call inherited 0x80022060 - the return address of
 // an unrelated `jal 0x80015ecc`. It could not return there, ran 757,804 cycles past its own end and
-// faulted at a non-address. See `docs/issues/0037`.
+// faulted at a non-address.
 inline constexpr std::uint32_t kDecompressGfxReturn = 0x80015F5Cu;  // `jal` at 0x80015F54
 inline constexpr std::uint32_t kLoadImageGuestReturn = 0x80015E94u; // `jal` at 0x80015E8C
 

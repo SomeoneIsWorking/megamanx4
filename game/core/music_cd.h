@@ -11,8 +11,8 @@ namespace x4::music_cd {
 using GuestBody = void (*)(Core *);
 
 // Every address and literal below is read out of the authenticated SLUS_005.61 image with
-// llvm-objdump over its text bytes (see docs/re-frontier.md RE-02: Ghidra's MIPS:BE:32 sleigh
-// decodes this image incorrectly, so it is not the instrument).
+// llvm-objdump over its text bytes (Ghidra's MIPS:BE:32 sleigh decodes this image incorrectly, so
+// it is not the instrument).
 //
 // The state machine lives in the guest's XA/BGM module. Its per-field entry 0x800169D8 gates on
 // `D_80141BD4 == 2` (`800169e0 lw $3,0x1bd4($3)` / `800169e8 bne $3,$2,0x80016B24`) and then loads
@@ -84,10 +84,9 @@ inline constexpr std::uint32_t kResult = 0x80139554u;
 //
 // So the call address is now a field, `kJalReturnOffset` states the +8 once, and a `static_assert`
 // holds the relationship for every step: a mis-entered return address breaks the BUILD instead of
-// breaking the product. `tools/verify_music_cd.py` is the other half — it parses this table out of this
-// file and diffs every entry against the authenticated bytes, because `tests/test_x4_music_cd.cpp`
-// takes its expectations from these same constants and so can only prove the lookup is consistent with
-// the table, never that the table matches SLUS_005.61.
+// breaking the product. `tests/test_x4_music_cd.cpp` takes its expectations from these same
+// constants, so it proves the lookup is consistent with the table, not that the table matches
+// SLUS_005.61; re-read every entry against the authenticated bytes when this table changes.
 struct Step {
   std::uint32_t state;
   std::uint32_t handler;

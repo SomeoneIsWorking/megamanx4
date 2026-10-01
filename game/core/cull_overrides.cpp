@@ -11,9 +11,8 @@
 // These bodies are leaves: they allocate no frame, call nothing, and clobber only caller-saved
 // registers ($2-$15, $24, $25) per the MIPS ABI, which the guest's own compiler observed at all 895
 // call sites. The one register a caller may read is $v0, and every adapter writes it with the site's
-// own return value. tools/verify_cull.py measures the 895 call sites and reports how many read a
-// caller-saved register before redefining it; that count is the evidence for this paragraph, and it is
-// printed by the gate rather than asserted here.
+// own return value. The 895 call sites were measured for how many read a caller-saved register
+// before redefining it; that count is the evidence for this paragraph.
 //
 // A site that returned a value its callers test IS reproduced faithfully, because the value is the
 // contract: 0x8002B160 and 0x8002B1E8 return 1 when the object is OFF screen (external/mmx4/src/main/

@@ -47,7 +47,7 @@ psx::config::BoolVar cv_fastwait("PSXPORT_X4_FASTWAIT",
 // runtime signal the framework had for "you set a knob and nothing happened": an unrecognised
 // PSXPORT_* name gets `[cfg:warn] UNKNOWN knob ... it did NOTHING in this run` plus an UNKNOWN count in
 // the exit audit, while a registered knob with zero call sites resolves silently to `true` and looks
-// like a working feature. Co-op remains `status: planned` (docs/re-frontier.md RE-07) and has no call
+// like a working feature. Co-op remains `status: planned` (docs/project-goals.md) and has no call
 // site outside this file, so it remains in this list. Widescreen left the list with its first real
 // consumer; fast-wait left it when the loading-coroutine conversion landed (game/core/fast_wait.cpp).
 //

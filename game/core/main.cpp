@@ -48,7 +48,7 @@ int main(int argc, char **argv) {
   static x4::X4Runtime runtime;
   psxport_install_game(runtime);
   // Say out loud which enhancement knobs this run will do NOTHING with. Co-op and fast-wait remain
-  // `planned` (docs/re-frontier.md RE-07/09), so a user who sets PSXPORT_X4_COOP=1 today would
+  // `planned` (docs/project-goals.md), so a user who sets PSXPORT_X4_COOP=1 today would
   // otherwise see a completely clean startup and a clean exit audit — registering them as CVars is
   // exactly what removed the framework's "UNKNOWN knob ... it did NOTHING" warning for them.
   x4::audit_declared_enhancements();

@@ -13,7 +13,7 @@
 //
 // `affect: full` is the only class that MUST be force-suppressed under a byte-compare run, and
 // docs/behavior-map.md's `check` gate FAILS an `affect: full` entry whose `guard` does not cite that
-// suppression. Registered knobs: ../../docs/config.md. Design: ../../docs/plans/enhancements.md.
+// suppression. Registered knobs: ../../docs/config.md. Design: ../../docs/project-goals.md.
 //
 // WHY A CHOKEPOINT AND NOT A CVar READ AT EACH CALL SITE. The framework put cfg_enh()'s suppression in
 // cfg.cpp for a stated reason — "that suppression is the whole point of this function living in cfg

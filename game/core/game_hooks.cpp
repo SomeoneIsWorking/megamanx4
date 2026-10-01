@@ -52,7 +52,7 @@ static void unstood_up(const char *what) {
            "%s was called, but this port has not stood that path up yet. "
            "Reaching it means "
            "the run entered an un-RE'd framework path — see "
-           "docs/re-frontier.md. Refusing "
+           "docs/issues/. Refusing "
            "to continue with fabricated behaviour.",
            what);
   abort();

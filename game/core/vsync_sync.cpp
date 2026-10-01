@@ -234,7 +234,7 @@ void serveVSync(Core *core) {
   // The retail return value, sampled at ENTRY (0x800E4DD0..0x800E4DEC): the 16-bit difference
   // between the HBlank-clocked root counter the image names and VSync's own previous sample of it.
   // The two register addresses are read out of the guest's own cells rather than hardcoded, because
-  // nothing in the resident text ever stores them (tools/verify_vsync.py pins that).
+  // nothing in the resident text ever stores them.
   const std::uint32_t gpuStat = c.mem_r32(c.mem_r32(kRegisterCell0));
   const std::uint32_t elapsed = (c.mem_r32(c.mem_r32(kRegisterCell1)) - c.mem_r32(kLastSample)) & 0xFFFFu;
 
@@ -257,7 +257,7 @@ void serveVSync(Core *core) {
     // Both counter waits, as host fields. The LAST field is a typed `FrameBoundary` exit rather than
     // a park, and that is not a choice — it is what makes the turn END here.
     //
-    // MEASURED on the working movie run (scratch/strloop/probe_str_loop.log): the retail movie task
+    // MEASURED on a working movie run: the retail movie task
     // 0x8001D064 reported "1 of 8 task turn(s) have needed a budget resume ... the other 7 reached a
     // guest field boundary", i.e. its per-field pull's VSync(0) at 0x80018BBC ended almost every
     // turn. A park-only wait does not: the fiber suspends and resumes INSIDE this function, so the
@@ -288,7 +288,7 @@ void serveVSync(Core *core) {
     // previous RCNT1 sample (0x800E4EDC). Both are sampled one field before the exit above, and the
     // only thing that reads either of them is THIS function's own next call, so the guest-visible
     // consequence is confined to the elapsed sample below — and no one of the 42 call sites in
-    // SLUS_005.61 reads this leaf's result (tools/verify_vsync.py census).
+    // SLUS_005.61 reads this leaf's result.
     c.mem_w32(kLastSync, c.mem_r32(kVblankCounter));
     c.mem_w32(kLastSample, c.mem_r32(c.mem_r32(kRegisterCell1)));
   }

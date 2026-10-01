@@ -14,7 +14,7 @@ namespace x4 {
 namespace {
 
 // SLUS_005.61's sole SetGeomOffset/SetGeomScreen publication uses a 320x240 projection and H=512.
-// tools/verify_projection.py derives the call site and arguments from the retail executable.
+// The call site and arguments are read out of the retail executable.
 constexpr GuestProjectionGeometry kRetailProjection{{320, 240}, 320};
 constexpr uint32_t kDrawEnvironmentWidthOffset = 4u;
 

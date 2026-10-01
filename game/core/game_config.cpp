@@ -9,7 +9,7 @@
 // An address stays ZERO until it has been reverse-engineered in this repo. That is the honest value:
 // psxport fails fast on a zero it needs, whereas a plausible-looking WRONG address does not fail
 // cleanly — it breaks boot or diverges the byte-compare in a way that reads as a framework bug. Each
-// group names its evidence or the open step in docs/re-frontier.md.
+// group names its evidence or the open step in docs/issues/.
 //
 // An AGPL-3.0 MATCHING decompilation of this exact executable exists (external/mmx4, docs/references.md;
 // its declared byte-exact build target is SHA-1 213733031136d095ca275d6957695aa25011cfa5, which is the
@@ -154,12 +154,7 @@ static_assert(kCrt0BssZeroLo < kPsExeTextAddr + kPsExeTextSize,
 //   0x8001218C  lui a2,0x8013 / addiu a2,a2,-0xB94   slot 1 buffer = 0x8012F46C
 //   0x80012194  jal 0x800EE0D0
 //   0x80012198  addiu a3,zero,0x22                    slot 1 capacity = 34 bytes
-//
-// Reproduce the whole-text call census and compare these shipping constants against its dataflow:
-//
-//   python3 tools/verify_pad.py --check
-//   python3 tools/verify_pad.py --selftest
-//
+
 // No `padDriverFn` or pointer table is implied by InitPAD's two direct buffer arguments. The framework
 // supports this exact shape: when padSlotPtrTable is zero, it writes its four-byte packet to these
 // fixed buffers. Leaving the unrelated fields zero is therefore a measured ownership decision, not an
@@ -273,7 +268,7 @@ static const GameConfig g_x4_cfg = {
     // across 25.2 MiB; the calibrated code-window filter reads median 2.5% on ARCs against 99.4% at the
     // header-declared entry region; ≤9.1% of j/jal targets land inside .text vs 85.0% in the boot exe),
     // and the decomp's splat config declares exactly one code segment and not one overlay. See
-    // docs/codemap.md and docs/info/claims/. BLIND SPOT, stated because the method cannot see past it:
+    // docs/references.md. BLIND SPOT, stated because the method cannot see past it:
     // this asserts "no PLAIN R3000A code outside the boot exe", not "no code" — packed/compressed code
     // inside an .ARC would read as a texture.
     //
@@ -331,7 +326,7 @@ static const GameConfig g_x4_cfg = {
     // Each window is an exact measured ownership range: the full libetc VSync entry and the three
     // contiguous BIOS thread thunks used by X4's retail scheduler. The native frame shell owns all
     // timing, so every guest VSync mode traps. Adjacent library/engine code remains refused;
-    // tools/verify_{vsync,threads}.py derive both ranges from SLUS_005.61.
+    // Both ranges are read out of SLUS_005.61.
     //
     // `.vsyncTrap` IS STILL REQUIRED, and not for the behaviour it used to imply. Two things read
     // it: `psx::PlatformHle::bindVSyncBoundary` installs the framework's own all-mode leaf there, and

@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // visibility_cull.cpp — the recovered SLUS_005.61 cull predicate.
 //
-// Every constant, address and comment in this file is a MEASURED fact of the extracted executable.
-// tools/verify_cull.py re-derives the immediates and the census from SLUS_005.61 itself and fails the
-// gate if the image disagrees; tools/probe_mmx4_cull.py is the census that found the owners in the
-// first place. The matching AGPL decomp (external/mmx4) supplied the function names only.
+// Every constant, address and comment in this file is a MEASURED fact of the extracted executable:
+// the immediates were decoded from SLUS_005.61 itself. The matching AGPL decomp (external/mmx4)
+// supplied the function names only.
 //
 // This file knows nothing about the guest ABI, the native seam, or which register a site reads its
 // half-extent from. That is cull_overrides.cpp, and the separation is load-bearing rather than

@@ -14,7 +14,7 @@
 // THE ROOT CAUSE IS ONE THING, and it is not "two functions forgot 428". Every cull owner in the
 // resident code states its window in the SAME retail idiom, found by decoding all 294,400
 // instruction words of the executable's text section and searching for the idiom rather than for a
-// list of known addresses (tools/probe_mmx4_cull.py: 7 object-pool owners, 895 call sites). The idiom
+// list of known addresses (7 object-pool owners, 895 call sites). The idiom
 // is
 //
 //     t = v + A ; t &= 0xFFFF ; (u32)t <u B
@@ -22,7 +22,7 @@
 // which over the s16 the guest loaded is exactly the half-open box [-A, B-A). One recovered predicate
 // serves all of them and the ONLY terms that change for widescreen are A and B.
 //
-// RETAIL FACTS (each an immediate in the image, re-derived by tools/verify_cull.py; the address sits
+// RETAIL FACTS (each an immediate in the image; the address sits
 // beside every constant). PLAN-DERIVED (one term only). The plan contributes the horizontal margin
 // and nothing else:
 //
@@ -217,7 +217,7 @@ private:
 // PUBLISHES the on_screen flag or RETURNS a value, what a returned 1 means, and where its scroll
 // comes from. This table is the owner's binding of guest address to recovered parameters, and the
 // adapters below take their slack and polarity from it rather than repeating them, so there is one
-// place to be wrong. tools/verify_cull.py re-derives every row from SLUS_005.61 — the address, the
+// place to be wrong. Every row is re-derivable from SLUS_005.61 — the address, the
 // `addiu` addend and the `sltiu` bound at each one — and fails the gate if the image disagrees.
 struct MeasuredSite {
   std::uint32_t address;

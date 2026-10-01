@@ -4,9 +4,8 @@
 // vram_rect_queue.cpp — the native owner of the guest's VRAM rectangle upload queue.
 //
 // See vram_rect_queue.h for what is owned and why. The recovery is from the authenticated
-// SLUS_005.61 bytes; every constant in the header carries the instruction that materialises it, and
-// tools/verify_vram_rect_queue.py re-derives all of them from the image and fails the gate if any
-// disagrees. The AGPL-3.0 reference decompilation supplied structure names and the loop shape; the
+// SLUS_005.61 bytes; every constant in the header carries the instruction that materialises it.
+// The AGPL-3.0 reference decompilation supplied structure names and the loop shape; the
 // C++ below is this repository's own.
 #include "vram_rect_queue.h"
 
@@ -235,11 +234,11 @@ void append(Core &core, std::uint32_t object, std::int32_t x, std::int32_t y) {
   //
   // The return point is `jal + 8` = 0x80015F5C, because a `jal` links `$ra` to PC+8 (the delay slot).
   // It is the ONLY `jal` in the whole image that targets 0x80016FF4 - 1 site of 294,400 words
-  // scanned, cross-checked by `tools/census_guest_call_sites.py` - so this is the call being stood
-  // in for and not a choice among candidates. Before this was supplied, `x4::guest::call` took the
+  // scanned - so this is the call being stood in for and not a choice among candidates.
+  // Before this was supplied, `x4::guest::call` took the
   // boundary from `core->r[31]` and inherited 0x80022060, the return address of an unrelated
   // `jal 0x80015ecc`; the decompressor could not return there, ran 757,804 cycles past its own end
-  // and faulted at a non-address. See `docs/issues/0037`.
+  // and faulted at a non-address.
   runGuest(core, kDecompressGfxGuest, kDecompressGfxReturn, stream, buffer, caller);
 
   emitBands(core, buffer, x, y, bands, record);

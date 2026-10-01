@@ -68,11 +68,11 @@ void call(Core &core, GuestDispatch dispatch, std::uint32_t entry, std::uint32_t
   // of ordering, and an owner that did not inherited whatever the guest last left. Measured
   // 2026-09-29: the decompress call inherited 0x80022060, the return address of an unrelated
   // `jal 0x80015ecc`, and ran 757,804 cycles off the end of its own function
-  // (`docs/issues/0037`). `x4::guest::call` no longer guesses, so this states the boundary.
+  // `x4::guest::call` no longer guesses, so this states the boundary.
   //
   // 0x80018AA0 is the return address of `jal 0x800ED574` at 0x800189A0, one of exactly TWO `jal`
-  // sites targeting DecDCTvlc in 294,400 scanned words (`tools/census_guest_call_sites.py`); this
-  // is the one this owner stands in for. The other is 0x80018E24.
+  // sites targeting DecDCTvlc in 294,400 scanned words; this is the one this owner stands in for.
+  // The other is 0x80018E24.
   //
   // So the production dispatch is `x4::guest::callWithRegisterReturn`, which reads that register and
   // REFUSES if it does not resolve in a code image - which is the whole difference between a stated

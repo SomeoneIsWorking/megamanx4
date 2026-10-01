@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Derived from external/mmx4/src/main/BBE34.c; retail addresses and layout are independently
-// re-measured by tools/verify_title_composition.py from SLUS_005.61.
+// measured from SLUS_005.61.
 #include "title_layout.h"
 
 #include "core.h"

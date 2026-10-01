@@ -296,9 +296,8 @@ void callWithRegisterReturn(Core *core, std::uint32_t address) {
                   "not in any code image. Either this owner did not set `r[31]` to the return "
                   "address of the call it stands in for, or the guest left a stale value there. "
                   "Refusing: resuming against this address is how the 2026-09-29 corruption ran "
-                  "757,804 guest cycles past the end of a function. `tools/"
-                  "census_guest_call_sites.py` lists the `jal` sites that target this entry; the "
-                  "return address is `jal + 8`",
+                  "757,804 guest cycles past the end of a function. The return address is the "
+                  "`jal` that targets this entry, plus 8",
                   address,
                   returnPc);
     std::abort();
@@ -394,8 +393,8 @@ void callWithoutKnownReturn(Core *core, std::uint32_t address) {
   lucent::error("x4-guest",
                 "guest call 0x{:08X} outlived one host turn and this owner has NO return point for "
                 "it, so there is no boundary to resume against: {} cycles at 0x{:08X}. Supply one - "
-                "`tools/census_guest_call_sites.py` lists every `jal` that targets this entry, and "
-                "the return address is `jal + 8`. Refusing rather than resuming against "
+                "the return address is the `jal` that targets this entry, plus 8. Refusing "
+                "rather than resuming against "
                 "`core->r[31]`, which is a stale return address left by whatever the guest called "
                 "last (measured 2026-09-29: that resumed 0x80016FF4 against 0x80022060 and ran "
                 "757,804 cycles off the end of the function)",

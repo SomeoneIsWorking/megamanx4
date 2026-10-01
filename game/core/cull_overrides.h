@@ -6,8 +6,8 @@
 // exhaustively over all 65,536 coordinates without linking the guest dispatcher, and it means a change to
 // the dispatch seam cannot reach the arithmetic.
 //
-// Every address and every register this file names was measured from the extracted executable and is
-// re-derived by tools/verify_cull.py, which fails the gate if the image disagrees with any of it.
+// Every address and every register this file names was measured from the extracted executable; the
+// address sits beside the constant it belongs to.
 #pragma once
 
 #include "visibility_cull.h"

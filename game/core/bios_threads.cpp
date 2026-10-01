@@ -35,8 +35,7 @@ namespace {
 // comment asserted a mechanism the image does not contain, now retired (see docs/issues/0028). The
 // task is NOT parked in a wait: it burns exactly one host turn of guest CPU per turn and its
 // budget-exhaustion PC keeps moving, which is the signature of work rather than of a wait.
-// Histogrammed over a 16,000-present run (tools/probe_post_movie_motion.py and scratch/motion/), the
-// resume PC is:
+// Histogrammed over a 16,000-present run, the resume PC is:
 //     turns 1..1,200       inside `DecDCTvlc` 0x800ED574..0x800ED8D8 — the stage's MDEC decode
 //     turns 1,200..1,765   the object-update set 0x800216EC / 0x80021858 / 0x80023F7C..0x80027704
 // and 0x80021858 is `update_misc_objects` in the matching decomp's config/symbols.us.txt. Its walk

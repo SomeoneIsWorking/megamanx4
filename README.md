@@ -8,7 +8,7 @@ Unlike psxport's other consumers this is an **enhancement port, not a native-eng
 already runs at 60fps, so there is no frame interpolation, no native producer and no native renderer to
 build. The three deliverables are widescreen, drop-in co-op (P2 spawns as the other hunter), and
 collapsing the game's own scripted wait states — all of them deliberate guest-state changes, gated by
-CVars and force-suppressed under the byte-compare oracle. See `docs/plans/enhancements.md`.
+CVars and force-suppressed under the byte-compare oracle. See `docs/project-goals.md`.
 
 ## Status: guest runtime reaches the front end; playability is not yet verified
 
@@ -26,12 +26,12 @@ or co-op is complete. What exists:
 - a default-on synchronous direct/archive load owner whose measured requests finish in one issuer
   call, plus removal of the measured loading-presentation task; exact destination-byte comparison and
   a capture proving no loading frame reaches presentation remain open,
-- the project registries (`docs/re-frontier.md`, `docs/codemap.md`, `docs/behavior-map.md`,
-  `docs/config.md`, `docs/info/`, `docs/issues/`),
+- the project registries (`docs/codemap.md`, `docs/behavior-map.md`, `docs/config.md`,
+  `docs/project-state.md`, `docs/issues/`),
 - a vendored **AGPL-3.0 matching decompilation** of this exact executable, `external/mmx4`, whose
   declared build target is the same SHA-1 as the image extracted from this disc.
 
-`docs/codemap.md` is the honest inventory; `docs/re-frontier.md` is the ordered RE chain.
+`docs/codemap.md` is the ownership inventory; `docs/project-state.md` is the capability ledger.
 
 ## Getting started
 
@@ -41,7 +41,6 @@ git submodule update --init external/mmx4           # optional matching-decomp r
 cp .env.example .env && $EDITOR .env                # point it at your own disc image (.env is gitignored)
 ./run.sh                                             # provision, build, launch
 ./run.sh --prepare-only                              # same cold path, but stop before launch
-uv run --frozen python tools/re_frontier.py next    # what to work on
 ```
 
 `tools/psxport_fetch.py` resolves the framework at the recorded pin and initializes its required
@@ -64,8 +63,7 @@ package managers itself.
 ## Legal
 
 **No game content is distributed here.** The disc image, the executable extracted from it and the
-runtime JIT cache derived from it are all yours and are gitignored. `tools/go_public.py` audits the
-full history for disc-derived material and machine-specific paths.
+runtime JIT cache derived from it are all yours and are gitignored.
 
 ### Licensing
 
