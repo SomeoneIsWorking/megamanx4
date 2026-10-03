@@ -8,6 +8,7 @@
 #include "game.h"
 #include "gpu_timeout.h"
 #include "guest_execution.h"
+
 #include "legacy_game_interface.h"
 #include "movie_cleanup.h"
 #include "music_stream.h"

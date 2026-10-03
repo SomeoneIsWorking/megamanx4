@@ -8,6 +8,7 @@
 #include "execution_services.h"
 #include "game.h"
 #include "guest_execution.h"
+#include "native_dispatch.h"
 
 #include <array>
 #include <cstdlib>
@@ -312,7 +313,7 @@ void run(Core *core) {
 }
 
 void registerOverride(Core &core) {
-  guest::install(core, kEntry, "stream_startup::startStr", static_cast<void (*)(Core *)>(run));
+  psx::cpu::installNativeOverride(core, kEntry, "stream_startup::startStr", static_cast<void (*)(Core *)>(run));
 }
 
 } // namespace x4::stream_startup

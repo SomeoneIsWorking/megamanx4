@@ -10,7 +10,6 @@
 #include "enhancements.h"
 #include "fs_util.h"
 #include "game.h"
-#include "guest_execution.h"
 #include "hw_bind.h"
 #include "psx_exe_image.h"
 #include "store_observe.h" // store_observe_attach — PSXPORT_STORE_OBSERVE on a title-owned spine
@@ -108,11 +107,10 @@ int main(int argc, char **argv) {
                clientFrameCap);
   native_boot_run(c);
   // The frame loop has returned, so this is the title's run-end path. The guest-call census lives
-  // with the owner that made the calls: it reports how many completed, how many had to be RESUMED
-  // past the one-display-field host turn, and the deepest one, so a run is never described only by
-  // what it drew. (X4Runtime::bootInit is not the run end — native_boot_run calls it to enter the
-  // loop.)
-  x4::guest::reportGuestCallCensus("after native boot");
+  // with the Core that made the calls: it reports how many completed, how many had to be RESUMED
+  // past the one-display-field host turn, and the deepest one. (X4Runtime::bootInit is not the run
+  // end - native_boot_run calls it to enter the loop.)
+  c->guestCallCensus().log("after native boot");
   // The rectangle queue's census names how many appends were REFUSED for want of room, which is
   // the number that says whether the bound this repository added is load-bearing on this disc. A
   // run that never refuses it says so with a denominator rather than by silence.

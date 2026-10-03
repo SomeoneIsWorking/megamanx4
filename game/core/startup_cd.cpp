@@ -5,6 +5,7 @@
 #include "core.h"
 #include "game.h"
 #include "guest_execution.h"
+#include "native_dispatch.h"
 
 #include <cstdlib>
 #include <lucent/log.h>
@@ -123,7 +124,7 @@ void run(Core *core) {
 }
 
 void registerOverride(Core &core) {
-  guest::install(core, kSetupEntry, "startup::initializeCd", static_cast<void (*)(Core *)>(run));
+  psx::cpu::installNativeOverride(core, kSetupEntry, "startup::initializeCd", static_cast<void (*)(Core *)>(run));
 }
 
 } // namespace x4::startup_cd

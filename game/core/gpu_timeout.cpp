@@ -3,7 +3,7 @@
 #include "cfg.h"
 #include "core.h"
 #include "execution_services.h"
-#include "guest_execution.h"
+#include "native_dispatch.h"
 
 #include <cstdlib>
 #include <lucent/log.h>
@@ -68,7 +68,7 @@ void setAlarm(Core *core) {
 }
 
 void registerOverride(Core &core) {
-  guest::install(core, kSetAlarmEntry, "gpu_timeout::setAlarm", setAlarm);
+  psx::cpu::installNativeOverride(core, kSetAlarmEntry, "gpu_timeout::setAlarm", setAlarm);
 }
 
 } // namespace x4::gpu_timeout

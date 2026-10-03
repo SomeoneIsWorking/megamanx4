@@ -10,7 +10,8 @@
 #include "vram_rect_queue.h"
 
 #include "core.h"
-#include "guest_execution.h"
+#include "native_dispatch.h"
+#include "resumable_guest_call.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -148,7 +149,7 @@ void runGuest(
   // The nested guest call returns to the return address the OVERRIDE was entered with, so a `jr $ra`
   // out of the callee lands on the dispatcher's boundary exactly as the guest's own `jal` would.
   core.r[31] = caller;
-  guest::call(&core, entry, returnPc);
+  psx::cpu::callGuestToReturnResuming(core, "vram_rect::flushRect", entry, returnPc);
   core.r[31] = savedLink;
 }
 
@@ -274,17 +275,17 @@ void append(Core &core, std::uint32_t object, std::int32_t x, std::int32_t y) {
 }
 
 void install(Core &core) {
-  guest::install(core, kClearQueueGuest, "vram_rect::clear", [](Core *active) {
+  psx::cpu::installNativeOverride(core, kClearQueueGuest, "vram_rect::clear", [](Core *active) {
     clear(*active);
   });
-  guest::install(core, kUploadQueueGuest, "vram_rect::upload", [](Core *active) {
+  psx::cpu::installNativeOverride(core, kUploadQueueGuest, "vram_rect::upload", [](Core *active) {
     upload(*active);
   });
   // The guest's three arguments are `$4` = object, `$5` = rectangle x, `$6` = rectangle y, read as
   // s16 by the two `sh` stores at 0x80015F7C and 0x80015F80. They are REGISTERS, not guest
   // addresses: `Core::mem_r16s` takes an address, so reading `$5` through it would name guest
   // address 5 and silently produce zero.
-  guest::install(core, kAppendBandsGuest, "vram_rect::append", [](Core *active) {
+  psx::cpu::installNativeOverride(core, kAppendBandsGuest, "vram_rect::append", [](Core *active) {
     const std::uint32_t object = active->r[4];
     const std::int32_t x = static_cast<std::int16_t>(active->r[5]);
     const std::int32_t y = static_cast<std::int16_t>(active->r[6]);

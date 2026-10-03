@@ -4,6 +4,7 @@
 #include "execution_services.h"
 #include "game.h"
 #include "guest_execution.h"
+
 #include "music_stream.h"
 
 namespace x4::frame {

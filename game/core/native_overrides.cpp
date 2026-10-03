@@ -6,6 +6,9 @@
 #include "core.h"
 #include "fast_wait.h"
 #include "guest_execution.h"
+#include "native_dispatch.h"
+#include "resumable_guest_call.h"
+
 #include "music_cd.h"
 #include "stream_interrupt.h"
 #include "vram_rect_queue.h"
@@ -27,7 +30,7 @@ void call(std::uint32_t address, Core *core) {
 }
 
 void original(std::uint32_t address, const char *owner, Core *core) {
-  guest::callOriginal(core, address, owner);
+  psx::cpu::callOriginalResumingToReturn(*core, owner, address, core->r[31]);
 }
 
 void originalSetGeomOffset(Core *core) {
@@ -169,18 +172,19 @@ void synchronousCdGetSector(Core *core) {
 } // namespace
 
 void install(Core &core) {
-  guest::install(core, kSetGeomOffset, "projection::SetGeomOffset", publishProjection);
-  guest::install(core, kSetDefDrawEnv, "projection::SetDefDrawEnv", publishDrawEnvironment);
-  guest::install(core, fast_wait::kDirectRequest, "fast_wait::directRequest", runDirectRequest);
-  guest::install(core, fast_wait::kDirectCdSetup, "fast_wait::directCdSetup", runDirectCdSetup);
-  guest::install(core, fast_wait::kArchiveRequest, "fast_wait::archiveRequest", runArchiveRequest);
-  guest::install(core, fast_wait::kArchiveCdSetup, "fast_wait::archiveCdSetup", runArchiveCdSetup);
-  guest::install(
+  psx::cpu::installNativeOverride(core, kSetGeomOffset, "projection::SetGeomOffset", publishProjection);
+  psx::cpu::installNativeOverride(core, kSetDefDrawEnv, "projection::SetDefDrawEnv", publishDrawEnvironment);
+  psx::cpu::installNativeOverride(core, fast_wait::kDirectRequest, "fast_wait::directRequest", runDirectRequest);
+  psx::cpu::installNativeOverride(core, fast_wait::kDirectCdSetup, "fast_wait::directCdSetup", runDirectCdSetup);
+  psx::cpu::installNativeOverride(core, fast_wait::kArchiveRequest, "fast_wait::archiveRequest", runArchiveRequest);
+  psx::cpu::installNativeOverride(core, fast_wait::kArchiveCdSetup, "fast_wait::archiveCdSetup", runArchiveCdSetup);
+  psx::cpu::installNativeOverride(
       core, fast_wait::kLoadingPresentationWait, "fast_wait::loadingPresentation", removeLoadingPresentationWait);
-  guest::install(core, fast_wait::kCdReady, "fast_wait::CdReady", synchronousCdReady);
-  guest::install(core, fast_wait::kCdControl, "fast_wait::CdControl", synchronousCdControl);
-  guest::install(core, fast_wait::kCdControlBlocking, "fast_wait::CdControlB", synchronousCdControlBlocking);
-  guest::install(core, fast_wait::kCdGetSector, "fast_wait::CdGetSector", synchronousCdGetSector);
+  psx::cpu::installNativeOverride(core, fast_wait::kCdReady, "fast_wait::CdReady", synchronousCdReady);
+  psx::cpu::installNativeOverride(core, fast_wait::kCdControl, "fast_wait::CdControl", synchronousCdControl);
+  psx::cpu::installNativeOverride(
+      core, fast_wait::kCdControlBlocking, "fast_wait::CdControlB", synchronousCdControlBlocking);
+  psx::cpu::installNativeOverride(core, fast_wait::kCdGetSector, "fast_wait::CdGetSector", synchronousCdGetSector);
   vram_rect::install(core);
   music_cd::registerOverrides(core);
 }

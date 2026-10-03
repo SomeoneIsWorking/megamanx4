@@ -6,6 +6,8 @@
 #include "coro.h"
 #include "execution_services.h"
 #include "guest_execution.h"
+#include "native_dispatch.h"
+
 #include "x4_context.h"
 
 #include <cstdlib>
@@ -169,7 +171,7 @@ bool State::pending() const {
 }
 
 void registerOverride(Core &core) {
-  guest::install(core, kSetModeEntry, "music_stream::setMode", runSetMode);
+  psx::cpu::installNativeOverride(core, kSetModeEntry, "music_stream::setMode", runSetMode);
 }
 
 } // namespace x4::music_stream

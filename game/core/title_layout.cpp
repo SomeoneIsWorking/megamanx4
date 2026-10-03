@@ -5,7 +5,9 @@
 
 #include "core.h"
 #include "enhancements.h"
-#include "guest_execution.h"
+#include "native_dispatch.h"
+#include "resumable_guest_call.h"
+
 #include "x4_context.h"
 
 #include <lucent/log.h>
@@ -20,7 +22,7 @@ std::int32_t centeredX(std::int32_t retailX, const GuestProjectionPlan &plan) {
 }
 
 void initializeMenuItem(Core *core) {
-  guest::callOriginal(core, kInitializeMenuItem, "title::initializeMenuItem original");
+  psx::cpu::callOriginalResumingToReturn(*core, "title::initializeMenuItem original", kInitializeMenuItem, core->r[31]);
 
   if (!enh(cv_widescreen)) {
     return;
@@ -32,7 +34,7 @@ void initializeMenuItem(Core *core) {
 }
 
 void registerOverride(Core &core) {
-  guest::install(core, kInitializeMenuItem, "title::initializeMenuItem", initializeMenuItem);
+  psx::cpu::installNativeOverride(core, kInitializeMenuItem, "title::initializeMenuItem", initializeMenuItem);
 }
 
 } // namespace x4::title_layout

@@ -21,7 +21,8 @@
 #include "cull_overrides.h"
 
 #include "core.h"
-#include "guest_execution.h"
+#include "native_dispatch.h"
+
 #include "x4_context.h"
 
 namespace x4::cull {
@@ -170,13 +171,16 @@ void quadOnScreen(Core *core) {
 } // namespace
 
 void registerOverrides(Core &core) {
-  guest::install(core, kBaseOnScreenTight.address, "cull::isOnScreenTight", isOnScreenTight);
-  guest::install(core, kBaseOnScreenWide.address, "cull::onScreenWide", onScreenWide);
-  guest::install(core, kBaseOnScreenParametric.address, "cull::onScreenParametric", onScreenParametric);
-  guest::install(core, kBaseOffScreenParametric.address, "cull::offScreenParametric", offScreenParametric);
-  guest::install(core, kBaseOffScreenLoose.address, "cull::offScreenLoose", offScreenLoose);
-  guest::install(core, kBaseOffScreenLayerZero.address, "cull::offScreenLayerZero", offScreenLayerZero);
-  guest::install(core, kQuadOnScreen.address, "cull::quadOnScreen", quadOnScreen);
+  psx::cpu::installNativeOverride(core, kBaseOnScreenTight.address, "cull::isOnScreenTight", isOnScreenTight);
+  psx::cpu::installNativeOverride(core, kBaseOnScreenWide.address, "cull::onScreenWide", onScreenWide);
+  psx::cpu::installNativeOverride(
+      core, kBaseOnScreenParametric.address, "cull::onScreenParametric", onScreenParametric);
+  psx::cpu::installNativeOverride(
+      core, kBaseOffScreenParametric.address, "cull::offScreenParametric", offScreenParametric);
+  psx::cpu::installNativeOverride(core, kBaseOffScreenLoose.address, "cull::offScreenLoose", offScreenLoose);
+  psx::cpu::installNativeOverride(
+      core, kBaseOffScreenLayerZero.address, "cull::offScreenLayerZero", offScreenLayerZero);
+  psx::cpu::installNativeOverride(core, kQuadOnScreen.address, "cull::quadOnScreen", quadOnScreen);
 }
 
 } // namespace x4::cull

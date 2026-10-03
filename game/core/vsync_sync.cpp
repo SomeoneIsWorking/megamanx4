@@ -27,6 +27,8 @@
 #include "execution_control.h"
 #include "game.h"
 #include "guest_execution.h"
+#include "native_dispatch.h"
+
 #include "image_identity.h"
 #include "input_path.h"
 #include "snapshot.h"
@@ -314,7 +316,7 @@ void serveVSync(Core *core) {
 }
 
 void registerOverrides(Core &core) {
-  guest::install(core, kVSync, "vsync::serveVSync", serveVSync);
+  psx::cpu::installNativeOverride(core, kVSync, "vsync::serveVSync", serveVSync);
 }
 
 } // namespace x4::vsync

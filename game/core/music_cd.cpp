@@ -2,7 +2,8 @@
 
 #include "cd_control.h"
 #include "core.h"
-#include "guest_execution.h"
+#include "native_dispatch.h"
+#include "resumable_guest_call.h"
 
 #include <array>
 #include <cstdlib>
@@ -85,7 +86,7 @@ void frameworkCdControl(Core *core) {
 }
 
 void originalCdSync(Core *core) {
-  guest::callOriginal(core, kCdSyncEntry, "music_cd::CdSync original");
+  psx::cpu::callOriginalResumingToReturn(*core, "music_cd::CdSync original", kCdSyncEntry, core->r[31]);
 }
 
 void serveCdSyncEntry(Core *core) {
@@ -217,7 +218,7 @@ bool serveCdControl(Core *core, GuestBody stockControl) {
 }
 
 void registerOverrides(Core &core) {
-  guest::install(core, kCdSyncEntry, "music_cd::CdSync", serveCdSyncEntry);
+  psx::cpu::installNativeOverride(core, kCdSyncEntry, "music_cd::CdSync", serveCdSyncEntry);
 }
 
 } // namespace x4::music_cd

@@ -6,7 +6,7 @@
 #include "title_layout.h"
 
 #include "core.h"
-#include "guest_execution.h"
+#include "native_dispatch.h"
 
 #include <lucent/log.h>
 
@@ -55,7 +55,8 @@ void initializeWhiteLogoQuad(Core *core) {
 }
 
 void registerOverride(Core &core) {
-  guest::install(core, kInitializeWhiteLogoQuad, "title::initializeWhiteLogoQuad", initializeWhiteLogoQuad);
+  psx::cpu::installNativeOverride(
+      core, kInitializeWhiteLogoQuad, "title::initializeWhiteLogoQuad", initializeWhiteLogoQuad);
   title_layout::registerOverride(core);
 }
 

@@ -1,7 +1,8 @@
 #include "stream_interrupt.h"
 
 #include "core.h"
-#include "guest_execution.h"
+#include "native_dispatch.h"
+#include "resumable_guest_call.h"
 
 #include <cstdlib>
 #include <lucent/log.h>
@@ -110,13 +111,13 @@ void run(Core *core) {
     std::abort();
   }
   const auto original = [](Core *active) {
-    guest::callOriginal(active, kEntry, "stream_interrupt::completeSector original");
+    psx::cpu::callOriginalResumingToReturn(*active, "stream_interrupt::completeSector original", kEntry, active->r[31]);
   };
   run(*core, original);
 }
 
 void registerOverride(Core &core) {
-  guest::install(core, kEntry, "stream_interrupt::completeSector", run);
+  psx::cpu::installNativeOverride(core, kEntry, "stream_interrupt::completeSector", run);
 }
 
 } // namespace x4::stream_interrupt

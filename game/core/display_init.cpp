@@ -4,6 +4,7 @@
 #include "core.h"
 #include "execution_services.h"
 #include "guest_execution.h"
+#include "native_dispatch.h"
 
 #include <cstdlib>
 #include <lucent/log.h>
@@ -137,7 +138,7 @@ void initialize(Core *core,
 }
 
 void registerOverride(Core &core) {
-  guest::install(core, kEntry, "display_init::initialize", run);
+  psx::cpu::installNativeOverride(core, kEntry, "display_init::initialize", run);
 }
 
 } // namespace x4::display_init

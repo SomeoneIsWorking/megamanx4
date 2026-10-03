@@ -6,6 +6,8 @@
 #include "core.h"
 #include "execution_services.h"
 #include "guest_execution.h"
+#include "native_dispatch.h"
+
 #include "x4_context.h"
 
 #include <cstdlib>
@@ -197,7 +199,7 @@ void run(Core *core) {
 }
 
 void registerOverride(Core &core) {
-  guest::install(core, kEntry, "movie_cleanup::run", static_cast<void (*)(Core *)>(run));
+  psx::cpu::installNativeOverride(core, kEntry, "movie_cleanup::run", static_cast<void (*)(Core *)>(run));
 }
 
 } // namespace x4::movie_cleanup
