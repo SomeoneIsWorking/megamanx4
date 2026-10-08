@@ -1,0 +1,36 @@
+# Build and run artifacts
+build/
+scratch/
+
+# The disc image and anything extracted from it are the copyright holder's and are never committed.
+#
+# Kept NARROW on purpose. Everything extracted lands under scratch/ (already ignored above); the
+# patterns here are the belt to that braces, for a file dropped in the repo root. Broad patterns
+# (*.exe, *.bin) would also match ordinary prose naming those files in the docs.
+*.chd
+.env
+# NOT listed here, deliberately: `SLUS_005.61` / `SLUS_*.*`. Every doc in this repo names them in
+# prose, so a pattern that also swept prose would be unusable. The extracted executable lands under
+# `scratch/bin/megamanx4/`, ignored above, which is where the tooling puts it; a copy dropped loose in
+# the repo root is caught by review.
+
+# The framework. Not tracked: either a relative symlink to the workspace's live psxport checkout
+# (local) or a clone of its main (fresh machine). Managed by tools/psxport_fetch.py.
+/external/psxport
+# The vendored AGPL decomp is a REFERENCE; we never build it here, but a curious session might.
+# external/mmx4/disks/ matters specifically: upstream's README says the retail SLUS_005.61 goes in
+# disks/us, i.e. the natural way to use that repo is to drop OUR extracted executable into it.
+external/mmx4/build/
+external/mmx4/disks/
+external/mmx4/.venv/
+external/mmx4/expected/
+*.log
+
+# Python bytecode — never committed. Compiled .pyc embed ABSOLUTE SOURCE PATHS, i.e. a machine-path
+# leak that a TEXT-only audit cannot see, because they are binary.
+__pycache__/
+*.pyc
+
+# Editor / OS noise
+compile_commands.json
+.DS_Store
