@@ -1,0 +1,145 @@
+# Config — THIS port's own knob registry
+
+This file exists because the framework's instruction "register every enhancement name in
+`docs/config.md`" resolves to `external/psxport/docs/config.md`, **which is inside a submodule a game
+repo may not edit.** So the game-local half lives here.
+
+The framework's knobs, the ladder's implementation and the whole `cfg_*` / CVar API are documented in
+`external/psxport/docs/config.md` and `runtime/psx/config/config_var.h` and are **not restated here**.
+
+## The ladder, quoted from `runtime/psx/config/config_var.h`
+
+```
+    Default   what the framework compiled in
+  < Value     the user's persisted choice (psxport_settings.ini)
+  < Override  a launch argument — the PSXPORT_* environment variable. Never persisted.
+  < Runtime   a REPL / debug-server command. This run only. Never persisted.
+```
+
+A higher layer wins. `Layer` is DERIVED from which slots are set rather than stored, so the
+introspection dump can show every layer of a knob at once. Runtime sits above Override because it is
+a human action at a live console after launch, later and more specific than the process environment.
+
+## This port's knobs
+
+| knob | kind | default | persistable | C++ object | read path |
+|---|---|---|---|---|---|
+| `PSXPORT_X4_DISC` | path (port fact, not a CVar) | — | — | `GameConfig::discEnvVar` | `tools/resolve_disc.py` host-side; the framework's disc resolver guest-side |
+| `PSXPORT_X4_CARD` | path (port fact, not a CVar) | `scratch/saves/megamanx4.mcr` | — | `GameConfig::cardEnvVar` / `cardDefaultPath` | the framework's memory-card backend |
+| `PSXPORT_X4_WIDESCREEN` | Bool | `true` | yes | `x4::cv_widescreen` | **`x4::enh(x4::cv_widescreen)`** |
+| `PSXPORT_X4_COOP` | Bool | `false` | yes | `x4::cv_coop` | **`x4::enh(x4::cv_coop)`** — no consumer yet |
+| `PSXPORT_X4_FASTWAIT` | Bool | `true` | yes | `x4::cv_fastwait` | **`x4::enh(x4::cv_fastwait)`** — consumer: game/media/fast_wait.cpp (loading-coroutine conversion) |
+
+## Title render policy: Native and synthetic 60fps are not player options
+
+X4 (`SLUS_005.61`) deliberately consumes neither the framework's PC-native renderer nor its synthetic
+interpolated-frame tier. The retail title already owns the target cadence, and the guest's own GP0
+work is the picture. `X4Runtime::renderCapabilities()` is the title authority: it declares the record
+path (psxport `docs/presentation.md`) as the default, no native renderer, and no temporal interpolation. The shared menu,
+settings loader/saver, and runtime render-path resolver consume that same declaration.
+
+The menu therefore offers neither Native rendering nor 60fps interpolation, and this repository's
+settings file carries no `fps60` key. An explicit diagnostic request for an unsupported mode remains a
+loud refusal or capability-owned fallback; it does not silently enable a product X4 does not own.
+
+The no-argument policy is therefore unambiguous. `PSXPORT_X4_WIDESCREEN` is the product default now
+that the title has a typed guest
+projection consumer; a persisted or launch/runtime `false` still supplies the exact 4:3 control.
+Default-on is not a pixel-verification claim: no 16-bit picture past boot is reachable yet (S002), so
+the off/on capture of margins, culling and 2D has not been taken (`docs/issues/0037`).
+
+## Native-override differential checks
+
+Native functions compare against their authenticated original guest bodies through psxport's scoped
+Lightrec original-call API. Diagnostic controls exercise the same runtime dispatcher; there is no
+generated implementation or static selector in the product.
+
+`PSXPORT_X4_DISC` is spelled identically in exactly three places and they must not diverge:
+`.env.example`, `GameConfig::discEnvVar`, and `tools/resolve_disc.py`'s `ENV_KEY`.
+The launcher imports that key and publishes an explicit disc argument into the environment used by
+both executable extraction and the running CD backend. A command-line disc therefore takes precedence
+over an existing title or generic disc setting for the whole session, including relative paths and
+paths containing spaces. Without an argument, environment, `.env`, and drop-in resolution are preserved.
+
+The three enhancement knobs are `persistable = true` deliberately: they are USER PREFERENCES, which is
+the class the Value layer exists for (cf. the framework's `cv_fps60`, whose Value layer is the `fps60=`
+line the overlay writes).
+
+## The force-suppression rule — NEVER call `.get()` at a feature call site
+
+Every read of an enhancement knob goes through **one** function, `x4::enh()` in
+`game/title/enhancements.cpp`. It delegates selection and suppression to `psx::config::enh()`, the
+shared owner of `PSXPORT_DIAGNOSTIC_RUN=product|compare-candidate|compare-reference`. Either comparison
+role returns false with a per-knob Lucent warning. Product mode honors the resolved knob. The typed
+role is diagnostic context for the same native/Lightrec product, not a CPU-engine selector.
+
+Calling `cv_coop.get()` directly at a feature call site is the bug the chokepoint exists to prevent. If
+you find one, it is a defect, not a shortcut.
+
+Each knob is also registered in `docs/behavior-map.md` as `class: pc_enh` / `affect: full` with a `guard`
+that cites the suppression — and that text is **machine-checked**: `tools/behavior.py check` fails an
+`affect: full` entry whose guard does not cite the typed comparison/suppression contract. The chokepoint plus that check is
+this port's whole "enhancement-free by construction" story.
+
+## This port does NOT use `PSXPORT_ENH` / `cfg_enh()`
+
+Two reasons, both concrete:
+
+1. **USER ruling: CVars.** `cfg_enh` cannot satisfy it — it reads
+   `lucent::config::text("PSXPORT_ENH")` directly into a function-local seeded static, so it is env-only:
+   no Value (settings-file) layer, no Runtime (REPL) layer, and it never appears in the CVar registry
+   dump. The framework's `docs/config-migration.md` "Qualification 2" explains why it was never
+   migrated (*"a SUPPRESSION rule, not a layer"*) and lists `PSXPORT_ENH` as still pending.
+2. **`cfg_enh` has zero call sites anywhere in the workspace.** X4 is the first real consumer of the
+   `pc_enh` class; the two names registered in the framework's own `docs/config.md`
+   (`expanded-load-range`, `faster-transitions`) are both `planned`.
+
+The duplication of the suppression rule in `x4::enh()` is therefore deliberate and commented as such.
+The proper fix is upstream — migrate `PSXPORT_ENH` onto the ladder, keeping the suppression as an
+explicit resolve-time hook with its own log line — and a game repo may not make it. Hand it to the
+operator.
+
+## Audit discipline — judge a knob on the EXIT audit, never the startup line
+
+A knob that is set but matches nothing is named at startup as:
+
+```
+[cfg:warn] UNKNOWN knob X is set and matched nothing — it did NOTHING in this run
+```
+
+**Read only the exit audit:**
+
+```
+[cfg] env audit AT EXIT (everything that was going to be read has been): N set -> ... 0 UNKNOWN
+```
+
+The startup audit runs *before* late-initialising subsystems have read anything, so it reports every
+not-yet-read knob as UNKNOWN — a claim about the run, made before the run. Measured elsewhere in this
+workspace: 6 knobs set → 4 UNKNOWN at startup, 0 at exit, and all four had worked. Gate on the exit line
+only.
+
+Declaring these three as CVars rather than reading them with `cfg_on` is precisely what keeps them out of
+that UNKNOWN list and puts them in the REPL `cvars` dump.
+
+**AND THAT IS A COST, NOT ONLY A WIN — so this port pays it back explicitly.** Co-op and fast-wait are
+still `planned` and have no call site outside `enhancements.{h,cpp}`; widescreen is consumed
+by `WidescreenPolicy`. `UNKNOWN … it did NOTHING in this run` is precisely the signal the framework had
+for "you set a knob and nothing consumed it", and registering a name is what silences it: a registered
+CVar with zero consumers resolves silently to `true`, the exit audit says `0 UNKNOWN`, and a user or a
+future session can read a clean startup as "co-op is on". The suppression path is loud; the
+not-implemented path was silent — the inverse of this repo's own "a diagnostic that can print nothing is
+lying" rule.
+
+So `game/title/enhancements.cpp` carries a `kUnimplemented` list (knob → frontier step), and
+`x4::audit_declared_enhancements()` — called once from `main.cpp` right after the seam install — pushes
+every knob the user turned ON through the chokepoint, producing one line per knob:
+
+```
+[cfg:warn] PSXPORT_X4_COOP is DECLARED but NO feature reads it yet — this run did NOTHING with it. Enabling it is not evidence that the enhancement works.
+```
+
+The audit exists because the read-time check alone cannot fire: a knob nothing reads never reaches
+`enh()`. On a comparison run the shared SUPPRESSED line replaces it. The production test drives the
+same typed `ScopedDiagnosticRun` boundary used by harnesses rather than mutating process environment.
+**Deleting an entry from `kUnimplemented` belongs in the same commit that adds that feature's first real
+call site** — that is what makes the warning shrink to nothing on its own.
