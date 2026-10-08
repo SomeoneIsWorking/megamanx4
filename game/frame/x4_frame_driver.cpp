@@ -1,0 +1,171 @@
+#include "x4_frame_driver.h"
+
+#include "core.h"
+#include "execution_services.h"
+#include "game.h"
+#include "guest_execution.h"
+
+#include "music_stream.h"
+
+namespace x4::frame {
+namespace {
+
+// Guest entry points of retail gameMain 0x80012024.
+constexpr std::uint32_t kStartup = 0x800DAE84u;
+constexpr std::uint32_t kInitialize = 0x8001213Cu;
+constexpr std::uint32_t kPutDispEnv = 0x800EAAD8u;
+constexpr std::uint32_t kPutDrawEnv = 0x800EA880u;
+constexpr std::uint32_t kDrawOTag = 0x800EA80Cu;
+constexpr std::uint32_t kClearOTagR = 0x800EA714u;
+constexpr std::uint32_t kBeforeObjectsA = 0x800168D8u;
+constexpr std::uint32_t kBeforeObjectsB = 0x800169D8u;
+constexpr std::uint32_t kRoutePads = 0x80012328u;
+constexpr std::uint32_t kClearVramRectPointers = 0x80015E0Cu;
+constexpr std::uint32_t kUpdateTasks = 0x80012600u;
+constexpr std::uint32_t kDrainArchive = 0x80014780u;
+constexpr std::uint32_t kDrawSync = 0x800EA20Cu;
+constexpr std::uint32_t kLoadVramRectPointers = 0x80015E54u;
+constexpr std::uint32_t kLoadPalette = 0x80016004u;
+constexpr std::uint32_t kFinishFrame = 0x80012454u;
+
+constexpr std::uint32_t kScratchDrawInfoPosition = 0x1F800000u;
+constexpr std::uint32_t kCurrentDrawInfo = 0x80142F80u;
+constexpr std::uint32_t kDrawInfos = 0x80166C10u;
+constexpr std::uint32_t kFieldCounter = 0x80141BD8u;
+constexpr std::uint32_t kDrawInfoStride = 160u;
+constexpr std::uint32_t kDrawEnvOffset = 20u;
+constexpr std::uint32_t kOrderingTableClearOffset = 112u;
+constexpr std::uint32_t kOrderingTableDrawOffset = 156u;
+
+void call(Core &core, GuestDispatch dispatch, std::uint32_t entry, std::uint32_t returnAddress, std::uint32_t ticks) {
+  core.r[31] = returnAddress;
+  psx::cpu::accountGuestInstructions(core, ticks);
+  dispatch(&core, entry);
+}
+
+bool movieOwnsPicture(const Core &core, const movie_cleanup::State &cleanup) {
+  return cleanup.pending() || (core.game && core.game->cd.stream_active != 0);
+}
+
+bool runRetailFramePrefix(Core &core, GuestDispatch dispatch, music_stream::State &musicStream) {
+  if (musicStream.pending()) {
+    if (!musicStream.dispatchBeforeObjectsB(dispatch)) {
+      return false;
+    }
+  } else {
+    std::uint32_t drawInfo = core.mem_r32(kCurrentDrawInfo);
+    core.r[4] = drawInfo;
+    call(core, dispatch, kPutDispEnv, 0x80012060u, 4u);
+
+    drawInfo = core.mem_r32(kCurrentDrawInfo);
+    core.r[4] = drawInfo + kDrawEnvOffset;
+    call(core, dispatch, kPutDrawEnv, 0x80012070u, 4u);
+
+    drawInfo = core.mem_r32(kCurrentDrawInfo);
+    core.r[4] = drawInfo + kOrderingTableDrawOffset;
+    call(core, dispatch, kDrawOTag, 0x80012080u, 4u);
+
+    gte_hold_src(&core, 5, kScratchDrawInfoPosition);
+    const std::uint32_t drawInfoPosition = core.mem_r32(kScratchDrawInfoPosition) ^ 1u;
+    drawInfo = kDrawInfos + drawInfoPosition * kDrawInfoStride;
+    core.mem_w32(kScratchDrawInfoPosition, drawInfoPosition);
+    gte_copy_pz(&core, 5, kScratchDrawInfoPosition);
+    core.mem_w32(kCurrentDrawInfo, drawInfo);
+    core.r[4] = drawInfo + kOrderingTableClearOffset;
+    core.r[5] = 12u;
+    call(core, dispatch, kClearOTagR, 0x800120B8u, 14u);
+
+    call(core, dispatch, kBeforeObjectsA, 0x800120C0u, 2u);
+    core.r[31] = 0x800120C8u;
+    psx::cpu::accountGuestInstructions(core, 2u);
+    if (!musicStream.dispatchBeforeObjectsB(dispatch)) {
+      return false;
+    }
+  }
+  call(core, dispatch, kRoutePads, 0x800120D0u, 2u);
+  call(core, dispatch, kClearVramRectPointers, 0x800120D8u, 2u);
+
+  core.mem_w32(kFieldCounter, core.mem_r32(kFieldCounter) + 1u);
+  return true;
+}
+
+void runRetailFrameSuffix(Core &core, GuestDispatch dispatch) {
+  call(core, dispatch, kDrainArchive, 0x800120F4u, 2u);
+
+  core.r[4] = 0u;
+  call(core, dispatch, kDrawSync, 0x800120FCu, 2u);
+  call(core, dispatch, kLoadVramRectPointers, 0x80012104u, 2u);
+  call(core, dispatch, kLoadPalette, 0x8001210Cu, 2u);
+  core.r[4] = 0u;
+  call(core, dispatch, kDrawSync, 0x80012114u, 2u);
+  call(core, dispatch, kFinishFrame, 0x8001211Cu, 2u);
+}
+
+} // namespace
+
+void bootPrefix(Core &core, GuestDispatch dispatch) {
+  // Keep the retail gameMain stack frame so callees and backtraces see it.
+  core.r[29] -= 32u;
+  core.mem_w32(core.r[29] + 24u, core.r[31]);
+  core.mem_w32(core.r[29] + 20u, core.r[17]);
+  core.mem_w32(core.r[29] + 16u, core.r[16]);
+
+  call(core, dispatch, kStartup, 0x80012038u, 5u);
+  core.r[17] = kScratchDrawInfoPosition;
+  call(core, dispatch, kInitialize, 0x80012040u, 2u);
+  core.r[16] = kFieldCounter;
+}
+
+void bootPrefix(Core &core) {
+  bootPrefix(core, guest::callWithoutKnownReturn);
+}
+
+X4FrameDriver::X4FrameDriver(GuestDispatch dispatch,
+                             FieldService fieldService,
+                             PresentationSync presentationSync,
+                             movie_cleanup::State &movieCleanup,
+                             music_stream::State &musicStream)
+    : dispatch_(dispatch), fieldService_(fieldService), presentationSync_(presentationSync),
+      movieCleanup_(&movieCleanup), musicStream_(&musicStream) {}
+
+void X4FrameDriver::stepFrame(Core &core, std::uint32_t) {
+  const bool resumingMusicField = musicStream_->pending();
+  const bool resumingCleanupField = movieCleanup_->pending();
+  const bool resumingNestedField = resumingMusicField || resumingCleanupField;
+
+  // A suspended state-7 transaction is still inside its VSync(3) call, so it keeps that frame
+  // and skips the outer back-edge.
+  if (!resumingNestedField) {
+    psx::cpu::accountGuestInstructions(core, 2u);
+  }
+  if (core.pending_work) {
+    psx::cpu::servicePendingWork(core);
+  }
+
+  if (presentationSync_) {
+    presentationSync_(core);
+  }
+
+  // Replaces retail VSync(0): one field boundary advances the current class-0 handler, pad, SPU and presentation.
+  if (!resumingNestedField) {
+    core.r[31] = 0x80012050u;
+    core.r[4] = 0u;
+    psx::cpu::accountGuestInstructions(core, 2u);
+  }
+  fieldService_(core);
+
+  // While the movie call is suspended in UpdateTasks, the 16-bit draw prefix must not rerun;
+  // it overwrites the 24-bit MDEC buffer. Resume only the blocked task.
+  if (!movieOwnsPicture(core, *movieCleanup_)) {
+    if (!runRetailFramePrefix(core, dispatch_, *musicStream_)) {
+      return;
+    }
+  }
+  call(core, dispatch_, kUpdateTasks, 0x800120ECu, 5u);
+  if (movieOwnsPicture(core, *movieCleanup_)) {
+    return;
+  }
+  runRetailFrameSuffix(core, dispatch_);
+}
+
+} // namespace x4::frame
