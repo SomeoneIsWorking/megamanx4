@@ -10,6 +10,7 @@ namespace x4 {
 psx::config::BoolVar &widescreenCvar(); // PSXPORT_X4_WIDESCREEN
 psx::config::BoolVar &coopCvar();       // PSXPORT_X4_COOP
 psx::config::BoolVar &fastWaitCvar();   // PSXPORT_X4_FASTWAIT
+psx::config::BoolVar &skipCvar();       // PSXPORT_X4_SKIP
 
 // Delegates to psx::config::enh() and warns once if the knob has no consumer yet.
 bool enh(psx::config::BoolVar &v);

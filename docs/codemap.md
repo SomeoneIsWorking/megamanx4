@@ -19,7 +19,7 @@ run.sh -> bootstrap.py -> tools/run.py
                                         +-- game/boot     X4Runtime (title policy + composition)
                                         +-- game/frame    X4FrameDriver + the per-field service
                                         +-- game/execution guest-call seam, override registry, BIOS tasks
-                                        +-- game/input    pad layout facts + the input-path observer
+                                        +-- game/input    pad layout facts, the input-path observer, the sequence skip
                                         +-- game/media    CD, streaming, movies, loading
                                         +-- game/render   display/GPU/cull/VRAM-rect owners
                                         +-- game/ui       title menu + logo composition
@@ -49,7 +49,7 @@ enters psxport.
 | `main.cpp` | `x4::g_runtime`, `main()` | The process entry point: parse the command line, install `X4Runtime`, self-provision the executable from a disc, bring up the PSX devices, attach the control channel, enter the framework spine, report the run-end censuses |
 | `command_line.{h,cpp}` | `x4::cli::Options`, `parse()`, `printUsage()` | Select help, the default executable, or one explicit path before any runtime or disc side effect; refuse an unknown option |
 | `x4_runtime.{h,cpp}` | `x4::X4Runtime` | The process-lifetime title owner: the framework-facing runtime seam (render capabilities: the record path, program image, pad buffers, widescreen aspect policy), the per-`Core` context, and the registration of every native owner |
-| `x4_context.{h,cpp}` | `x4::X4Context`, `context()` | The per-`Core` state every owner composes: BIOS threads, fast-wait, movie cleanup, music stream, widescreen |
+| `x4_context.{h,cpp}` | `x4::X4Context`, `context()` | The per-`Core` state every owner composes: BIOS threads, fast-wait, movie cleanup, music stream, widescreen, widened objects |
 
 ### `game/frame/` — the field turn (namespace `x4::frame`, `x4::vsync`)
 
@@ -66,12 +66,14 @@ enters psxport.
 | `native_overrides.{h,cpp}` | `x4::native_overrides::install()` | Install the widescreen projection and the loading owners against the active authenticated image |
 | `bios_threads.{h,cpp}` | `x4::bios_threads::Service`, `install()` | The BIOS cooperative-task context underneath the untouched retail scheduler: OpenTh / ChangeTh / CloseTh, the field boundary a task parks on, the per-task over-budget turn count (`spendBudgetTurn`, restarted by the task's own ChangeTh yield) and `frameInProgress()`, and the resume census |
 
-### `game/input/` — input (namespaces `x4::pad`, `x4::input_path`)
+### `game/input/` — input (namespaces `x4::pad`, `x4::input_path`, `x4::sequence_skip`)
 
 | Unit | Owner | Responsibility |
 |---|---|---|
 | `pad_layout.h` | `x4::pad` constants | The two measured fixed InitPAD receive buffers and their capacities, published to the runtime and the legacy view |
 | `input_path.{h,cpp}` | `x4::input_path::observeField()` | A read-only, per-delivered-field observer of every stage of a pad edge; writes nothing, inert unless the `x4-input-path` channel is on |
+| `sequence_skip.{h,cpp}` | `x4::sequence_skip::SequenceSkip` | The skip rule: while Start is held in the Hunter H.Q. briefing (engine state 3, sub-state 9) the guest's Cross edge is raised every fourth field, so the retail briefing owner pages itself to its end |
+| `sequence_skip_overrides.{h,cpp}` | `x4::sequence_skip::registerOverrides()` | The retail pad route `0x80012328` with the skip applied to its held/edge words after the original call, behind `x4::enh(skipCvar())` |
 
 ### `game/media/` — CD, streaming, movies, loading
 
@@ -87,14 +89,19 @@ enters psxport.
 | `music_cd.{h,cpp}` | `x4::music_cd::registerOverrides()`, `serveCdSync()`, `serveCdControl()` | The measured 6 -> 5 -> 1 edges of the XA/BGM machine, bound to the framework's own stock-Sony completion owners; every other caller of either leaf keeps the guest body |
 | `fast_wait.{h,cpp}` | `x4::fast_wait::State`, `load_synchronously()`, `archive_cd_setup()`, `direct_cd_setup()`, `loading_presentation_wait()` | The measured direct/archive load operations, completed without their loading waits, and the scoped SDK leaves they virtualize |
 
-### `game/render/` — render producers (namespaces `x4::display_init`, `x4::gpu_timeout`, `x4::cull`, `x4::vram_rect`)
+### `game/render/` — render producers (namespaces `x4::display_init`, `x4::gpu_timeout`, `x4::cull`, `x4::background`, `x4::hud`, `x4::vram_rect`)
 
 | Unit | Owner | Responsibility |
 |---|---|---|
 | `display_init.{h,cpp}` | `x4::display_init::initialize()` | Publish X4's two retail draw environments and display flags, omitting the nested guest VSync fence |
 | `gpu_timeout.{h,cpp}` | `x4::gpu_timeout::setAlarm()` | PsyQ `set_alarm` 0x800ECB38, sourced from the native field counter instead of a guest VSync query |
-| `visibility_cull.{h,cpp}` | `x4::cull::ScreenWindow`, `contains()` | The recovered retail cull predicate, widened only by the horizontal margin; the identity at 4:3 |
-| `cull_overrides.{h,cpp}` | `x4::cull::registerOverrides()` | The seven measured cull sites, bound to the guest ABI — the only place that knows one |
+| `visibility_cull.{h,cpp}` | `x4::cull::ScreenWindow`, `VisibilityCull` | The recovered retail cull predicate; `VisibilityCull::retail()` is the 4:3 box gameplay reads, the plan's box is widened only horizontally |
+| `widened_objects.{h,cpp}` | `x4::cull::WidenedObjects` | The objects the widened box admits and the retail box culls; `raise()` / `lower()` lend them `on_screen = 1` for the draw pass only |
+| `cull_overrides.{h,cpp}` | `x4::cull::registerOverrides()` | The four flag-writing cull sites (store the retail flag, record the widened verdict) and the object draw pass `0x80023DB8` (raise, original call, lower); the off-screen-verdict sites stay retail |
+| `background_tiles.{h,cpp}` | `x4::background::WideBackground` | The tile-layer ring model and sprite writer: margin columns of the cell ring and their tile sprites, linked into the retail OT buckets |
+| `background_overrides.{h,cpp}` | `x4::background::registerOverrides()` | `0x80026AA0` (draw layer) and `0x8002728C` (ring edge fill) with the retail body run first through the scoped original call |
+| `hud_anchor.{h,cpp}` | `x4::hud::HudAnchor` | Moves the HUD packets a pass appended to its own screen edge by the margin |
+| `hud_overrides.{h,cpp}` | `x4::hud::registerOverrides()` | `0x80024E70` (HUD pass) with the retail body run first through the scoped original call |
 | `vram_rect_queue.{h,cpp}` | `x4::vram_rect::clear()`, `upload()`, `append()`, `reportCensus()` | The guest's eight-entry VRAM rectangle upload queue end to end, including its real capacity; `bandCount` / `streamAddress` are the one decode of the animation word (twenty-bit stream offset) |
 
 ### `game/ui/` — title logo composition (namespace `x4::title_quad`)
@@ -107,7 +114,7 @@ enters psxport.
 
 | Unit | Owner | Responsibility |
 |---|---|---|
-| `widescreen_controller.{h,cpp}` | `x4::WidescreenPolicy`, `x4::WidescreenController` | The requested presentation aspect (process-lifetime, 4:3 while an STR plays) and the per-`Core` projection plan: the guest projection / draw-environment publication (retail on the record path) and the margin the cull reads, re-latched every field |
+| `widescreen_controller.{h,cpp}` | `x4::WidescreenPolicy`, `x4::WidescreenController` | The requested presentation aspect (process-lifetime: the player's Aspect Ratio row, 4:3 while an STR plays or enhancements are suppressed) and the per-`Core` projection plan: the guest projection / draw-environment publication (retail on the record path) and the margin the cull reads, re-latched every field |
 
 ### `game/title/` — measured facts and enhancement policy (namespace `x4`, `x4::legacy`, `x4::guest`)
 
@@ -167,6 +174,7 @@ Framework hops name psxport files so a reader can follow them into `external/psx
 | Effective mask | `Pad::pollHostInput` -> `Pad::serviceFrame` (psxport) | Force / hold, REPL drive, host suppression, session record-replay; edges latched last |
 | The frame's service point | `x4::vsync::deliverField` -> `c->game->pad.serviceFrame()` | The exact point in the turn the pad is read, and the same point the observer brackets |
 | Stage-by-stage evidence | `x4::input_path::observeField()` before and after the service (`game/input/input_path.cpp`) | The REPL mask, the resolved mask, the BIOS-pad gate and the guest packet buffer, once per delivered field; writes nothing |
+| Sequence skip | `x4::sequence_skip::SequenceSkip` via `sequence_skip_overrides` (`game/input/`) | Which guest pad words the briefing sees while Start is held |
 | Guest buffers | `x4::pad::kSlot0Buffer` / `kSlot1Buffer` -> `X4Runtime::guestPadBufferLayout()` (`game/input/pad_layout.h`, `game/boot/x4_runtime.cpp`) | Which two fixed buffers the framework's 4-byte packet lands in |
 | Control-channel input | `DbgServer` command -> `Pad::driveTap` (psxport), applied by `tools/live_play.py` | An offered edge, replayable, so a headless run can exercise the same path a player drives |
 
@@ -200,7 +208,9 @@ Framework hops name psxport files so a reader can follow them into `external/psx
 |---|---|---|
 | Render path | `X4Runtime::renderCapabilities()` (`game/boot/x4_runtime.cpp`) | `RenderPath::Record`: the device's GP0 work replayed from the frame record; this 60 Hz title pulls in no native producer, no interpolation and no native depth |
 | Projection | `x4::WidescreenPolicy::presentationAspect` + `WidescreenController::publishProjection` / `publishDrawEnvironment` (`game/widescreen/widescreen_controller.cpp`) | The guest OFX / draw-environment width from the framework plan, written through the measured retail owners with an original call; retail 160 / 320 on the record path |
-| Coverage | `x4::cull::contains()` via `cull_overrides` (`game/render/`) | Which objects the guest's own draw pass is allowed to see, widened only by the horizontal margin |
+| Coverage | `x4::cull::WidenedObjects` via `cull_overrides` (`game/render/`) | Which extra objects the guest's own draw pass may see: retail `on_screen` stays what gameplay reads, the widened-only objects are raised for `0x80023DB8` alone |
+| Background | `x4::background::WideBackground` via `background_overrides` (`game/render/`) | The tile columns the margins show, drawn after each retail layer pass |
+| HUD | `x4::hud::HudAnchor` via `hud_overrides` (`game/render/`) | The gauge packets, moved to the screen edge they hug at 4:3 |
 | Margins | psxport `RecordRasterizer` canvas (`gpu_vk_record_raster.cpp`), margin from `gpu_vk_latch_record_display` | What the guest draws outside its 320-column buffer lands in the canvas margins; guest 2D stays as drawn, centred |
 | VRAM uploads | `x4::vram_rect::{clear,upload,append}` (`game/render/vram_rect_queue.cpp`) | The guest's rectangle queue, including its real capacity |
 | Present | `deliverField` -> `c->game->presentation.commit(c, 1)` | Capture, present, pacing and ledger rotation at one display field per step |
@@ -233,7 +243,8 @@ Framework hops name psxport files so a reader can follow them into `external/psx
 | A new native function owner | a module in the directory that owns its subsystem, plus the image-and-address-keyed override registry; call the original guest body through psxport's scoped original-call API |
 | A new per-field host service | `x4::vsync::deliverField` — it is the only per-field service, and `X4FrameDriver` composes it |
 | A new player-visible renderer or cadence decision | `X4Runtime::renderCapabilities()`; generic UI filtering stays in psxport |
-| A HUD element that must move at 16:9 | a title producer that anchors it (psxport `presentation.md`, Widescreen); never a layout hook that shifts guest 2D |
+| A HUD element that must move at 16:9 | `x4::hud::HudAnchor` (`game/render/hud_anchor.*`) for the HUD pass; any other element gets its own anchored producer (psxport `presentation.md`, Widescreen), never a layout hook that shifts guest 2D |
+| A background or object draw that must reach the 16:9 margins | `game/render/background_tiles.*` for tiles, `widened_objects.*` for objects; the retail value gameplay reads stays untouched |
 | A game-specific enhancement knob or suppression rule | `game/title/enhancements.*` plus `docs/config.md` and `docs/behavior-map.md` |
 | A widescreen projection publication | `WidescreenController`, at a measured retail owner |
 | Finite startup CD/controller setup | `game/media/startup_cd.*`; later load operations belong to `fast_wait.*` and never to the frame driver |

@@ -27,6 +27,13 @@ psx::config::BoolVar cv_fastwait("PSXPORT_X4_FASTWAIT",
                                  "suppressed in comparison runs)",
                                  /*persistable=*/true);
 
+psx::config::BoolVar
+    cv_skip("PSXPORT_X4_SKIP",
+            true,
+            "pc_enh: holding Start skips the Hunter H.Q. briefing by raising the game's own page-advance "
+            "input (affect=full; suppressed in comparison runs)",
+            /*persistable=*/true);
+
 } // namespace
 
 psx::config::BoolVar &widescreenCvar() {
@@ -39,6 +46,10 @@ psx::config::BoolVar &coopCvar() {
 
 psx::config::BoolVar &fastWaitCvar() {
   return cv_fastwait;
+}
+
+psx::config::BoolVar &skipCvar() {
+  return cv_skip;
 }
 
 // Knobs with no feature reading them yet.

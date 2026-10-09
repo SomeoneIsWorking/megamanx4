@@ -24,7 +24,11 @@ PresentationAspect WidescreenPolicy::presentationAspect(const Core &core) const 
   if (context(core).movieCleanup.ownsPicture()) {
     return PresentationAspect::Standard4x3;
   }
-  return enh(widescreenCvar()) ? PresentationAspect::Wide16x9 : PresentationAspect::Standard4x3;
+  if (!enh(widescreenCvar())) {
+    return PresentationAspect::Standard4x3;
+  }
+  // The player's Aspect Ratio row (Mods::aspect) picks the widening.
+  return GuestWidescreenProjection::presentationAspect(core);
 }
 
 WidescreenController::WidescreenController() : WidescreenController(gpu_vk_latch_guest_projection) {}

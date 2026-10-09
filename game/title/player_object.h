@@ -37,7 +37,8 @@ inline constexpr uint32_t kInputRouterFn = 0x80012328;
 inline constexpr uint32_t kPlayerInitFn = 0x80035240;
 inline constexpr uint32_t kCameraDispatchFn = 0x80027850;
 inline constexpr uint32_t kCameraModeFnTable = 0x800F3134;
-inline constexpr uint32_t kInitObjectsFn = 0x80023DB8;
+// Per-frame object draw pass: HUD, then every pool, drawing each object whose on_screen byte (+3) is set.
+inline constexpr uint32_t kObjectDrawPassFn = 0x80023DB8;
 inline constexpr uint32_t kResetObjectsFn = 0x8002A7D0;
 inline constexpr uint32_t kFindFreeMainObjFn = 0x8002AB74;
 inline constexpr uint32_t kUpdateMainObjectsFn = 0x80021234;
@@ -62,22 +63,24 @@ struct PlayerOffsets {
 };
 
 struct CameraLayerOffsets {
-  static constexpr uint32_t kEnabled = 0x03;       // u8 init writes 1
-  static constexpr uint32_t kMode = 0x04;          // u8 index into kCameraModeFnTable
-  static constexpr uint32_t kTargetX = 0x08;       // s32 follow target
-  static constexpr uint32_t kTargetY = 0x0C;       // s32
-  static constexpr uint32_t kScrollX = 0x0A;       // s16 THE camera x — consumers subtract it
-  static constexpr uint32_t kScrollY = 0x0E;       // s16 THE camera y
-  static constexpr uint32_t kAnchorX = 0x16;       // s16 screen-edge load trigger anchor
-  static constexpr uint32_t kAnchorY = 0x1A;       // s16
-  static constexpr uint32_t kBoundMinX = 0x1C;     // s16 hard clamp windows (+ push-back on player)
-  static constexpr uint32_t kBoundMaxX = 0x1E;     // s16
-  static constexpr uint32_t kBoundMinY = 0x20;     // s16
-  static constexpr uint32_t kBoundMaxY = 0x22;     // s16
-  static constexpr uint32_t kDeadZoneLeft = 0x30;  // u16 horizontal dead-zone margins used by
-  static constexpr uint32_t kDeadZoneRight = 0x32; // u16 the follow helpers
-  static constexpr uint32_t kStepMax = 0x48;       // u8 max forward step per frame
-  static constexpr uint32_t kStepBack = 0x49;      // s8 (= -kStepMax once following)
+  static constexpr uint32_t kEnabled = 0x03;        // u8 init writes 1
+  static constexpr uint32_t kMode = 0x04;           // u8 index into kCameraModeFnTable
+  static constexpr uint32_t kTargetX = 0x08;        // s32 follow target
+  static constexpr uint32_t kTargetY = 0x0C;        // s32
+  static constexpr uint32_t kScrollX = 0x0A;        // s16 THE camera x — consumers subtract it
+  static constexpr uint32_t kScrollY = 0x0E;        // s16 THE camera y
+  static constexpr uint32_t kAnchorX = 0x16;        // s16 screen-edge load trigger anchor
+  static constexpr uint32_t kAnchorY = 0x1A;        // s16
+  static constexpr uint32_t kBoundMinX = 0x1C;      // s16 hard clamp windows (+ push-back on player)
+  static constexpr uint32_t kBoundMaxX = 0x1E;      // s16
+  static constexpr uint32_t kBoundMinY = 0x20;      // s16
+  static constexpr uint32_t kBoundMaxY = 0x22;      // s16
+  static constexpr uint32_t kDeadZoneLeft = 0x30;   // u16 horizontal dead-zone margins used by
+  static constexpr uint32_t kDeadZoneRight = 0x32;  // u16 the follow helpers
+  static constexpr uint32_t kStepMax = 0x48;        // u8 max forward step per frame
+  static constexpr uint32_t kStepBack = 0x49;       // s8 (= -kStepMax once following)
+  static constexpr uint32_t kMapRightBlock = 0x4E;  // u8 last 256-pixel map column (layout width - 1, 0x8002771C)
+  static constexpr uint32_t kMapBottomBlock = 0x50; // u8 last 256-pixel map row (layout height - 1)
 };
 
 static_assert(PlayerOffsets::kXPosHi == PlayerOffsets::kXPos + 2);

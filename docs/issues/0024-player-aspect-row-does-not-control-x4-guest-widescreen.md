@@ -1,12 +1,12 @@
 ---
 id: 24
 title: Player Aspect Ratio row does not control X4 guest widescreen
-status: open
+status: resolved
 symptom: The surviving player Aspect Ratio row changes a host-native setting that the record path ignores, while X4 guest widescreen is controlled by a separate title CVar
 tags: ui,widescreen,rendering,ownership
 state_items: S006
 created: 2026-08-26
-updated: 2026-10-07
+updated: 2026-10-10
 ---
 
 ## Root cause
@@ -42,3 +42,13 @@ readout reported `render 428x240`, while the surviving Aspect Ratio row reported
 log resolved `PSXPORT_X4_WIDESCREEN=true` from the default layer and published the X4-owned guest
 projection as `320x240 -> 428x240`, OFX 214, draw width 428. The title projection is active, but the
 player row describes a different owner and therefore remains an open truthful-control defect.
+
+## Resolution
+
+`x4::WidescreenPolicy::presentationAspect` (`game/widescreen/widescreen_controller.cpp`) answers 4:3 while an
+STR owns the picture or enhancements are off, and otherwise defers to the framework's own mapping of the
+player's row (`Mods::aspect`: Vanilla 4:3, 16:9, 21:9, Auto). `PSXPORT_X4_WIDESCREEN` now only switches the
+enhancement off. `tests/test_x4_runtime.cpp` pins each row state. The tracked `psxport_settings.ini` carries
+`aspect=1` for tool runs; comparison and recordcheck runs pass a settings file with `aspect=0`. The shared
+menu was not forked: the row already reaches the guest projection through the base policy, and the 21:9 row is
+capped by the background ring (`docs/behavior-map.md`).

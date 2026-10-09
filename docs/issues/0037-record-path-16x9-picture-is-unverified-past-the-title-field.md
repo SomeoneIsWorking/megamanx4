@@ -1,12 +1,12 @@
 ---
 id: 37
-title: The record-path 16:9 picture is unverified past the title field
-status: open
-symptom: No reachable frame shows 3D, HUD, a fade over content or gameplay at 16:9, so margin content and 2D placement are unmeasured
+title: The record-path 16:9 picture is verified only on stage 1
+status: investigating
+symptom: Stage 1 shows widened background, objects and HUD at 16:9; fades over content, other stages and 21:9 are unmeasured
 tags: widescreen,record,evidence
 state_items: S006
 created: 2026-10-07
-updated: 2026-10-07
+updated: 2026-10-10
 ---
 
 ## What is measured
@@ -44,3 +44,24 @@ prefix skipped (`docs/issues/0038`).
 Once a gameplay field is reachable by a title debug option, matched `PSXPORT_SHOT_AT` captures at 4:3
 and 16:9 on the record path: the 16:9 centre must equal the 4:3 picture and the margins must show the
 widened scene.
+
+## Stage 1, 2026-10-10
+
+Measured on the record path at `ires=1` with the player row on 16:9, headless, the first stage reached by
+the pad-tap route (`scratch/x4-widescreen/`). Before: the margins were black. Two defects were behind it:
+
+- The title drew nothing there: the background pass (`0x80026648`) draws 21 tile columns and the retail cull
+  hides the objects past the 4:3 edge. Fixed in `game/render/background_tiles.*` and `cull_overrides.*`.
+- psxport's `RecordRasterizer::showCanvas` retired the other buffer's canvas whenever the two display
+  buffers differed in height (X4 alternates `(0,0,320,240)` and `(0,240,320,479)`), so a record drawing the
+  buffer being shown next never reached a canvas. Fixed by `canvasSurvives` in `record_raster_setup.*`,
+  tested in `tests/test_record_raster.cpp`.
+
+Now: both margins show background tiles and objects, the life gauge sits on the left edge, 4:3 stays
+recordcheck mismatched=0 (3,477 presents through the stage), and the gameplay blocks match 4:3 byte for byte.
+
+## Still unmeasured
+
+- Fades over content: they are 320-wide guest quads, so the margins are not faded.
+- Stages after the first, boss gauges on the right edge, 21:9 (the ring caps the margin at 80 px).
+- The title menu and the white logo quad.

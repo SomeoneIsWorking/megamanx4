@@ -32,7 +32,14 @@ set(SEAM_SRC
   game/media/fast_wait.cpp
   game/render/display_init.cpp
   game/render/gpu_timeout.cpp
+  game/render/background_tiles.cpp
+  game/render/background_overrides.cpp
+  game/render/hud_anchor.cpp
+  game/render/hud_overrides.cpp
+  game/input/sequence_skip.cpp
+  game/input/sequence_skip_overrides.cpp
   game/render/visibility_cull.cpp
+  game/render/widened_objects.cpp
   game/render/cull_overrides.cpp
   game/render/vram_rect_queue.cpp
   game/widescreen/widescreen_controller.cpp
@@ -94,8 +101,15 @@ if(BUILD_TESTING)
     ${CMAKE_SOURCE_DIR}/game/media/stream_interrupt.cpp
     ${CMAKE_SOURCE_DIR}/game/media/stream_startup.cpp
     ${CMAKE_SOURCE_DIR}/game/ui/title_quad.cpp
+    ${CMAKE_SOURCE_DIR}/game/render/background_tiles.cpp
+    ${CMAKE_SOURCE_DIR}/game/render/background_overrides.cpp
+    ${CMAKE_SOURCE_DIR}/game/render/hud_anchor.cpp
+    ${CMAKE_SOURCE_DIR}/game/render/hud_overrides.cpp
+    ${CMAKE_SOURCE_DIR}/game/input/sequence_skip.cpp
+    ${CMAKE_SOURCE_DIR}/game/input/sequence_skip_overrides.cpp
     ${CMAKE_SOURCE_DIR}/game/render/cull_overrides.cpp
     ${CMAKE_SOURCE_DIR}/game/render/visibility_cull.cpp
+    ${CMAKE_SOURCE_DIR}/game/render/widened_objects.cpp
     ${CMAKE_SOURCE_DIR}/game/render/vram_rect_queue.cpp
     ${CMAKE_SOURCE_DIR}/game/frame/vsync_sync.cpp
     ${CMAKE_SOURCE_DIR}/game/input/input_path.cpp
@@ -285,6 +299,7 @@ if(BUILD_TESTING)
   # Predicate only; cull_overrides.cpp (guest dispatcher) stays out so the test is hermetic.
   add_executable(mmx4_visibility_cull_test
     ${CMAKE_SOURCE_DIR}/game/render/visibility_cull.cpp
+    ${CMAKE_SOURCE_DIR}/game/render/widened_objects.cpp
     ${CMAKE_SOURCE_DIR}/tests/test_x4_visibility_cull.cpp
   )
   target_include_directories(mmx4_visibility_cull_test PRIVATE ${X4_TITLE_DIRS})
@@ -294,6 +309,42 @@ if(BUILD_TESTING)
     CXX_STANDARD_REQUIRED ON
   )
   add_test(NAME x4_visibility_cull COMMAND mmx4_visibility_cull_test)
+  # Layout only; background_overrides.cpp (guest dispatcher) stays out so the test is hermetic.
+  add_executable(mmx4_background_tiles_test
+    ${CMAKE_SOURCE_DIR}/game/render/background_tiles.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_x4_background_tiles.cpp
+  )
+  target_include_directories(mmx4_background_tiles_test PRIVATE ${X4_TITLE_DIRS})
+  target_link_libraries(mmx4_background_tiles_test PRIVATE psxport)
+  set_target_properties(mmx4_background_tiles_test PROPERTIES
+    CXX_STANDARD 20
+    CXX_STANDARD_REQUIRED ON
+  )
+  add_test(NAME x4_background_tiles COMMAND mmx4_background_tiles_test)
+  # Packet shifting only; hud_overrides.cpp (guest dispatcher) stays out so the test is hermetic.
+  add_executable(mmx4_hud_anchor_test
+    ${CMAKE_SOURCE_DIR}/game/render/hud_anchor.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_x4_hud_anchor.cpp
+  )
+  target_include_directories(mmx4_hud_anchor_test PRIVATE ${X4_TITLE_DIRS})
+  target_link_libraries(mmx4_hud_anchor_test PRIVATE psxport)
+  set_target_properties(mmx4_hud_anchor_test PROPERTIES
+    CXX_STANDARD 20
+    CXX_STANDARD_REQUIRED ON
+  )
+  add_test(NAME x4_hud_anchor COMMAND mmx4_hud_anchor_test)
+  # The skip rule only; sequence_skip_overrides.cpp (guest dispatcher) stays out so the test is hermetic.
+  add_executable(mmx4_sequence_skip_test
+    ${CMAKE_SOURCE_DIR}/game/input/sequence_skip.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_x4_sequence_skip.cpp
+  )
+  target_include_directories(mmx4_sequence_skip_test PRIVATE ${X4_TITLE_DIRS})
+  target_link_libraries(mmx4_sequence_skip_test PRIVATE psxport)
+  set_target_properties(mmx4_sequence_skip_test PROPERTIES
+    CXX_STANDARD 20
+    CXX_STANDARD_REQUIRED ON
+  )
+  add_test(NAME x4_sequence_skip COMMAND mmx4_sequence_skip_test)
   # Needs the player's disc; exit code 77 skips when none is present.
   # uv run because the script imports from the locked project environment.
   find_program(X4_UV_EXECUTABLE uv)

@@ -28,7 +28,7 @@ Method notes and denominators:
 |---|---|---|
 | Player object address | `0x801418C8` | mmx4 `symbols.us.txt` line `g_Player = 0x801418C8; // type:PlayerObj size:0xE4`; our binary materialises this address 123× across gameplay code (scan floor; e.g. first site `func_8001D460`, densest region `0x8002xxxx–0x8004xxxx`) |
 | Struct size | `0xE4` bytes | mmx4 symbol comment; adjacency in our RAM map: next named global `background_objects = 0x801419B0` sits exactly 4 bytes past `0x801418C8+0xE4`. NOT yet proven from code that reads past byte `0xE3` — treat size as high-confidence, not measured-to-the-byte |
-| A second PlayerObj exists | `g_Entity = 0x80175D58`, also `0xE4` | mmx4 symbols; our binary materialises it 9× (e.g. `func_80023EC0`-containing `init_objects`, `reset_objects`); both are spawned/reset/cleared as a PAIR by `init_objects`/`reset_objects` (below) |
+| A second PlayerObj exists | `g_Entity = 0x80175D58`, also `0xE4` | mmx4 symbols; our binary materialises it 9× (e.g. the draw pass `func_80023DB8` and `reset_objects`); both are spawned/reset/cleared as a PAIR by `reset_objects` (below) |
 | `+0x00 active` (u8) | set to 1 by player init | Ghidra `FUN_80035240`: `DAT_801418c8 = 1` |
 | `+0x01 id` (u8) | object id for update-table dispatch | mmx4 `BaseObj.id // 0x01`; `update_main_objects` dispatches `main_object_update_funcs[id]` — Ghidra `FUN_80021234` indexes `PTR_FUN_800f24a4[(char)obj[1]]` over stride 0x9C from `0x8013BED0` to `0x8013DC10` |
 | `+0x02 character/type` (u8) | X vs Zero selector for the player object | Ghidra `FUN_80035240`: `g_Player+2 = engine_obj_43 (@0x80172203)`; then per-byte branch picks pointer table `0x80119DF0` (=X) vs `0x8011AFF0` (=Zero) into `g_Player+0x30`. Same +2 byte gates `FUN_80024F5C`/`FUN_8002509C` in `FUN_80024E70` |
@@ -114,16 +114,19 @@ All measured on our binary via Ghidra; caller attribution via a JAL scan against
    `func_8001C210`, `0x8001C310` in `func_8001C30C`, `0x80021E54` in `func_80021E3C` —
    front-end/selection range; which UI screen owns each is UNVERIFIED), selects the X/Zero
    pointer table into `+0x30`, seeds position/state from stage scratch (`_DAT_1f800014`,
-   `_DAT_1f80001c` — populated by `init_objects` from the per-stage tables
+   `_DAT_1f80001c` — populated from the per-stage tables
    `&DAT_801499C8 + stage*0xA000` etc.), then initialises companion slots
    (`foo_objects @ 0x80141AB0`, back-pointer at their `+0x50`).
    Callers: `jal 0x8001D3C4` in `func_8001D364`, `jal 0x8001FCCC` in `func_8001FC20`.
-2. **Stage-load spine: `init_objects = func_80023DB8`** (mmx4 symbol; our decompile):
-   fills stage scratch pointers, runs `func_80024E70` (life-gauge/HUD draw incl. boss gauge),
-   `func_800241E8` (OT-head setup), then re-inits every object pool with measured strides —
-   main 48×0x9C (`0x8013BED0..0x8013DC10`), weapon 16×0x9C, shot 32×0x9C, visual 32×0x70,
-   effect 32×0x30, item 32×0x8C, misc 64×0x60, unk 20×0x60, quad 32×0x60 — counts proven by
-   the loop bounds in our own decompile, matching pool sizes in mmx4 symbols.
+2. **Per-frame object draw pass: `func_80023DB8`** (mmx4 names it `init_objects`; the disassembly of this
+   image shows a draw pass, measured 2026-10-10). It sets the packet-arena cursors at scratchpad
+   `0x1F800100..0x110` and `0x124`, runs `func_80024E70` (life/weapon/boss gauge HUD) and `func_800241E8`
+   (OT-head setup), then walks every object pool and calls the sprite builder `func_80024334` for each
+   object whose `+3 on_screen` byte is non-zero: player, entity, foo objects, then the pools with measured
+   strides main 48x0x9C (`0x8013BED0..0x8013DC10`), weapon 16x0x9C, shot 32x0x9C, visual 32x0x70,
+   effect 32x0x30, item 32x0x8C, misc 64x0x60, quad 32x0x60. Its caller chain is the per-frame wrapper
+   `func_80023D68`, which first runs the background pass `func_80026648`. No pool is re-initialised here;
+   the reset is `func_8002A7D0` below.
 3. **Reset: `reset_objects = func_8002A7D0`** clears `g_Player` and `g_Entity` via
    `FUN_8002A728`, zeroes all pools, plus named singletons.
 4. **Allocation: `find_free_main_obj = func_8002AB74`** scans main_objects for `active==0`
@@ -136,8 +139,7 @@ All measured on our binary via Ghidra; caller attribution via a JAL scan against
    correcting mmx4's suggestive name).
 
 UNKNOWN: where `engine_obj_stage/substage` (`0x801721CC/CD`) transition on level change and
-which state function invokes `init_objects` per stage (the callers of `func_80023DB8` are not
-yet attributed); the checkpoint/respawn writer (`engine_obj_checkpoint @ 0x801721DD`).
+which state function sets up each stage's pools; the checkpoint/respawn writer (`engine_obj_checkpoint @ 0x801721DD`).
 
 ## 5. What this unlocks, and what it deliberately does NOT do
 

@@ -28,6 +28,7 @@ a human action at a live console after launch, later and more specific than the 
 | `PSXPORT_X4_CARD` | path (port fact, not a CVar) | `scratch/saves/megamanx4.mcr` | — | `GameConfig::cardEnvVar` / `cardDefaultPath` | the framework's memory-card backend |
 | `PSXPORT_X4_WIDESCREEN` | Bool | `true` | yes | `x4::cv_widescreen` | **`x4::enh(x4::cv_widescreen)`** |
 | `PSXPORT_X4_COOP` | Bool | `false` | yes | `x4::cv_coop` | **`x4::enh(x4::cv_coop)`** — no consumer yet |
+| `PSXPORT_X4_SKIP` | Bool | `true` | yes | `x4::cv_skip` | **`x4::enh(x4::skipCvar())`** — consumer: game/input/sequence_skip_overrides.cpp (Start skips the Hunter H.Q. briefing) |
 | `PSXPORT_X4_FASTWAIT` | Bool | `true` | yes | `x4::cv_fastwait` | **`x4::enh(x4::cv_fastwait)`** — consumer: game/media/fast_wait.cpp (loading-coroutine conversion) |
 
 ## Title render policy: Native and synthetic 60fps are not player options
@@ -42,11 +43,11 @@ The menu therefore offers neither Native rendering nor 60fps interpolation, and 
 settings file carries no `fps60` key. An explicit diagnostic request for an unsupported mode remains a
 loud refusal or capability-owned fallback; it does not silently enable a product X4 does not own.
 
-The no-argument policy is therefore unambiguous. `PSXPORT_X4_WIDESCREEN` is the product default now
-that the title has a typed guest
-projection consumer; a persisted or launch/runtime `false` still supplies the exact 4:3 control.
-Default-on is not a pixel-verification claim: no 16-bit picture past boot is reachable yet (S002), so
-the off/on capture of margins, culling and 2D has not been taken (`docs/issues/0037`).
+The no-argument policy is therefore unambiguous. `PSXPORT_X4_WIDESCREEN` is the product default and only
+switches the enhancement off: when it is on, the player's Aspect Ratio row (`Mods::aspect`, the `aspect=`
+settings key) chooses 4:3, 16:9, 21:9 or Auto (`x4::WidescreenPolicy::presentationAspect`). The tracked
+`psxport_settings.ini` carries `aspect=1` for tool runs; a comparison or recordcheck run passes its own
+settings file with `aspect=0` (`docs/issues/0024`).
 
 ## Native-override differential checks
 

@@ -4,6 +4,7 @@
 #pragma once
 
 #include "guest_widescreen_projection.h"
+#include "player_object.h"
 
 #include <cstdint>
 
@@ -30,12 +31,6 @@ struct RetailSlack {
   static constexpr int kLoose = 64;
 };
 
-// Camera layer array: 0x801419BA = layer 0 scroll (@ 0x8002B2C4), 0x54-byte entries.
-inline constexpr std::uint32_t kCameraLayersAddress = 0x801419B0u;
-inline constexpr std::uint32_t kCameraLayerStride = 0x54u;
-inline constexpr std::uint32_t kCameraScrollX = 0x0Au;
-inline constexpr std::uint32_t kCameraScrollY = 0x0Eu;
-
 // BaseObj: `lb 0x14` @ 0x8002B28C, `lhu 0xa/0xe` @ 0x8002B29C/0x8002B2A0.
 // QuadObj: `lb 0x37` @ 0x800D46F8, `lhu 0xa/0xe` @ 0x800D470C/0x800D4714.
 inline constexpr std::uint32_t kBaseObjectBackgroundOffset = 0x14u;
@@ -53,12 +48,6 @@ struct LayoutOffsets {
   std::uint32_t backgroundOffset;
   std::uint32_t xInteger; // integer half of the s16.16 position
   std::uint32_t yInteger;
-};
-
-// 0x800B8490 ignores the object background byte and always uses camera layer 0.
-enum class BackgroundSource {
-  ObjectByte, // a negative background byte means screen space; otherwise index the layer array
-  LayerZero,  // always subtract camera layer 0
 };
 
 // quad_is_on_screen corner extents, in the order its blocks read them.
@@ -101,6 +90,10 @@ struct ScreenCoordinate {
 class VisibilityCull {
 public:
   explicit VisibilityCull(const GuestProjectionPlan &plan) : margin_(plan.presentationHorizontalMargin) {}
+  // The retail box: what gameplay reads.
+  static VisibilityCull retail() {
+    return VisibilityCull{0};
+  }
 
   // Already 0 at 4:3 and with widescreen off; the plan resolves both.
   int horizontalMargin() const {
@@ -110,8 +103,8 @@ public:
   static LayoutOffsets offsetsFor(ObjectLayout layout);
 
   // A negative background byte means screen space; otherwise the layer scroll is subtracted.
-  ScreenCoordinate screenX(Core &core, std::uint32_t object, ObjectLayout layout, BackgroundSource source) const;
-  ScreenCoordinate screenY(Core &core, std::uint32_t object, ObjectLayout layout, BackgroundSource source) const;
+  ScreenCoordinate screenX(Core &core, std::uint32_t object, ObjectLayout layout) const;
+  ScreenCoordinate screenY(Core &core, std::uint32_t object, ObjectLayout layout) const;
 
   // Halves are per-side slack in pixels.
   bool inside(int screenX, int screenY, int halfWidth, int halfHeight) const;
@@ -122,48 +115,35 @@ public:
   void publishOnScreen(Core &core, std::uint32_t object, bool onScreen) const;
 
 private:
-  int layerFor(Core &core, std::uint32_t object, ObjectLayout layout, BackgroundSource source) const;
+  explicit VisibilityCull(int margin) : margin_(margin) {}
+
+  int layerFor(Core &core, std::uint32_t object, ObjectLayout layout) const;
   std::uint32_t scrollBits(Core &core, int layer, std::uint32_t field) const;
 
   int margin_;
 };
 
-// One row per cull owner; the adapters take slack and polarity from here.
+// One row per flag-writing cull owner; the adapters take slack from here. The sites that return an
+// off-screen verdict to gameplay (0x8002B160, 0x8002B1E8, 0x800B8490) stay retail and have no row.
 struct MeasuredSite {
   std::uint32_t address;
-  int halfWidth;         // per-side slack; -1 when taken from a guest register
-  int halfHeight;        // not always equal to halfWidth
-  bool writesFlag;       // publishes on_screen rather than returning a value
-  bool returnsOffScreen; // returns 1 when the object is off screen
-  bool layerZeroScroll;  // always uses camera layer 0
+  int halfWidth;  // per-side slack; -1 when taken from a guest register
+  int halfHeight; // not always equal to halfWidth
 };
 
-// func_8002B160 (1A5BC.c:597): fixed 64/64, returns off-screen; callers test it.
-inline constexpr MeasuredSite kBaseOffScreenLoose{
-    0x8002B160u, RetailSlack::kLoose, RetailSlack::kLoose, false, true, false};
-// func_8002B1E8 (1A5BC.c:599): parametric, half-extents in $5/$6.
-inline constexpr MeasuredSite kBaseOffScreenParametric{0x8002B1E8u, -1, -1, false, true, false};
 // is_on_screen (1A5BC.c:601): 32/32, publishes the flag.
-inline constexpr MeasuredSite kBaseOnScreenTight{
-    0x8002B288u, RetailSlack::kTight, RetailSlack::kTight, true, false, false};
+inline constexpr MeasuredSite kBaseOnScreenTight{0x8002B288u, RetailSlack::kTight, RetailSlack::kTight};
 // func_8002B318 (1A5BC.c:620): parametric, publishes the flag.
-inline constexpr MeasuredSite kBaseOnScreenParametric{0x8002B318u, -1, -1, true, false, false};
+inline constexpr MeasuredSite kBaseOnScreenParametric{0x8002B318u, -1, -1};
 // func_8002B3C0 (1A5BC.c:622): asymmetric 96/80.
-inline constexpr MeasuredSite kBaseOnScreenWide{
-    0x8002B3C0u, RetailSlack::kWideX, RetailSlack::kWideY, true, false, false};
-// 0x800B8490 (A7878.c:88): fixed 64/64, camera layer 0 only.
-inline constexpr MeasuredSite kBaseOffScreenLayerZero{
-    0x800B8490u, RetailSlack::kLoose, RetailSlack::kLoose, false, true, true};
+inline constexpr MeasuredSite kBaseOnScreenWide{0x8002B3C0u, RetailSlack::kWideX, RetailSlack::kWideY};
 // quad_is_on_screen (C49B0.c:19): four corners, zero slack.
-inline constexpr MeasuredSite kQuadOnScreen{0x800D46F4u, 0, 0, true, false, false};
+inline constexpr MeasuredSite kQuadOnScreen{0x800D46F4u, 0, 0};
 
 inline constexpr MeasuredSite kMeasuredSites[] = {
     kBaseOnScreenTight,
     kBaseOnScreenWide,
     kBaseOnScreenParametric,
-    kBaseOffScreenParametric,
-    kBaseOffScreenLoose,
-    kBaseOffScreenLayerZero,
     kQuadOnScreen,
 };
 

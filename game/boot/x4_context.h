@@ -4,6 +4,8 @@
 #include "fast_wait.h"
 #include "movie_cleanup.h"
 #include "music_stream.h"
+#include "sequence_skip.h"
+#include "widened_objects.h"
 #include "widescreen_controller.h"
 
 class Core;
@@ -20,6 +22,8 @@ struct X4Context {
   movie_cleanup::State movieCleanup;
   music_stream::State musicStream;
   WidescreenController widescreen;
+  cull::WidenedObjects widenedObjects;
+  sequence_skip::SequenceSkip sequenceSkip;
 };
 
 X4Context &context(Core &core);

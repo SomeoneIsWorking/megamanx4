@@ -38,7 +38,18 @@ deviation, grouped by affect. `tools/behavior.py` = view · `... <words>` = sear
 - **status:** implemented
 - **flag:** PSXPORT_X4_WIDESCREEN (read via x4::enh(x4::cv_widescreen) — never .get() at a call site)
 - **original:** the guest sets up a 4:3 projection and renders the retail composition
-- **altered:** the guest's visibility cull widens by the 16:9 margin and the record path's canvas shows what the guest draws there; the projection and draw environment stay retail
+- **altered:** with the player's Aspect Ratio row on 16:9 or 21:9, the record path's canvas shows what the guest draws in the margin: extra background tile columns, objects the retail cull hides (drawn only, the retail on_screen byte stays what gameplay reads) and the HUD packets moved to their screen edge; the projection and draw environment stay retail
 - **guard:** force-suppressed by psx::config::enh() in typed comparison runs; game/title/enhancements.cpp x4::enh() is the single title chokepoint every read passes through
-- **owner:** game/widescreen/widescreen_controller.cpp
-- **notes:** The retail image has one global OFX/OFY/H setup at 160/120/512. On the record path the framework plan keeps OFX 160 and RECT.w 320 (the canvas adds 54 columns each side at 16:9), so the title's projection owner changes nothing the guest draws with; only the seven cull sites widen. Guest 2D stays as drawn, centred. STR movies hold 4:3. Pixel verification is open: no 16-bit picture past boot is reachable (`docs/issues/0037`).
+- **owner:** game/widescreen/widescreen_controller.cpp, game/render/background_tiles.cpp, game/render/cull_overrides.cpp, game/render/hud_anchor.cpp
+- **notes:** The retail image has one global OFX/OFY/H setup at 160/120/512. On the record path the framework plan keeps OFX 160 and RECT.w 320 (the canvas adds 54 columns each side at 16:9), so the title's projection owner changes nothing the guest draws with. The aspect comes from the player's Aspect Ratio row (`Mods::aspect`, issue 0024); the flag only switches the enhancement off. Gameplay never sees the widening: the off-screen-verdict cull sites and the spawn strips stay retail, so objects spawn at the 4:3 edges and pop in inside the margin; the background margin reaches at most 5 tile columns per side (80 px), so 21:9 is capped. Guest 2D stays as drawn, centred. STR movies hold 4:3. Pixel verification is open: no 16-bit picture past boot is reachable (`docs/issues/0037`).
+
+## skip
+- **class:** pc_enh
+- **affect:** full
+- **status:** implemented
+- **flag:** PSXPORT_X4_SKIP (read via x4::enh(x4::skipCvar()) — never .get() at a call site)
+- **original:** the Hunter H.Q. briefing shows each message page until the player presses Cross, then loads the stage
+- **altered:** while Start is held in the briefing the guest's Cross edge is raised every fourth field, so the retail briefing owner runs every page and reaches the stage start itself (about 100 fields instead of about 1,100 with a Cross tap per page)
+- **guard:** force-suppressed by psx::config::enh() in typed comparison runs; game/title/enhancements.cpp x4::enh() is the single title chokepoint, and the pad route override reads it before touching a guest word
+- **owner:** game/input/sequence_skip.cpp
+- **notes:** The end state is the one the retail route leaves: engine, misc, item and entity blocks were byte-identical to the Cross-tap route at the first controllable field of stage 1 (the player's animation counter differs by the sub-field alignment). Only the briefing is covered; the other sequences are listed in `docs/project-state.md` S011 as not done.

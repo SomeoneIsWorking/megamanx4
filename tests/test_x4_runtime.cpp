@@ -485,8 +485,19 @@ int main() {
     return 1;
   }
   x4::widescreenCvar().set(psx::config::Layer::Runtime, true);
+  game->mods.aspect = ASPECT_4_3;
+  if (runtime.guestWidescreenProjection()->presentationAspect(*core) != PresentationAspect::Standard4x3) {
+    std::fprintf(stderr, "the player's Vanilla aspect row did not keep the 4:3 guest projection\n");
+    return 1;
+  }
+  game->mods.aspect = ASPECT_21_9;
+  if (runtime.guestWidescreenProjection()->presentationAspect(*core) != PresentationAspect::UltraWide21x9) {
+    std::fprintf(stderr, "the player's 21:9 aspect row did not select the 21:9 guest projection\n");
+    return 1;
+  }
+  game->mods.aspect = ASPECT_16_9;
   if (runtime.guestWidescreenProjection()->presentationAspect(*core) != PresentationAspect::Wide16x9) {
-    std::fprintf(stderr, "enabled widescreen did not select the 16:9 guest projection\n");
+    std::fprintf(stderr, "the player's 16:9 aspect row did not select the 16:9 guest projection\n");
     return 1;
   }
   game->cd.stream_active = 1;

@@ -1,5 +1,6 @@
 #include "x4_runtime.h"
 
+#include "background_overrides.h"
 #include "bios_threads.h"
 #include "cfg.h"
 #include "core.h"
@@ -8,6 +9,8 @@
 #include "game.h"
 #include "gpu_timeout.h"
 #include "guest_execution.h"
+#include "hud_overrides.h"
+#include "sequence_skip_overrides.h"
 
 #include "legacy_game_interface.h"
 #include "movie_cleanup.h"
@@ -61,6 +64,10 @@ void X4Runtime::registerOverrides(Game &game) {
   title_quad::registerOverride(game.core);
   // The recovered predicate in visibility_cull.cpp is bound to the seam by cull_overrides.cpp.
   cull::registerOverrides(game.core);
+  // The margin columns of the background tile layers, added after the retail bodies.
+  background::registerOverrides(game.core);
+  hud::registerOverrides(game.core);
+  sequence_skip::registerOverrides(game.core);
   // Loading-coroutine owners are registered by authenticated image/address and keep scoped Lightrec
   // original calls where required.
   native_overrides::install(game.core);

@@ -1784,12 +1784,18 @@ def main() -> int:
                              "once per DELIVERED FIELD instead of once per poll. Costs O(fields) log "
                              "lines, so it is off by default; a report that says the channel was off is "
                              "reporting that the path was NOT MEASURED, never that it worked or did not")
+    parser.add_argument("--out", type=Path, default=OUT,
+                        help="directory for the log, WAV and screenshots (default scratch/post-movie/live)")
     parser.add_argument("--selftest", action="store_true",
                         help="exercise the readers on fixtures; launches no product and drives nothing")
     arguments = parser.parse_args()
 
     if arguments.selftest:
         return selftest()
+
+    global LOG, WAV, SHOT_DIR
+    out = arguments.out if arguments.out.is_absolute() else REPO / arguments.out
+    LOG, WAV, SHOT_DIR = out / "live_play.log", out / "live_play.wav", out / "shots"
 
     matched, scanned, disagreements = prompts.verify_address_owners(REPO)
     print(f"[live] guest-address owners: {matched} of {scanned} declaration(s) still agree")

@@ -1,26 +1,20 @@
 // Hermetic gate for game/render/visibility_cull.{h,cpp}: exhaustive 4:3 identity against the disassembly,
 // and widening that admits only the margin bands.
 #include "visibility_cull.h"
+#include "widened_objects.h"
 
 #include "core.h"
 #include "game.h"
 
 #include <cstdio>
 #include <memory>
+#include <vector>
 
 namespace {
 
-using x4::cull::BackgroundSource;
-using x4::cull::kBaseOffScreenLayerZero;
-using x4::cull::kBaseOffScreenLoose;
-using x4::cull::kBaseOffScreenParametric;
 using x4::cull::kBaseOnScreenParametric;
 using x4::cull::kBaseOnScreenTight;
 using x4::cull::kBaseOnScreenWide;
-using x4::cull::kCameraLayersAddress;
-using x4::cull::kCameraLayerStride;
-using x4::cull::kCameraScrollX;
-using x4::cull::kCameraScrollY;
 using x4::cull::kMeasuredSites;
 using x4::cull::kOnScreenOffset;
 using x4::cull::kQuadCornerX;
@@ -33,6 +27,10 @@ using x4::cull::RetailSlack;
 using x4::cull::ScreenCoordinate;
 using x4::cull::ScreenWindow;
 using x4::cull::VisibilityCull;
+using x4::cull::WidenedObjects;
+using x4::guest::CameraLayerOffsets;
+using x4::guest::kCameraLayersAddress;
+using x4::guest::kCameraLayerStride;
 
 int g_checks = 0;
 int g_windows = 0;
@@ -170,9 +168,10 @@ bool verify_widened_bands(int margin) {
   return true;
 }
 
-// 1b. Each measured site is bound to the slack its own disassembly carries; parametric rows are marked as such.
+// 1b. Each flag-writing site is bound to the slack its own disassembly carries; the off-screen verdict sites stay
+// retail.
 bool verify_measured_site_table() {
-  // Seven sites, no duplicate addresses, all inside the text section.
+  CHECK(std::size(kMeasuredSites) == 4);
   for (std::size_t i = 0; i < std::size(kMeasuredSites); ++i) {
     const MeasuredSite &site = kMeasuredSites[i];
     for (std::size_t j = 0; j < i; ++j) {
@@ -183,14 +182,10 @@ bool verify_measured_site_table() {
   CHECK(kBaseOnScreenTight.address == 0x8002B288u);
   CHECK(kBaseOnScreenParametric.address == 0x8002B318u);
   CHECK(kBaseOnScreenWide.address == 0x8002B3C0u);
-  CHECK(kBaseOffScreenParametric.address == 0x8002B1E8u);
-  CHECK(kBaseOffScreenLoose.address == 0x8002B160u);
-  CHECK(kBaseOffScreenLayerZero.address == 0x800B8490u);
   CHECK(kQuadOnScreen.address == 0x800D46F4u);
 
-  // A site's slack must be covered by the sweep; parametric rows (-1) are exempt, their slack arrives in a register.
-  const MeasuredSite *pinned[] = {
-      &kBaseOnScreenTight, &kBaseOnScreenWide, &kBaseOffScreenLoose, &kBaseOffScreenLayerZero, &kQuadOnScreen};
+  // A site's slack must be covered by the sweep; the parametric row (-1) is exempt, its slack arrives in a register.
+  const MeasuredSite *pinned[] = {&kBaseOnScreenTight, &kBaseOnScreenWide, &kQuadOnScreen};
   for (const MeasuredSite *site : pinned) {
     bool covered = false;
     for (const Shape &shape : kShapes) {
@@ -203,23 +198,7 @@ bool verify_measured_site_table() {
   // The asymmetric row is 0x60/0x200 horizontal and 0x50/0x190 vertical: 96/80, not 96/96.
   CHECK(kBaseOnScreenWide.halfWidth == 0x60);
   CHECK(kBaseOnScreenWide.halfHeight == 0x50);
-  CHECK(kBaseOnScreenWide.halfWidth != kBaseOnScreenWide.halfHeight);
-  // Layer-0 is the only row ignoring the background byte; the zero-slack row is the only publishing one with no slack.
-  CHECK(kBaseOffScreenLayerZero.layerZeroScroll);
-  for (const MeasuredSite &site : kMeasuredSites) {
-    if (site.address != kBaseOffScreenLayerZero.address) {
-      CHECK(!site.layerZeroScroll);
-    }
-  }
   CHECK(kQuadOnScreen.halfWidth == 0 && kQuadOnScreen.halfHeight == 0);
-  CHECK(kQuadOnScreen.writesFlag);
-  // The flag polarity: the two off-screen sites return the inverse, the four writers do not.
-  CHECK(kBaseOffScreenLoose.returnsOffScreen && !kBaseOffScreenLoose.writesFlag);
-  CHECK(kBaseOffScreenParametric.returnsOffScreen && !kBaseOffScreenParametric.writesFlag);
-  CHECK(kBaseOffScreenLayerZero.returnsOffScreen && !kBaseOffScreenLayerZero.writesFlag);
-  CHECK(kBaseOnScreenTight.writesFlag && !kBaseOnScreenTight.returnsOffScreen);
-  CHECK(kBaseOnScreenWide.writesFlag && !kBaseOnScreenWide.returnsOffScreen);
-  CHECK(kBaseOnScreenParametric.writesFlag && !kBaseOnScreenParametric.returnsOffScreen);
   CHECK(kBaseOnScreenParametric.halfWidth == -1 && kBaseOnScreenParametric.halfHeight == -1);
   return true;
 }
@@ -320,8 +299,8 @@ struct Fixture {
   }
   void setScroll(int layer, int x, int y) {
     const std::uint32_t base = kCameraLayersAddress + static_cast<std::uint32_t>(layer) * kCameraLayerStride;
-    core->mem_w16(base + kCameraScrollX, static_cast<std::uint16_t>(x));
-    core->mem_w16(base + kCameraScrollY, static_cast<std::uint16_t>(y));
+    core->mem_w16(base + CameraLayerOffsets::kScrollX, static_cast<std::uint16_t>(x));
+    core->mem_w16(base + CameraLayerOffsets::kScrollY, static_cast<std::uint16_t>(y));
   }
 };
 
@@ -339,8 +318,8 @@ bool verify_background_relative_recovery(Fixture &f) {
   f.core->mem_w8(kObject + 0x14u, 0xFFu);
   f.setScroll(0, 1000, 1000);
   f.setScreenPosition(kObject, 0x0Au, 160, 120);
-  CHECK(retail.screenX(*f.core, kObject, ObjectLayout::BaseObject, BackgroundSource::ObjectByte).value == 160);
-  CHECK(retail.screenY(*f.core, kObject, ObjectLayout::BaseObject, BackgroundSource::ObjectByte).value == 120);
+  CHECK(retail.screenX(*f.core, kObject, ObjectLayout::BaseObject).value == 160);
+  CHECK(retail.screenY(*f.core, kObject, ObjectLayout::BaseObject).value == 120);
 
   // Layer 1's scroll is subtracted; the layer index comes from the byte (84 = 0x54 stride).
   f.core->mem_w8(kObject + 0x14u, 1);
@@ -348,33 +327,29 @@ bool verify_background_relative_recovery(Fixture &f) {
   f.setScroll(1, 100, 200);
   f.setScroll(2, 300, 400);
   f.setScreenPosition(kObject, 0x0Au, 260, 320);
-  CHECK(retail.screenX(*f.core, kObject, ObjectLayout::BaseObject, BackgroundSource::ObjectByte).value == 160);
-  CHECK(retail.screenY(*f.core, kObject, ObjectLayout::BaseObject, BackgroundSource::ObjectByte).value == 120);
+  CHECK(retail.screenX(*f.core, kObject, ObjectLayout::BaseObject).value == 160);
+  CHECK(retail.screenY(*f.core, kObject, ObjectLayout::BaseObject).value == 120);
 
   // The QuadObj byte is at +0x37, not +0x14; plant opposite values at both.
   f.core->mem_w8(kQuad + 0x14u, 2);
   f.core->mem_w8(kQuad + 0x37u, 1);
   f.setScreenPosition(kQuad, 0x0Au, 260, 320);
-  CHECK(retail.screenX(*f.core, kQuad, ObjectLayout::QuadObject, BackgroundSource::ObjectByte).value == 160);
-  CHECK(retail.screenY(*f.core, kQuad, ObjectLayout::QuadObject, BackgroundSource::ObjectByte).value == 120);
+  CHECK(retail.screenX(*f.core, kQuad, ObjectLayout::QuadObject).value == 160);
+  CHECK(retail.screenY(*f.core, kQuad, ObjectLayout::QuadObject).value == 120);
   // And the BaseObj reading of the same bytes must still use +0x14, i.e. layer 2 -> 300/400 -> -40/-80.
-  CHECK(retail.screenX(*f.core, kQuad, ObjectLayout::BaseObject, BackgroundSource::ObjectByte).value == -40);
-  CHECK(retail.screenY(*f.core, kQuad, ObjectLayout::BaseObject, BackgroundSource::ObjectByte).value == -80);
-
-  // The LayerZero source ignores the byte entirely, which is what 0x800B8490 does.
-  CHECK(retail.screenX(*f.core, kQuad, ObjectLayout::BaseObject, BackgroundSource::LayerZero).value == 260 - 11);
-  CHECK(retail.screenY(*f.core, kQuad, ObjectLayout::BaseObject, BackgroundSource::LayerZero).value == 320 - 12);
+  CHECK(retail.screenX(*f.core, kQuad, ObjectLayout::BaseObject).value == -40);
+  CHECK(retail.screenY(*f.core, kQuad, ObjectLayout::BaseObject).value == -80);
 
   // The guest `lhu`s both terms, so its register holds a zero-extended value (0x0000FFFB for -5) and `subu` gives
   // 65431, not -205; `raw` catches a sign-extending transcription.
   f.core->mem_w8(kObject + 0x14u, 1);
   f.setScreenPosition(kObject, 0x0Au, -5, -7);
-  const ScreenCoordinate x = retail.screenX(*f.core, kObject, ObjectLayout::BaseObject, BackgroundSource::ObjectByte);
+  const ScreenCoordinate x = retail.screenX(*f.core, kObject, ObjectLayout::BaseObject);
   CHECK(x.raw == 0xFFFBu - 100u); // -5 as u16 is 0xFFFB, not 0xFFFF
   CHECK(x.value == -105);
   // Far negative end: the zero-extended raw is 0x00008000 and the subtraction does not wrap.
   f.setScreenPosition(kObject, 0x0Au, -32768, 0);
-  const ScreenCoordinate far = retail.screenX(*f.core, kObject, ObjectLayout::BaseObject, BackgroundSource::ObjectByte);
+  const ScreenCoordinate far = retail.screenX(*f.core, kObject, ObjectLayout::BaseObject);
   CHECK(far.raw == 0x8000u - 100u);
   CHECK(far.value == static_cast<std::int16_t>(0x8000u - 100u));
   return true;
@@ -535,13 +510,60 @@ bool verify_publication(Fixture &f) {
   return true;
 }
 
+// 5. The retail verdict is what gameplay sees; the widened-only objects are raised for the draw pass and lowered after.
+bool verify_widened_objects(Fixture &f) {
+  const VisibilityCull retail = VisibilityCull::retail();
+  const VisibilityCull wide{widePlan(kExpectedMargin)};
+  CHECK(retail.horizontalMargin() == 0);
+  const int rightBand = RetailScreen::kWidth + RetailSlack::kTight;
+  CHECK(!retail.inside(rightBand, 120, RetailSlack::kTight, RetailSlack::kTight));
+  CHECK(wide.inside(rightBand, 120, RetailSlack::kTight, RetailSlack::kTight));
+
+  f.plantObject(kObject, 0x40u);
+  f.core->mem_w8(kObject + x4::cull::kObjectActiveOffset, 1);
+  f.core->mem_w8(kObject + x4::cull::kObjectIdOffset, 7);
+  f.core->mem_w8(kObject + kOnScreenOffset, 0);
+  WidenedObjects table;
+  table.record(*f.core, kObject, false, true);
+  CHECK(table.size() == 1);
+
+  // Raised for the draw, gameplay's byte back afterwards, neighbours untouched.
+  std::vector<std::uint32_t> raised = table.raise(*f.core);
+  CHECK(raised.size() == 1 && raised[0] == kObject);
+  CHECK(f.core->mem_r8(kObject + kOnScreenOffset) == 1);
+  CHECK(f.core->mem_r8(kObject + 0x02u) == 0xA2);
+  WidenedObjects::lower(*f.core, raised);
+  CHECK(f.core->mem_r8(kObject + kOnScreenOffset) == 0);
+  CHECK(f.core->mem_r8(kObject + 0x02u) == 0xA2);
+
+  // Retail-visible objects and objects off in both boxes are never recorded.
+  table.record(*f.core, kObject, true, true);
+  CHECK(table.size() == 0);
+  table.record(*f.core, kObject, false, false);
+  CHECK(table.size() == 0);
+
+  // A freed or reused slot does not inherit the entry; an object retail already shows is left alone.
+  table.record(*f.core, kObject, false, true);
+  f.core->mem_w8(kObject + x4::cull::kObjectIdOffset, 9);
+  CHECK(table.raise(*f.core).empty());
+  f.core->mem_w8(kObject + x4::cull::kObjectIdOffset, 7);
+  f.core->mem_w8(kObject + x4::cull::kObjectActiveOffset, 0);
+  CHECK(table.raise(*f.core).empty());
+  f.core->mem_w8(kObject + x4::cull::kObjectActiveOffset, 1);
+  f.core->mem_w8(kObject + kOnScreenOffset, 1);
+  CHECK(table.raise(*f.core).empty());
+  CHECK(f.core->mem_r8(kObject + kOnScreenOffset) == 1);
+  return true;
+}
+
 } // namespace
 
 int main() {
   Fixture fixture;
   if (!verify_4x3_identity_exhaustive() || !verify_measured_site_table() || !verify_sixteen_bit_parameter_wrap() ||
       !verify_widened_bands(kExpectedMargin) || !verify_wide_requires_the_plan() ||
-      !verify_background_relative_recovery(fixture) || !verify_quad_corners(fixture) || !verify_publication(fixture)) {
+      !verify_background_relative_recovery(fixture) || !verify_quad_corners(fixture) || !verify_publication(fixture) ||
+      !verify_widened_objects(fixture)) {
     return 1;
   }
   std::fprintf(stderr,

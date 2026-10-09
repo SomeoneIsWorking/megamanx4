@@ -39,42 +39,38 @@ LayoutOffsets VisibilityCull::offsetsFor(ObjectLayout layout) {
   return {kBaseObjectBackgroundOffset, kPositionIntegerX, kPositionIntegerY};
 }
 
-int VisibilityCull::layerFor(Core &core, std::uint32_t object, ObjectLayout layout, BackgroundSource source) const {
-  if (source == BackgroundSource::LayerZero) {
-    return 0;
-  }
+int VisibilityCull::layerFor(Core &core, std::uint32_t object, ObjectLayout layout) const {
   const LayoutOffsets offsets = offsetsFor(layout);
   const int layer = signExtendByte(core.mem_r8(object + offsets.backgroundOffset));
   return layer < 0 ? -1 : layer;
 }
 
 std::uint32_t VisibilityCull::scrollBits(Core &core, int layer, std::uint32_t field) const {
-  const std::uint32_t address = kCameraLayersAddress + static_cast<std::uint32_t>(layer) * kCameraLayerStride + field;
+  const std::uint32_t address =
+      guest::kCameraLayersAddress + static_cast<std::uint32_t>(layer) * guest::kCameraLayerStride + field;
   return core.mem_r16(address);
 }
 
-ScreenCoordinate
-VisibilityCull::screenX(Core &core, std::uint32_t object, ObjectLayout layout, BackgroundSource source) const {
+ScreenCoordinate VisibilityCull::screenX(Core &core, std::uint32_t object, ObjectLayout layout) const {
   const LayoutOffsets offsets = offsetsFor(layout);
   const std::uint32_t position = core.mem_r16(object + offsets.xInteger);
-  const int layer = layerFor(core, object, layout, source);
+  const int layer = layerFor(core, object, layout);
   if (layer < 0) {
     return {static_cast<std::int32_t>(position), static_cast<std::int16_t>(position)};
   }
   // `subu` wraps in 32 bits; only the low 16 are consumed.
-  const std::uint32_t raw = position - scrollBits(core, layer, kCameraScrollX);
+  const std::uint32_t raw = position - scrollBits(core, layer, guest::CameraLayerOffsets::kScrollX);
   return {static_cast<std::int32_t>(raw), static_cast<std::int16_t>(raw)};
 }
 
-ScreenCoordinate
-VisibilityCull::screenY(Core &core, std::uint32_t object, ObjectLayout layout, BackgroundSource source) const {
+ScreenCoordinate VisibilityCull::screenY(Core &core, std::uint32_t object, ObjectLayout layout) const {
   const LayoutOffsets offsets = offsetsFor(layout);
   const std::uint32_t position = core.mem_r16(object + offsets.yInteger);
-  const int layer = layerFor(core, object, layout, source);
+  const int layer = layerFor(core, object, layout);
   if (layer < 0) {
     return {static_cast<std::int32_t>(position), static_cast<std::int16_t>(position)};
   }
-  const std::uint32_t raw = position - scrollBits(core, layer, kCameraScrollY);
+  const std::uint32_t raw = position - scrollBits(core, layer, guest::CameraLayerOffsets::kScrollY);
   return {static_cast<std::int32_t>(raw), static_cast<std::int16_t>(raw)};
 }
 
@@ -85,11 +81,11 @@ bool VisibilityCull::inside(int screenX, int screenY, int halfWidth, int halfHei
 
 bool VisibilityCull::quadOnScreen(Core &core, std::uint32_t object) const {
   const LayoutOffsets offsets = offsetsFor(ObjectLayout::QuadObject);
-  const int layer = layerFor(core, object, ObjectLayout::QuadObject, BackgroundSource::ObjectByte);
+  const int layer = layerFor(core, object, ObjectLayout::QuadObject);
   const std::uint32_t positionX = core.mem_r16(object + offsets.xInteger);
   const std::uint32_t positionY = core.mem_r16(object + offsets.yInteger);
-  const std::uint32_t scrollX = layer < 0 ? 0u : scrollBits(core, layer, kCameraScrollX);
-  const std::uint32_t scrollY = layer < 0 ? 0u : scrollBits(core, layer, kCameraScrollY);
+  const std::uint32_t scrollX = layer < 0 ? 0u : scrollBits(core, layer, guest::CameraLayerOffsets::kScrollX);
+  const std::uint32_t scrollY = layer < 0 ? 0u : scrollBits(core, layer, guest::CameraLayerOffsets::kScrollY);
 
   // First corner inside wins; the zero slack is retail.
   const ScreenWindow windowX = ScreenWindow::horizontal(0, horizontalMargin());
