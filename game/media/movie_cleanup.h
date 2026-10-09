@@ -29,18 +29,23 @@ enum class Phase : std::uint8_t {
   AfterSetModeFence,
 };
 
-// Tracks the three VSync fences of the cleanup transaction; an active phase also tells the frame
-// driver this owns the CD after Pause releases the stream bit.
+// Owns "an STR movie holds the picture": from the STR startup (`beginStream`) through the end of the
+// three-fence cleanup transaction. The XA/BGM stream also sets the CD pump's stream bit, so that bit
+// says nothing about movies.
 class State {
 public:
   explicit State(Core &core);
   State(Core &core, SuspendField suspendField);
 
+  void beginStream();
+  void abandonStream();
   void begin();
   void yieldFields(std::uint32_t returnAddress, std::uint32_t fields);
   void complete();
 
   [[nodiscard]] bool pending() const;
+  [[nodiscard]] bool streaming() const;
+  [[nodiscard]] bool ownsPicture() const;
   [[nodiscard]] Phase phase() const;
   [[nodiscard]] std::uint32_t completedFields() const;
 
@@ -48,6 +53,7 @@ private:
   Core &core_;
   SuspendField suspendField_;
   Phase phase_ = Phase::Idle;
+  bool streaming_ = false;
   std::uint32_t completedFields_ = 0u;
 };
 

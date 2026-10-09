@@ -53,6 +53,14 @@ State::State(Core &core, SuspendField suspendField) : core_(core), suspendField_
   }
 }
 
+void State::beginStream() {
+  streaming_ = true;
+}
+
+void State::abandonStream() {
+  streaming_ = false;
+}
+
 void State::begin() {
   if (phase_ != Phase::Idle) {
     refuse("a second cleanup began while the first is active");
@@ -100,10 +108,19 @@ void State::complete() {
     refuse("cleanup returned before all seven retained fields completed");
   }
   phase_ = Phase::Idle;
+  streaming_ = false;
 }
 
 bool State::pending() const {
   return phase_ != Phase::Idle;
+}
+
+bool State::streaming() const {
+  return streaming_;
+}
+
+bool State::ownsPicture() const {
+  return streaming_ || pending();
 }
 
 Phase State::phase() const {

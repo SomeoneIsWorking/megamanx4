@@ -39,9 +39,9 @@ from launch_environment import agent_environment
 from present_geometry import Unreadable, read_image
 
 SETTINGS = REPO / "psxport_settings.ini"
-EXECUTABLE = REPO / "build/bin/megamanx4_port"
+EXECUTABLE = REPO / "build/ci/bin/megamanx4_port"
 IMAGE = REPO / "scratch/bin/megamanx4/SLUS_005.61"
-OUT = REPO / "scratch/live"
+OUT = REPO / "scratch/post-movie/live"
 LOG = OUT / "live_play.log"
 WAV = OUT / "live_play.wav"
 SHOT_DIR = OUT / "shots"

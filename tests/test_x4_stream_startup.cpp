@@ -1,5 +1,6 @@
 #include "core.h"
 #include "game.h"
+#include "movie_cleanup.h"
 #include "stream_startup.h"
 
 #include <array>
@@ -203,9 +204,12 @@ bool verifyShippingCallbackRegistration(Core &core) {
 
 } // namespace
 
+void ignoreField(Core &) {}
+
 int main() {
   auto game = std::make_unique<Game>();
   Core &core = game->core;
+  x4::movie_cleanup::State movie(core, ignoreField);
   constexpr std::uint32_t kStack = 0x801FFF00u;
   constexpr std::uint32_t kReturnAddress = 0x81234567u;
   constexpr std::array<std::uint32_t, 4> kSaved = {0x16161616u, 0x17171717u, 0x18181818u, 0x19191919u};
@@ -239,10 +243,11 @@ int main() {
   g_vlcInput = 0u;
   g_vlcTable = 0u;
   bool ok = verifyShippingCallbackRegistration(core);
-  x4::stream_startup::run(core, recordDispatch, recordField, recordCdTransaction);
+  x4::stream_startup::run(core, recordDispatch, recordField, recordCdTransaction, movie);
 
   ok = verifyNoGuestWaits() && ok;
   ok = check(core.r[2] == 0u, "finite STR startup did not return success") && ok;
+  ok = check(movie.streaming() && movie.ownsPicture(), "a started STR movie did not own the picture") && ok;
   ok = check(core.r[29] == kStack && core.r[31] == kReturnAddress, "caller stack/RA were not restored") && ok;
   ok = check(core.r[16] == kSaved[0] && core.r[17] == kSaved[1] && core.r[18] == kSaved[2] && core.r[19] == kSaved[3],
              "callee-saved registers were not restored") &&
@@ -281,9 +286,20 @@ int main() {
     g_events.clear();
     g_stGetNextCalls = 2u;
     g_cdReadMode = 0u;
-    x4::stream_startup::run(core, recordDispatch, recordField, recordCdTransaction);
+    x4::stream_startup::run(core, recordDispatch, recordField, recordCdTransaction, movie);
     ok = check(g_cdReadMode == 456u, "alternate retail stream flavor did not select read mode 456") &&
          verifyNoGuestWaits();
+  }
+
+  if (ok) {
+    // A startup the CD refuses is no movie: the picture goes back to the game.
+    movie.abandonStream();
+    core.r[29] = kStack;
+    core.r[4] = kStreamLba + 1u;
+    core.mem_w32(kStack + 32u, 0u);
+    g_events.clear();
+    x4::stream_startup::run(core, recordDispatch, recordField, recordCdTransaction, movie);
+    ok = check(core.r[2] == 1u && !movie.ownsPicture(), "a failed STR startup left the movie owning the picture");
   }
 
   if (!ok) {

@@ -1,12 +1,12 @@
 ---
 id: 38
 title: An XA BGM stream is treated as an STR movie
-status: open
+status: closed
 symptom: 16:9 drops to 4:3 when title music starts, and the frame driver skips the retail draw prefix while BGM plays
 tags: widescreen,movie,music,frame-loop
 state_items: S004,S006
 created: 2026-10-07
-updated: 2026-10-07
+updated: 2026-10-09
 ---
 
 ## Reproduction
@@ -31,3 +31,12 @@ owners read that word as "an STR movie owns the picture":
 Key movie ownership on X4's own STR owners: a state set by `x4::stream_startup::run` (0x80018788) and
 cleared when `x4::movie_cleanup` completes, read by both owners. `cd.stream_active` stays the CD
 pump's word.
+
+## Resolution
+
+Closed. `x4::movie_cleanup::State` now owns "an STR movie owns the picture": `stream_startup::run` calls
+`beginStream()`, `complete()` or a failed start releases it, and `ownsPicture()` is read by
+`X4FrameDriver::stepFrame` and `WidescreenPolicy::presentationAspect`. `Game::cd.stream_active` stays the CD
+pump's word. Tests: `x4_frame_driver` (`verifyBgmStreamDoesNotOwnPicture`), `x4_runtime` (BGM keeps 16:9, a
+stream gives 4:3), `x4_movie_cleanup`, `x4_stream_startup`. Post-movie presents have non-black pictures
+(title at present ~13,500, demo stage ~15,000) where they were 0.00% before.

@@ -1,11 +1,11 @@
 ---
 id: 36
 title: Every run dies at presented field ~2,848 on a SysEnq element whose VERIFIER word is not code
-status: open
+status: closed
 symptom: Deterministic SIGSEGV at presented field ~2,848 after exactly 306 task-turn budget resumes
 tags: frame-loop,irq,sysenq,crash
 created: 2026-10-04
-updated: 2026-10-04
+updated: 2026-10-09
 ---
 
 Found while measuring the `task_resume_evidence` gate (`docs/project-state.md` S002), because that gate
@@ -75,3 +75,15 @@ This closes when a 3,000-present run exits 0. It does NOT close the wall behind 
 from 100 to 2,830 measured 0.00% non-black (`PSXPORT_PRESENT_SHOT_AT=100,200,…,2830`), so even with the
 crash fixed, no present in this window satisfies `task_resume_evidence`'s 1% non-black floor. The picture
 has to exist first, which is issue 0028/0029's subject.
+## Resolution
+
+Closed. The SysEnq element was never corrupted by a stray write to `0x8013BC00`. The queue appender stored a
+twenty-bit stream offset through a sixteen-bit mask, so the guest decompressor read the wrong compressed stream
+for player graphics and wrote past its buffer into the interrupt element and the class-0 table
+(`game/render/vram_rect_queue.h`: `kStreamOffsetMask`, `streamAddress`; `lui a0,0xf` / `ori a0,a0,0xffff` at
+`0x80015F44`/`0x80015F48` build `0xFFFFF` for the `and` at `0x80015F4C`).
+Test: `x4_vram_rect_queue` (`tests/test_x4_vram_rect_queue.cpp`) checks animation word `0x0191DFB4` resolves to
+25 bands at blob+`0x1DFB4`; it fails with the old mask. A 30,000-present run now exits 0 with no SysEnq
+verifier refusal. The "306 resumes then SIGSEGV" shape described above no longer occurs at HEAD; the earlier
+`StGetNext` retry loop was a separate defect fixed in psxport (`runtime/psx/cd/cdc_native.cpp`,
+`stop_continuous_read`, test `pause_keeps_an_announced_sector_for_its_pending_data_ready`).

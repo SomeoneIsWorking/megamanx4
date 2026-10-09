@@ -8,6 +8,10 @@ namespace x4::bios_threads {
 class Service;
 }
 
+namespace x4::movie_cleanup {
+class State;
+}
+
 namespace x4::stream_startup {
 
 inline constexpr std::uint32_t kEntry = 0x80018788u;
@@ -27,8 +31,13 @@ void installReadCallbacks(Core &core, std::uint32_t readMode);
 void awaitField(Core &core);
 void awaitField(Core &core, bios_threads::Service &threads);
 
-// Native SLUS_005.61 STR/MDEC startup; hardware waits go through the injected services.
-void run(Core &core, GuestDispatch dispatch, FieldService serviceField, CdTransaction startCdStream);
+// Native SLUS_005.61 STR/MDEC startup; hardware waits go through the injected services. `movie` owns
+// the picture from the first wait until the cleanup completes, or until this startup fails.
+void run(Core &core,
+         GuestDispatch dispatch,
+         FieldService serviceField,
+         CdTransaction startCdStream,
+         movie_cleanup::State &movie);
 void run(Core *core);
 void registerOverride(Core &core);
 

@@ -43,8 +43,9 @@ inline constexpr std::uint32_t kLoadImageGuestReturn = 0x80015E94u; // `jal` at 
 // Animation word `lw` @ 0x80015F14; `srl 0x14` @ 0x80015F20 gives a 12-bit band count.
 inline constexpr std::uint32_t kBandCountShift = 20u;
 inline constexpr std::uint32_t kBandCountMask = 0xFFFu;
-// 16-bit stream offset (`ori 0xffff` @ 0x80015F48); the reference decomp prints 0xFFFFF.
-inline constexpr std::uint32_t kStreamOffsetMask = 0xFFFFu;
+// 20-bit stream offset: `lui a0,0xf` @ 0x80015F44 and `ori a0,a0,0xffff` @ 0x80015F48 build 0xFFFFF for the `and` @
+// 0x80015F4C.
+inline constexpr std::uint32_t kStreamOffsetMask = 0xFFFFFu;
 // Buffers formed @ 0x80015F24-0x80015F28 (shared) and 0x80015F38-0x80015F3C (per slot, `sll 0xc` @ 0x80015F34).
 inline constexpr std::uint32_t kSharedGfxBuffer = 0x8016DEA8u;
 inline constexpr std::uint32_t kPerSlotGfxBuffer = 0x8016EEA8u;
@@ -113,6 +114,15 @@ static_assert(kGfxBufferStride == 0x1000u, "the per-slot graphics stride is 0x10
 static_assert(kBandHeight == 0x10, "the trailing-band threshold is the band height");
 static_assert((0xFFFFFFFFu >> kBandCountShift) == ((1u << (32u - kBandCountShift)) - 1u),
               "the band count is masked to the twelve bits the shift leaves above it");
+
+// The band count and the compressed stream of one animation word (`srl` @ 0x80015F20, `and`/`addu` @
+// 0x80015F4C-0x80015F50).
+constexpr std::int32_t bandCount(std::uint32_t animationWord) {
+  return static_cast<std::int32_t>((animationWord >> kBandCountShift) & kBandCountMask);
+}
+constexpr std::uint32_t streamAddress(std::uint32_t blob, std::uint32_t animationWord) {
+  return blob + (animationWord & kStreamOffsetMask);
+}
 
 // One append call, recorded for the census.
 struct Append {

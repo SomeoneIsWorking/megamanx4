@@ -1,11 +1,11 @@
 ---
 id: 29
 title: The post-movie park is an UNOWNED stock libcd CdSync leaf, and the whole 6→5→1 chain gates on it
-status: open
+status: closed
 symptom: Post-movie fields present a flat clear colour; the guest sits at game state 1 / sub-state 2 forever
 tags: frame-loop,cd,vsync,widescreen
 created: 2026-09-27
-updated: 2026-09-27
+updated: 2026-10-09
 ---
 
 Supersedes the mechanism half of issue 0028. Its wall ("the host must complete the guest's
@@ -225,3 +225,13 @@ frontier number is claimed.
   state-5 `CdlSeekL`/`CdControlF` choice at `0x80016dd8`. It therefore cannot divert state 5 off the
   `CdControl(0x15, …)` edge this owner covers. If it ever were nonzero, state 5 would enter the
   unowned `CdControlF` at `0x800E5EC8` instead, which is a separate, separately-measurable gap.
+
+## Resolution
+
+Closed, superseded. At HEAD the post-movie phase is reached: both movies complete, the title presents and the
+attract demo runs. The ring-refill failure was psxport's CD controller discarding a sector the drive had already
+announced when the guest issued Pause (`runtime/psx/cd/cdc_native.cpp`: `stop_continuous_read` now keeps
+`following_sector_ready` on a guest-command stop); libstr's `StCdInterrupt` then spun on the data DMA. Test:
+`pause_keeps_an_announced_sector_for_its_pending_data_ready` in `tests/test_cdc_continuous_read.cpp` (psxport).
+The `0x0113D7D0` dispatch was the wrong-mask corruption recorded in issue 0036. Issue 0038 was the reason the
+post-movie picture stayed black after that.

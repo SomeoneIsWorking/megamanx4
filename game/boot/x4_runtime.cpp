@@ -85,7 +85,8 @@ std::unique_ptr<FrameDriver> X4Runtime::createFrameDriver(Game &game) {
                                                 vsync::deliverField,
                                                 synchronizePresentation,
                                                 context(game.core).movieCleanup,
-                                                context(game.core).musicStream);
+                                                context(game.core).musicStream,
+                                                context(game.core).biosThreads);
 }
 
 const GuestPadBufferLayout *X4Runtime::guestPadBufferLayout() const {

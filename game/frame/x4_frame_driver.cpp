@@ -43,10 +43,6 @@ void call(Core &core, GuestDispatch dispatch, std::uint32_t entry, std::uint32_t
   dispatch(&core, entry);
 }
 
-bool movieOwnsPicture(const Core &core, const movie_cleanup::State &cleanup) {
-  return cleanup.pending() || (core.game && core.game->cd.stream_active != 0);
-}
-
 bool runRetailFramePrefix(Core &core, GuestDispatch dispatch, music_stream::State &musicStream) {
   if (musicStream.pending()) {
     if (!musicStream.dispatchBeforeObjectsB(dispatch)) {
@@ -124,14 +120,17 @@ X4FrameDriver::X4FrameDriver(GuestDispatch dispatch,
                              FieldService fieldService,
                              PresentationSync presentationSync,
                              movie_cleanup::State &movieCleanup,
-                             music_stream::State &musicStream)
+                             music_stream::State &musicStream,
+                             bios_threads::Service &tasks)
     : dispatch_(dispatch), fieldService_(fieldService), presentationSync_(presentationSync),
-      movieCleanup_(&movieCleanup), musicStream_(&musicStream) {}
+      movieCleanup_(&movieCleanup), musicStream_(&musicStream), tasks_(&tasks) {}
 
 void X4FrameDriver::stepFrame(Core &core, std::uint32_t) {
   const bool resumingMusicField = musicStream_->pending();
   const bool resumingCleanupField = movieCleanup_->pending();
-  const bool resumingNestedField = resumingMusicField || resumingCleanupField;
+  // A task that ran out of turn budget is mid-frame, so retail's loop is still inside UpdateTasks.
+  const bool resumingTaskFrame = tasks_->frameInProgress();
+  const bool resumingNestedField = resumingMusicField || resumingCleanupField || resumingTaskFrame;
 
   // A suspended state-7 transaction is still inside its VSync(3) call, so it keeps that frame
   // and skips the outer back-edge.
@@ -156,13 +155,13 @@ void X4FrameDriver::stepFrame(Core &core, std::uint32_t) {
 
   // While the movie call is suspended in UpdateTasks, the 16-bit draw prefix must not rerun;
   // it overwrites the 24-bit MDEC buffer. Resume only the blocked task.
-  if (!movieOwnsPicture(core, *movieCleanup_)) {
+  if (!movieCleanup_->ownsPicture() && !resumingTaskFrame) {
     if (!runRetailFramePrefix(core, dispatch_, *musicStream_)) {
       return;
     }
   }
   call(core, dispatch_, kUpdateTasks, 0x800120ECu, 5u);
-  if (movieOwnsPicture(core, *movieCleanup_)) {
+  if (movieCleanup_->ownsPicture() || tasks_->frameInProgress()) {
     return;
   }
   runRetailFrameSuffix(core, dispatch_);

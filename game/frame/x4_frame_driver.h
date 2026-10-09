@@ -1,5 +1,6 @@
 #pragma once
 
+#include "bios_threads.h"
 #include "game_runtime.h"
 #include "movie_cleanup.h"
 #include "music_stream.h"
@@ -28,7 +29,8 @@ public:
                 FieldService fieldService,
                 PresentationSync presentationSync,
                 cleanup::State &movieCleanup,
-                music::State &musicStream);
+                music::State &musicStream,
+                bios_threads::Service &tasks);
   void stepFrame(Core &core, std::uint32_t frame) override;
 
 private:
@@ -37,6 +39,7 @@ private:
   PresentationSync presentationSync_;
   cleanup::State *movieCleanup_;
   music::State *musicStream_;
+  bios_threads::Service *tasks_;
 };
 
 } // namespace x4::frame

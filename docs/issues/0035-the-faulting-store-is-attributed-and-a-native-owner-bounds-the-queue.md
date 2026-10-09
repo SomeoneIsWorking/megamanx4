@@ -243,11 +243,11 @@ fills the queue says so with a denominator rather than by silence.
   capacity compare INSIDE the appender (the same claim in the other direction), swapping the loop
   branch's target (the 0033/0034 misreading), moving the array base off `item_objects[0]`, and
   planting a fourth call site.
-* **It caught a real error in the C++ I had just written.** I had taken the stream-offset mask from
-  the reference decompilation as `0xFFFFF`. The image builds it as `ori $4,$4,0xffff` at
-  `0x80015F48` and ANDs in a register at `0x80015F4C` — **sixteen bits**. A twenty-bit mask would
-  let the compressed-stream offset run a megabyte past the object's blob. `kStreamOffsetMask` is now
-  `0xFFFF`, the gate says so out loud, and this is the reason the gate exists.
+* **CORRECTED 2026-10-09.** This entry claimed the image's stream-offset mask is sixteen bits. It is
+  twenty: `lui $4,0xf` at `0x80015F44` precedes the `ori $4,$4,0xffff` at `0x80015F48`, so the `and` at
+  `0x80015F4C` uses `0xFFFFF`, as the reference decompilation says. The sixteen-bit mask made the guest
+  decompressor read the wrong stream, which is the cause of issue 0036 and the `0x0113D7D0` dispatch.
+  `kStreamOffsetMask` is `0xFFFFF` and `x4_vram_rect_queue` pins it.
 * Two of the gate's own helpers were wrong before the gate was right, and both produced a confident
   wrong answer rather than an error: a MIPS shift puts its SOURCE in the `rt` slot and a
   non-shift puts its source in `rs`; and a mutation helper that read the load address one word too
@@ -261,7 +261,7 @@ reported.** The first two runs of the owner still carried the twenty-bit stream 
 decompilation (§6 says the gate caught it). With that mask the guest reads the wrong compressed
 stream and follows a different path.
 
-| | before the owner | owner, 20-bit mask (SUPERSEDED) | owner, 16-bit mask (SHIPPING) |
+| | before the owner | owner, 20-bit mask (SUPERSEDED) | owner, 16-bit mask (WRONG, superseded) |
 |---|---|---|---|
 | fatal `0x26010006` dispatch | present | **absent** | **absent** (0 occurrences) |
 | display field reached | **29,514** | **31,166** | past the refusal at field counter 175,501, and further |
@@ -315,9 +315,8 @@ loop; and `func_8001D460`'s countdown, which is what identified the pass functio
 
 Verified here, against the authenticated bytes, and NOT taken from the decompilation: every address,
 every immediate, the record layout, the twelve-bit band field, the per-iteration cursor advance and
-its delay slot, the three-writer census, the pass ordering, and the sixteen-bit stream mask — the
-last of which **contradicts** the decompilation, which is the clearest evidence in this issue that
-the reading aid and the image were kept apart.
+its delay slot, the three-writer census, the pass ordering, and the stream mask (originally recorded as sixteen bits,
+wrongly; it is twenty, see the correction in section 6).
 
 ## 9. The measurement trap this issue walked into, recorded because it nearly cost the finding
 

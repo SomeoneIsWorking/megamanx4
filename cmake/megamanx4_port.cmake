@@ -211,6 +211,17 @@ if(BUILD_TESTING)
     CXX_STANDARD_REQUIRED ON
   )
   add_test(NAME x4_gpu_timeout COMMAND mmx4_gpu_timeout_test)
+  add_executable(mmx4_vram_rect_queue_test
+    ${CMAKE_SOURCE_DIR}/game/render/vram_rect_queue.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_x4_vram_rect_queue.cpp
+  )
+  target_include_directories(mmx4_vram_rect_queue_test PRIVATE ${X4_TITLE_DIRS})
+  target_link_libraries(mmx4_vram_rect_queue_test PRIVATE x4_guest_execution)
+  set_target_properties(mmx4_vram_rect_queue_test PROPERTIES
+    CXX_STANDARD 20
+    CXX_STANDARD_REQUIRED ON
+  )
+  add_test(NAME x4_vram_rect_queue COMMAND mmx4_vram_rect_queue_test)
   add_executable(mmx4_display_init_test
     ${CMAKE_SOURCE_DIR}/game/render/display_init.cpp
     ${CMAKE_SOURCE_DIR}/tests/test_x4_display_init.cpp
@@ -224,6 +235,7 @@ if(BUILD_TESTING)
   add_test(NAME x4_display_init COMMAND mmx4_display_init_test)
   add_executable(mmx4_stream_startup_test
     ${CMAKE_SOURCE_DIR}/game/execution/bios_threads.cpp
+    ${CMAKE_SOURCE_DIR}/game/media/movie_cleanup.cpp
     ${CMAKE_SOURCE_DIR}/game/media/cd_controller.cpp
     ${CMAKE_SOURCE_DIR}/game/media/stream_startup.cpp
     ${CMAKE_SOURCE_DIR}/game/frame/vsync_sync.cpp

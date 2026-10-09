@@ -21,7 +21,7 @@ constexpr uint32_t kDrawEnvironmentWidthOffset = 4u;
 
 PresentationAspect WidescreenPolicy::presentationAspect(const Core &core) const {
   // STR movies are 320x240 pictures without the widened GTE projection, so they stay 4:3 while streaming.
-  if (core.game && (core.game->cd.stream_active != 0 || context(core).movieCleanup.pending())) {
+  if (context(core).movieCleanup.ownsPicture()) {
     return PresentationAspect::Standard4x3;
   }
   return enh(widescreenCvar()) ? PresentationAspect::Wide16x9 : PresentationAspect::Standard4x3;

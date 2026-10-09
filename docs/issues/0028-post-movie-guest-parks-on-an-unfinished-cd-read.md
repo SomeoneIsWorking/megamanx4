@@ -1,11 +1,11 @@
 ---
 id: 28
 title: After both STR movies the guest parks in game state 1 / sub-state 2 on an unfinished CD read
-status: open
+status: closed
 symptom: Post-movie fields present a flat clear colour and the retail task never ends a turn
 tags: frame-loop,cd,vsync,widescreen
 created: 2026-09-27
-updated: 2026-09-27
+updated: 2026-10-09
 ---
 
 ## What was measured
@@ -218,3 +218,13 @@ reports 13–17 ordering-table nodes walked per present from present ~13,000 onw
 or non-primitive nodes. So the cull owners are neither being handed a scene to reject nor being
 proved correct on one: the guest has nothing to submit yet. Issue 0019 stays open with its hermetic
 pinning and gains no product evidence from this session.
+
+## Resolution
+
+Closed, superseded. At HEAD the post-movie phase is reached: both movies complete, the title presents and the
+attract demo runs. The ring-refill failure was psxport's CD controller discarding a sector the drive had already
+announced when the guest issued Pause (`runtime/psx/cd/cdc_native.cpp`: `stop_continuous_read` now keeps
+`following_sector_ready` on a guest-command stop); libstr's `StCdInterrupt` then spun on the data DMA. Test:
+`pause_keeps_an_announced_sector_for_its_pending_data_ready` in `tests/test_cdc_continuous_read.cpp` (psxport).
+The `0x0113D7D0` dispatch was the wrong-mask corruption recorded in issue 0036. Issue 0038 was the reason the
+post-movie picture stayed black after that.

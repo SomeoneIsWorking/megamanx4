@@ -24,6 +24,9 @@ constexpr uint32_t kThreadWindowEnd = 0x800EDDCCu;
 constexpr uint32_t kMainThreadHandle = 0xFF000000u;
 constexpr int kThreadCount = 4;
 
+// Over-budget turns a task may take in one frame before the run reports a guest loop.
+constexpr uint32_t kMaxTurnFields = 512u;
+
 using EntryRunner = std::function<void(Core &, uint32_t)>;
 
 // Per-Core BIOS-thread service under retail func_80012600, which still picks the task and calls ChangeTh.
@@ -50,6 +53,14 @@ public:
   // Park the running task without dispatching the guest ChangeTh thunk; must be inside a non-main TCB.
   void yieldToMain();
 
+  // Counts one over-budget turn of the running task; true once it has gone kMaxTurnFields without
+  // yielding through ChangeTh or reaching a field wait.
+  [[nodiscard]] bool spendBudgetTurn();
+
+  // A task parked on an exhausted turn budget is still inside its guest frame: retail's UpdateTasks has not
+  // returned, so the draw prefix and tail must not run for it.
+  [[nodiscard]] bool frameInProgress() const;
+
   // Whether a field wait has a fiber to park; the main TCB never has one.
   [[nodiscard]] bool inTaskFiber() const {
     return activeSlot_ > 0 && activeSlot_ < kThreadCount;
@@ -73,6 +84,8 @@ private:
     // Stack top from OpenTh; the stack grows down, so a resumed sp above it is foreign.
     uint32_t stackTop = 0;
     R3000 regs{};
+    // Consecutive over-budget turns since the task last finished a frame or reached a field wait.
+    uint32_t budgetTurns = 0;
     std::unique_ptr<Coro> fiber;
   };
 

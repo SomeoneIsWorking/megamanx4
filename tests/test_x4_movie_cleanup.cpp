@@ -129,6 +129,7 @@ bool verifyTransaction(Core &core, Game &game, x4::movie_cleanup::State &state) 
   game.cdc.tick_context = &ticks;
   game.cdc.tick_now = testTicks;
   gState = &state;
+  state.beginStream();
 
   x4::movie_cleanup::run(core, state, dispatch, resetController);
 
@@ -154,6 +155,7 @@ bool verifyTransaction(Core &core, Game &game, x4::movie_cleanup::State &state) 
 
   return check(gFieldPhases == std::vector<x4::movie_cleanup::Phase>(kPhases.begin(), kPhases.end()),
                "cleanup did not consume the exact 1+3+3 field phase order") &&
+         check(!state.ownsPicture(), "cleanup left the movie owning the picture") &&
          check(!state.pending() && state.phase() == x4::movie_cleanup::Phase::Idle &&
                    state.completedFields() == x4::movie_cleanup::kTotalFields,
                "cleanup FSM did not finish exactly seven fields") &&

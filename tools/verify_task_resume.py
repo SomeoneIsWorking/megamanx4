@@ -22,7 +22,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_EXE = ROOT / "scratch/bin/megamanx4/SLUS_005.61"
-DEFAULT_PRODUCT = ROOT / "build/bin/megamanx4_port"
+DEFAULT_PRODUCT = ROOT / "build/ci/bin/megamanx4_port"
 EXPECTED_SHA1 = "213733031136d095ca275d6957695aa25011cfa5"
 TEXT_VADDR = 0x80010000
 TEXT_FILE_OFFSET = 0x800

@@ -9,7 +9,9 @@
 #include "execution_services.h"
 #include "game.h"
 #include "guest_execution.h"
+#include "movie_cleanup.h"
 #include "native_dispatch.h"
+#include "x4_context.h"
 
 #include <array>
 #include <cstdlib>
@@ -163,11 +165,22 @@ void installReadCallbacks(Core &core, std::uint32_t readMode) {
   core.mem_w32(kReadyCallbackSlot, kStCdInterrupt);
 }
 
-void run(Core &core, GuestDispatch dispatch, FieldService serviceField, CdTransaction startCdStream) {
+void run(Core &core,
+         GuestDispatch dispatch,
+         FieldService serviceField,
+         CdTransaction startCdStream,
+         movie_cleanup::State &movie) {
   if (!dispatch || !serviceField || !startCdStream) {
     cfg_loge("x4-stream-startup", "STR startup requires dispatch, field, and CD services");
     std::abort();
   }
+
+  // The retail startup is a nested VSync loop, so the picture belongs to the movie from here, not from its first frame.
+  movie.beginStream();
+  const auto fail = [&core, &movie] {
+    movie.abandonStream();
+    finish(core, 1u);
+  };
 
   const std::uint32_t streamLba = core.r[4];
   const std::uint32_t streamArg1 = core.r[5];
@@ -232,7 +245,7 @@ void run(Core &core, GuestDispatch dispatch, FieldService serviceField, CdTransa
 
   const std::uint32_t readMode = core.mem_r32(kStreamFlavor) == 0u ? kDefaultReadMode : kAlternateReadMode;
   if (!startCdStream(core, streamLba, readMode, kStreamFilter, serviceField)) {
-    finish(core, 1u);
+    fail();
     return;
   }
 
@@ -240,7 +253,7 @@ void run(Core &core, GuestDispatch dispatch, FieldService serviceField, CdTransa
   call(core, dispatch, kCdPosToInt, 0x80018968u, 4u);
   const std::uint32_t headLba = core.r[2];
   if (headLba < streamLba - 20u || headLba > streamLba + 5u) {
-    finish(core, 1u);
+    fail();
     return;
   }
 
@@ -256,7 +269,7 @@ void run(Core &core, GuestDispatch dispatch, FieldService serviceField, CdTransa
     core.r[4] = 0u;
     serviceFields(core, serviceField, 1u);
     if (++waits >= kFirstFrameWaitLimit) {
-      finish(core, 1u);
+      fail();
       return;
     }
   }
@@ -297,7 +310,7 @@ void run(Core *core) {
     cfg_loge("x4-stream-startup", "STR startup received a null Core");
     std::abort();
   }
-  run(*core, guest::callWithRegisterReturn, awaitField, startNativeCdStream);
+  run(*core, guest::callWithRegisterReturn, awaitField, startNativeCdStream, context(*core).movieCleanup);
 }
 
 void registerOverride(Core &core) {

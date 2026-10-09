@@ -161,8 +161,8 @@ void append(Core &core, std::uint32_t object, std::int32_t x, std::int32_t y) {
 
   const std::uint32_t blob = core.mem_r32(object + kBlobOffset);
   const std::uint32_t word = core.mem_r32(blob + current * 4u);
-  const std::int32_t bands = static_cast<std::int32_t>((word >> kBandCountShift) & kBandCountMask);
-  const std::uint32_t stream = blob + (word & kStreamOffsetMask);
+  const std::int32_t bands = bandCount(word);
+  const std::uint32_t stream = streamAddress(blob, word);
   const std::uint32_t buffer = decompressedBuffer(core, object);
 
   // `jal 0x80016FF4` @ 0x80015F54, the only call to it; returns to 0x80015F5C.

@@ -244,6 +244,36 @@ bool verify_bios_thread_contract(Core &core) {
   return subject.close(reused) && subject.close(second) && subject.close(third);
 }
 
+bool verify_budget_turns_reset_on_guest_yield(Core &core) {
+  constexpr uint32_t kStack = 0x801F8100u;
+  constexpr uint32_t kGp = 0x8012F418u;
+  x4::bios_threads::Service *service = nullptr;
+  bool tripped = false;
+  x4::bios_threads::Service subject(core, [&](Core &, uint32_t) {
+    // Two frames of 300 over-budget turns each: only the sum passes the limit.
+    for (int frame = 0; frame < 2; ++frame) {
+      for (int turn = 0; turn < 300; ++turn) {
+        tripped |= service->spendBudgetTurn();
+      }
+      service->change(x4::bios_threads::kMainThreadHandle);
+    }
+    for (uint32_t turn = 0; turn < x4::bios_threads::kMaxTurnFields; ++turn) {
+      tripped |= service->spendBudgetTurn() != (turn + 1u == x4::bios_threads::kMaxTurnFields);
+    }
+  });
+  service = &subject;
+  const uint32_t handle = subject.open(0x8001DAF8u, kStack, kGp);
+  for (int resume = 0; resume < 3; ++resume) {
+    subject.change(handle);
+  }
+  const bool ok = !tripped;
+  subject.close(handle);
+  if (!ok) {
+    std::fprintf(stderr, "over-budget turns carried across a guest ChangeTh yield instead of restarting\n");
+  }
+  return ok;
+}
+
 bool verify_title_vsync_field_yield(Core &core) {
   constexpr uint32_t kEntry = 0x8001D064u;
   constexpr uint32_t kStack = 0x801F8100u;
@@ -460,11 +490,17 @@ int main() {
     return 1;
   }
   game->cd.stream_active = 1;
+  if (runtime.guestWidescreenProjection()->presentationAspect(*core) != PresentationAspect::Wide16x9) {
+    std::fprintf(stderr, "an XA/BGM stream dropped the widescreen gameplay picture to 4:3\n");
+    return 1;
+  }
+  game->cd.stream_active = 0;
+  x4::context(*core).movieCleanup.beginStream();
   if (runtime.guestWidescreenProjection()->presentationAspect(*core) != PresentationAspect::Standard4x3) {
     std::fprintf(stderr, "active 24-bit STR movie did not preserve its authored 4:3 picture\n");
     return 1;
   }
-  game->cd.stream_active = 0;
+  x4::context(*core).movieCleanup.abandonStream();
   if (runtime.guestWidescreenProjection()->presentationAspect(*core) != PresentationAspect::Wide16x9) {
     std::fprintf(stderr, "widescreen gameplay did not resume after the STR stream stopped\n");
     return 1;
@@ -485,6 +521,9 @@ int main() {
     return 1;
   }
   if (!verify_bios_thread_contract(*core)) {
+    return 1;
+  }
+  if (!verify_budget_turns_reset_on_guest_yield(*core)) {
     return 1;
   }
   if (!verify_title_vsync_field_yield(*core)) {

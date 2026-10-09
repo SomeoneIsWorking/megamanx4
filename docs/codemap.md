@@ -55,7 +55,7 @@ enters psxport.
 
 | Unit | Owner | Responsibility |
 |---|---|---|
-| `x4_frame_driver.{h,cpp}` | `x4::frame::X4FrameDriver`, `bootPrefix()` | One retail field: the finite guest-main prefix, the preserved draw/drain suffix, and the ownership signals that keep a blocking movie from restarting the outer loop |
+| `x4_frame_driver.{h,cpp}` | `x4::frame::X4FrameDriver`, `bootPrefix()` | One retail field: the finite guest-main prefix, the preserved draw/drain suffix, and the ownership signals that keep a blocking movie, or a task that ran out of turn budget, from restarting the outer loop |
 | `vsync_sync.{h,cpp}` | `x4::vsync::deliverField()`, `serveVSync()`, `yieldField()`, `registerOverrides()` | The ONE display-field service (IRQ-0 delivery, pad, SPU, snapshot, presentation commit) and the sole owner of the libetc VSync entry 0x800E4DB0 for every mode the retail body defines |
 
 ### `game/execution/` — guest execution (namespaces `x4::guest`, `x4::native_overrides`, `x4::bios_threads`)
@@ -64,7 +64,7 @@ enters psxport.
 |---|---|---|
 | `guest_execution.{h,cpp}` | `x4::guest::callWithoutKnownReturn()`, `callWithRegisterReturn()`, `dispatch()` | This title's guest-call entry points: measured which entries have a known return address, and which registers must be checked before one is used as a boundary |
 | `native_overrides.{h,cpp}` | `x4::native_overrides::install()` | Install the widescreen projection and the loading owners against the active authenticated image |
-| `bios_threads.{h,cpp}` | `x4::bios_threads::Service`, `install()` | The BIOS cooperative-task context underneath the untouched retail scheduler: OpenTh / ChangeTh / CloseTh, the field boundary a task parks on, and the resume census |
+| `bios_threads.{h,cpp}` | `x4::bios_threads::Service`, `install()` | The BIOS cooperative-task context underneath the untouched retail scheduler: OpenTh / ChangeTh / CloseTh, the field boundary a task parks on, the per-task over-budget turn count (`spendBudgetTurn`, restarted by the task's own ChangeTh yield) and `frameInProgress()`, and the resume census |
 
 ### `game/input/` — input (namespaces `x4::pad`, `x4::input_path`)
 
@@ -82,7 +82,7 @@ enters psxport.
 | `startup_cd.{h,cpp}` | `x4::startup_cd::run()`, `registerOverride()` | The finite title setup transaction at 0x80013588, without borrowing libcd's VSync polling clock |
 | `stream_startup.{h,cpp}` | `x4::stream_startup::run()`, `awaitField()`, `installReadCallbacks()` | The STR/MDEC startup: start the native controller read without guest waits, publish the DMA3 callback table, and park the task on the next field |
 | `stream_interrupt.{h,cpp}` | `x4::stream_interrupt::run()`, `consumeCompletedCallback()` | The libstr sector-completion boundary, retaining the original `StCdInterrupt` body |
-| `movie_cleanup.{h,cpp}` | `x4::movie_cleanup::State`, `run()` | The complete retained cleanup transaction at 0x80018E50 and its exact 1+3+3 host fields |
+| `movie_cleanup.{h,cpp}` | `x4::movie_cleanup::State`, `run()` | The complete retained cleanup transaction at 0x80018E50 and its exact 1+3+3 host fields, and `ownsPicture()` (`streaming()` from `stream_startup::run` until `complete()`, or a pending cleanup): the one word that says an STR movie owns the picture |
 | `music_stream.{h,cpp}` | `x4::music_stream::State`, `setMode()` | The XA/BGM Setmode transition: the retained state-7 body with its VSync(3) replaced by a finite host-field yield |
 | `music_cd.{h,cpp}` | `x4::music_cd::registerOverrides()`, `serveCdSync()`, `serveCdControl()` | The measured 6 -> 5 -> 1 edges of the XA/BGM machine, bound to the framework's own stock-Sony completion owners; every other caller of either leaf keeps the guest body |
 | `fast_wait.{h,cpp}` | `x4::fast_wait::State`, `load_synchronously()`, `archive_cd_setup()`, `direct_cd_setup()`, `loading_presentation_wait()` | The measured direct/archive load operations, completed without their loading waits, and the scoped SDK leaves they virtualize |
@@ -95,7 +95,7 @@ enters psxport.
 | `gpu_timeout.{h,cpp}` | `x4::gpu_timeout::setAlarm()` | PsyQ `set_alarm` 0x800ECB38, sourced from the native field counter instead of a guest VSync query |
 | `visibility_cull.{h,cpp}` | `x4::cull::ScreenWindow`, `contains()` | The recovered retail cull predicate, widened only by the horizontal margin; the identity at 4:3 |
 | `cull_overrides.{h,cpp}` | `x4::cull::registerOverrides()` | The seven measured cull sites, bound to the guest ABI — the only place that knows one |
-| `vram_rect_queue.{h,cpp}` | `x4::vram_rect::clear()`, `upload()`, `append()`, `reportCensus()` | The guest's eight-entry VRAM rectangle upload queue end to end, including its real capacity |
+| `vram_rect_queue.{h,cpp}` | `x4::vram_rect::clear()`, `upload()`, `append()`, `reportCensus()` | The guest's eight-entry VRAM rectangle upload queue end to end, including its real capacity; `bandCount` / `streamAddress` are the one decode of the animation word (twenty-bit stream offset) |
 
 ### `game/ui/` — title logo composition (namespace `x4::title_quad`)
 
@@ -175,7 +175,8 @@ Framework hops name psxport files so a reader can follow them into `external/psx
 | Hop | Owner | What it decides |
 |---|---|---|
 | Movie start-up | `x4::stream_startup::run()` at 0x80018788 (`game/media/stream_startup.cpp`) | Starts the native controller read, publishes the DMA3 callback table, and parks the task with `awaitField` rather than a guest VSync wait |
-| While a movie blocks | `X4FrameDriver::stepFrame()` + `movie_cleanup::State::pending()` + `Game::cd::stream_active` | The frame driver does NOT replay the 16-bit gameplay draw prefix while a movie owns the picture; only the blocked task transaction is resumed |
+| While a movie blocks | `X4FrameDriver::stepFrame()` + `movie_cleanup::State::pending()` + `Game::cd::stream_active` | The frame driver does NOT replay the 16-bit gameplay draw prefix while a movie owns the picture; only the blocked task transaction is resumed. `stream_startup::run` sets `movie_cleanup::State::streaming()`; `Game::cd::stream_active` is the CD pump's word and also covers XA/BGM, so it is not read for this |
+| While a task is mid-frame | `X4FrameDriver::stepFrame()` + `bios_threads::Service::frameInProgress()` | A task parked on an exhausted turn budget is still inside retail's UpdateTasks, so the next field runs only the field service and UpdateTasks, and the tail waits for the field in which the task ends its frame |
 | Picture | psxport record path (`gpu_vk_record_present.cpp`) | A 24-bit STR display is shown from the device VRAM the MDEC LoadImage slices wrote; `WidescreenPolicy::presentationAspect` holds it at 4:3 |
 | Movie skip | This title has NO movie-skip owner: the pad is served by `deliverField` once per field for the whole run, movie included, and `tools/live_play.py` offers the pad edges. A skip rule would have to live in `game/media/movie_cleanup.*` or `game/frame/` | — |
 | Cleanup transaction | `x4::movie_cleanup::run()` at 0x80018E50 (`game/media/movie_cleanup.cpp`) | The retained stack/call/state sequence plus its three finite host-field fences, released on the same field policy the frame driver uses |

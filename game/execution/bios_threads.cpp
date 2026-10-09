@@ -17,8 +17,6 @@
 namespace x4::bios_threads {
 namespace {
 
-// A task turn past this many display fields without a guest field boundary is a guest loop.
-constexpr uint32_t kMaxTurnFields = 512u;
 // libetc VBlank counter; game/frame/vsync_sync.h owns the boundary it counts.
 constexpr uint32_t kVblankCounter = 0x8011DC50u;
 
@@ -67,7 +65,6 @@ void Service::runGuestEntry(Core &core, uint32_t entry) {
 
   std::uint32_t resumeAddress = entry;
   bool suspended = false;
-  uint32_t budgetTurns = 0u;
   for (;;) {
     // First turn dispatches the entry; later turns resume mid-function but stay attributed to `entry`.
     const psx::cpu::ExecutionResult result =
@@ -112,13 +109,13 @@ void Service::runGuestEntry(Core &core, uint32_t entry) {
                       psx::cpu::executionExitName(result.reason));
         std::abort();
       }
-      if (++budgetTurns >= kMaxTurnFields) {
+      if (spendBudgetTurn()) {
         lucent::error("x4-thread",
                       "guest task spent {} display field(s) of guest CPU without reaching a field "
                       "boundary and is still at 0x{:08X} at display field {} (the measured libetc "
                       "VBlank counter at 0x{:08X}). Retail delivers a field every field, so this is a "
                       "guest loop: reported rather than spun on",
-                      budgetTurns,
+                      kMaxTurnFields,
                       result.guestPc,
                       core.mem_r32(kVblankCounter),
                       kVblankCounter);
@@ -242,7 +239,7 @@ void Service::runGuestEntry(Core &core, uint32_t entry) {
     }
 
     // Frame boundaries keep this task's stacks; the frame driver resumes at the typed guest PC.
-    budgetTurns = 0u;
+    threads_[activeSlot_].budgetTurns = 0u;
     ++turnCensus_.fieldResumes;
     resumeAddress = result.guestPc;
     suspended = true;
@@ -381,6 +378,8 @@ bool Service::change(uint32_t handle) {
       return false;
     }
     Thread &running = threads_[activeSlot_];
+    // A guest-authored yield is the task finishing a frame, so the over-budget run starts again.
+    running.budgetTurns = 0u;
     running.regs = static_cast<R3000 &>(core_);
     running.fiber->yield();
     return true;
@@ -467,6 +466,19 @@ bool Service::change(uint32_t handle) {
   static_cast<R3000 &>(core_) = mainRegs_;
   finishDeferredClose(target);
   return true;
+}
+
+bool Service::spendBudgetTurn() {
+  return ++threads_[activeSlot_].budgetTurns >= kMaxTurnFields;
+}
+
+bool Service::frameInProgress() const {
+  for (int slot = 1; slot < kThreadCount; ++slot) {
+    if (threads_[slot].open && threads_[slot].budgetTurns != 0u) {
+      return true;
+    }
+  }
+  return false;
 }
 
 void Service::yieldToMain() {
