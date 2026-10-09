@@ -2,7 +2,8 @@
 
 This is the USA `SLUS_005.61` enhancement port. The authenticated executable is runtime data;
 `external/psxport` owns PSX and Lightrec execution, while this repository owns title identity,
-measured native behavior, and widescreen, loading removal, and X/Zero co-op. Read
+measured native behavior, and widescreen, loading removal, drop-in/drop-out X/Zero co-op and
+skippable dialogue and sequences. Read
 `external/psxport/CLAUDE.md` for the framework contract. Use `docs/project-goals.md` for scope,
 `docs/project-state.md` for current capability status, `docs/issues/` for open bugs and missing
 features, and `docs/codemap.md` for ownership.

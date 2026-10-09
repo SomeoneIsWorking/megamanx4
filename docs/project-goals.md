@@ -40,9 +40,9 @@ independently classified.
 
 Contributing state: S007.
 
-## G004 — Drop-in co-op
+## G004 — Drop-in/drop-out co-op
 
-Allow a second player to join during play as the other hunter, with independent input and correct
+Allow a second player to join and leave during play as the other hunter, with independent input and correct
 player, camera, collision, combat, checkpoint, and lifecycle behavior.
 
 Success includes an explicit co-op evidence strategy because the enhanced two-player state cannot be
@@ -50,13 +50,25 @@ byte-compared with the single-player retail oracle.
 
 Contributing state: S003, S008.
 
+## G005 — Skippable sequences
+
+Let the player skip what retail makes them sit through: dialogue boxes (finish the text, then advance)
+and the other non-interactive sequences — movies, story and briefing scenes, stage and boss intros, the
+weapon-get screen. Each sequence is found by RE and skipped through the game's own route to its end
+state, never by fast-forwarding the simulation.
+
+Success requires an enumerated list of the sequences, each skip reaching the same terminal state as
+letting it play out.
+
+Contributing state: S011.
+
 ## Constraints and non-goals
 
 - Native rendering, native graphics producers, native depth, interpolation/lerp, and a synthetic
   60fps mode are out of scope. The retail game already owns its target cadence and guest GTE picture.
 - The player interface exposes none of those unsupported modes. Diagnostic software rasterization
   may remain an explicit maintainer path; it is not a player renderer choice.
-- Widescreen, fast loading, and co-op remain suppressed under oracle/SBS comparison.
+- Widescreen, fast loading, co-op and skips remain suppressed under oracle/SBS comparison.
 - AGPL-derived Mega Man X4 code stays inside this repository and never enters psxport.
 - Provisioning validates runtime data and never emits executable code. Runtime JIT output is
   disposable user data, never an install input.
