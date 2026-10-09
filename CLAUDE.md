@@ -2,7 +2,7 @@
 
 This is the USA `SLUS_005.61` enhancement port. The authenticated executable is runtime data;
 `external/psxport` owns PSX and Lightrec execution, while this repository owns title identity,
-measured native behavior, and widescreen, loading removal, and X/Zero co-op. Read
+measured native behavior, widescreen, and drop-in/drop-out X/Zero co-op. Loading removal is not a goal. Read
 `external/psxport/CLAUDE.md` for the framework contract. Use `docs/project-goals.md` for scope,
 `docs/project-state.md` for current capability status, `docs/issues/` for open bugs and missing
 features, and `docs/codemap.md` for ownership.
@@ -25,13 +25,12 @@ namespace, its classes and its "Who owns it" chains say where a behaviour lives.
 - The guest's own GP0 work, replayed on psxport's record path, is the picture. X4 already runs at
   60 fps, so native producers, frame interpolation, and native depth are outside this port's scope.
   Do not link temporal `Fps60` machinery or select a guaranteed-black native render path.
-- Widescreen, loading removal, and co-op are `pc_enh` changes with `affect: full`. Typed comparison
+- Widescreen and co-op are `pc_enh` changes with `affect: full`. Typed comparison
   runs suppress them. Route every enhancement read through `x4::enh()` in
   `game/title/enhancements.cpp`, not direct CVar `.get()` calls. `docs/config.md` owns the knobs;
   `docs/behavior-map.md` owns their divergence and comparison behavior, and
   `tools/behavior.py check` is its machine gate.
-- Keep raw CD I/O latency and removal of the retail loading coroutine as separate behaviors. A
-  combined "load time" number establishes neither. Co-op needs its own evidence: a comparison run
+- Co-op needs its own evidence: a comparison run
   with co-op suppressed proves only baseline parity.
 
 ## Evidence and source boundaries

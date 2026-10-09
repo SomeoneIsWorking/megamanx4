@@ -29,20 +29,9 @@ semantically correct margins.
 
 Contributing state: S004, S006.
 
-## G003 — Loading removal
+## G004 — Drop-in/drop-out co-op
 
-Remove storage latency and loading-only waits without changing unrelated scripted timing or using a
-presentation workaround.
-
-Success requires each measured load operation to deliver the same payload and terminal state while
-omitting its loading presentation. Non-loading fades and timers remain retail behavior until they are
-independently classified.
-
-Contributing state: S007.
-
-## G004 — Drop-in co-op
-
-Allow a second player to join during play as the other hunter, with independent input and correct
+Allow a second player to join and leave during play as the other hunter, with independent input and correct
 player, camera, collision, combat, checkpoint, and lifecycle behavior.
 
 Success includes an explicit co-op evidence strategy because the enhanced two-player state cannot be
@@ -56,7 +45,9 @@ Contributing state: S003, S008.
   60fps mode are out of scope. The retail game already owns its target cadence and guest GTE picture.
 - The player interface exposes none of those unsupported modes. Diagnostic software rasterization
   may remain an explicit maintainer path; it is not a player renderer choice.
-- Widescreen, fast loading, and co-op remain suppressed under oracle/SBS comparison.
+- The port's enhancements are widescreen and drop-in/drop-out co-op only. Loading removal is not a goal;
+  the CD owners complete reads and nothing more.
+- Widescreen and co-op remain suppressed under oracle/SBS comparison.
 - AGPL-derived Mega Man X4 code stays inside this repository and never enters psxport.
 - Provisioning validates runtime data and never emits executable code. Runtime JIT output is
   disposable user data, never an install input.
