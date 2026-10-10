@@ -54,9 +54,6 @@ bool schedFreshEntry(Core *, int, uint32_t, uint32_t) {
   unstood_up("schedFreshEntry (PcScheduler)");
   return false;
 }
-void devWarp(Core *, int, int) {
-  unstood_up("devWarp");
-}
 
 // Designated initializers so an upstream field cannot shift the table; keep declaration order.
 const GameHooks g_hooks = {
@@ -66,7 +63,6 @@ const GameHooks g_hooks = {
     .hasNativeHandlerForEntry = hasNativeHandlerForEntry,
     .renderFadeState = renderFadeState,
     .renderBbFrameReset = renderBbFrameReset,
-    .devWarp = devWarp,
     .devAreaCount = devAreaCount,
     .devAreaName = devAreaName,
     .devWarpAllowed = devWarpAllowed,
