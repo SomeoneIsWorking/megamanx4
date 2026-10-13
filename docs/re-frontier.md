@@ -50,8 +50,8 @@ frame commit, not a malformed OT or CD failure.
 matching decompilation (`external/mmx4`) declares a byte-exact build target whose SHA-1 equals the SHA-1
 of the image this repo extracts, so its symbol addresses are OUR addresses with no translation. That
 changes where RE labour comes from; **it does not fill a single field**, because a borrowed address is a
-REFERENCE until this repo measures it against this executable. Its own matched-code figure (18.5% upper
-bound, on the `objdiff` object-identity axis) is a fact about the supply and must never be quoted as this
+REFERENCE until this repo measures it against this executable. Its own matched-code figure (60.85% on
+decomp.dev 2026-10-13, on the `objdiff` object-identity axis) is a fact about the supply and must never be quoted as this
 port's progress — this port's axis is SBS byte-exact RAM parity, and neither implies the other.
 
 **THE CURRENT OWNERSHIP FRONTIER IS `RE-10`'S FIRST SELECTED BODY.** The title state-0 white-logo quad

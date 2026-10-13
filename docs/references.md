@@ -17,8 +17,8 @@ Vendored as `external/mmx4` (submodule, pinned `1922fcd3`).
 | target | `SLUS_005.61` (USA) — the same image on our disc | its `check.us.txt` declares sha1 `213733031136d095ca275d6957695aa25011cfa5` for `build/us/main.bin`, which is the sha1 of the image `tools/extract_exe.py` extracts (1,179,648 bytes) |
 | kind | *matching* decomp: its source is meant to build to byte-identical objects | its own splat/objdiff pipeline |
 | overlays | **declares exactly ONE code segment and no overlays** | `config/SLUS_005.61.splat.yaml`: 155 subsegments, one code segment `main` at vram `0x80010000`, bss `0x8012F418 + 0x46B20` |
-| activity | **DORMANT** — last push 2025-08-25 (confirmed at the ref, `refs/heads/main` = `1922fcd3`, not just from the web UI) | `git ls-remote`, and the API's `pushed_at` |
-| progress | **18.5% upper bound on matched code** | NOT measured here, and NOT this port's number — see below |
+| activity | **active** — upstream `main` at `a40132e8`, pushed 2026-10-13, ~400 PRs since our `1922fcd3` pin; now also configs for JP `SLPS_009.02` and EU `SLES_011.76` and a PC build (`src/pc`, Psy-Z) | GitHub API `pushed_at` and commit list, 2026-10-13 |
+| progress | **60.85% on decomp.dev** (2026-10-13; was 18.5% at the pin) | NOT measured here, and NOT this port's number — see below |
 
 The USER's ruling (2026-08-12) is that licensing is not a constraint on this repo: *"Licensing isn't an
 issue, you can use whatever license needed."* So mmx4 may be used for **code and ideas**, and this repo
@@ -68,12 +68,12 @@ legitimate reason to lift one. Details and the sparse-checkout recipe: `LICENSIN
 ## What it does NOT buy
 
 - **A SHA-1 match says nothing about coverage.** It proves the decomp aims at these bytes, not how much
-  of them is decompiled. Its 18.5% is an upper bound on `objdiff` object identity; this port's axis is
+  of them is decompiled. Its percentage is on `objdiff` object identity; this port's axis is
   SBS byte-exact RAM parity. **Neither implies the other, and quoting one as evidence about the other is
   how a port looks finished while nothing is gated.** Nothing in this repo may cite that percentage as
   this port's progress.
-- **It is a PARTIAL and DORMANT supply.** 18.5%, no push since 2025-08-25. Do not plan as though the
-  remaining 81.5% is coming.
+- **It is a PARTIAL supply, and our pin is stale.** Upstream is active (60.85% on 2026-10-13); the pin
+  `1922fcd3` predates most of it. Re-run `tools/verify_decomp_targets.py` after moving the pin.
 - **Nothing has been read.** As of 2026-08-12 no AGPL source from it has been read in this repo — only
   its build config (splat yaml, `check.us.txt`, `extract.sh`) and its LICENSE header. The containment
   rule is therefore currently vacuous in the good sense: there is nothing to contain yet.
@@ -86,8 +86,8 @@ legitimate reason to lift one. Details and the sparse-checkout recipe: `LICENSIN
 
 ## Prior art that is NOT to be engaged with
 
-`external/psxport/docs/prior-art.md` records that **`mstan/psxrecomp` already ships Mega Man X4–X6
-ports**. Read it for the SHAPE of solved problems — overlay capture-and-compile, BIOS as oracle, per-game
+`docs/prior-art.md` records that **`mstan/MegaManX4Recomp`** (built with `RetroPortingToolKit/psxrecomp`,
+formerly `mstan/psxrecomp`) already ships a Mega Man X4 port. Read it for the SHAPE of solved problems — overlay capture-and-compile, BIOS as oracle, per-game
 repo layout — **not for code** (PolyForm Noncommercial would drag a noncommercial term into this repo).
 And note the **standing USER decision, 2026-08-12: we are NOT engaging with that community (R.A.I.D.),
 and it is not to be proposed again.**
