@@ -92,9 +92,6 @@ const GameConfig g_x4_cfg = {
     // disc key (port fact)
     .discEnvVar = "PSXPORT_X4_DISC",
 
-    // The guest plays its own movies.
-    .bootFmv = {nullptr, nullptr, nullptr, nullptr},
-
     // Native-producer frame path only; X4FrameDriver calls the retail GTE/OT leaves, so zero.
     .otRegionBase = 0,
     .otRegionStride = 0,

@@ -4,7 +4,7 @@
 #include "cfg.h"
 #include "command_line.h"
 #include "core.h"
-#include "dbg_server.h" // debug_server_live + DbgServer::attach — the live control channel
+#include "dbg_server.h" // debug_server_live + DbgServer::start — the live control channel
 #include "disc.h"
 #include "enhancements.h"
 #include "fs_util.h"
@@ -75,14 +75,10 @@ int main(int argc, char **argv) {
   c->r[5] = 0; // a0/a1 as the BIOS leaves them
 
   c->runtime->registerOverrides(*game);
-  // Attach before the frame loop so a client-driven run is uncapped and `pause` works.
-  const int clientFrameCap = game->dbg_server.attach(c, cfg_int("PSXPORT_NATIVE_FRAMES", 0));
-  // This spine bypasses the line in `native_boot_run` that arms the store observer.
+  // Before the title's boot, so `pause` and the store observer see it; the run's cap is RunBudget's.
+  game->dbg_server.start(c);
   store_observe_attach(*c);
-  lucent::info("boot",
-               "live control channel {} (client frame cap {})",
-               debug_server_live() ? "attached" : "not requested",
-               clientFrameCap);
+  lucent::info("boot", "live control channel {}", debug_server_live() ? "attached" : "not requested");
   native_boot_run(c);
   c->guestCallCensus().log("after native boot");
   x4::vram_rect::reportCensus("after native boot");

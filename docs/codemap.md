@@ -149,7 +149,7 @@ Framework hops name psxport files so a reader can follow them into `external/psx
 | Executable provisioned | `Fs::exists` -> `disc_extract_file(kDiscExePath)` | `SLUS_005.61` from `$PSXPORT_X4_DISC`, `.env`, or a repository-root CHD |
 | Devices | `gte_init` / `mdec_init` / `spu_init` / `Game::spu_audio::init` / `Game::gpu::gpu_native_init` / `Game::cd::overridesInit` / `Game::platform_hle::initBuiltins` / `Game::pad::overridesInit` | The framework's PSX devices in the measured order; `r[4] = 1`, `r[5] = 0` as the BIOS leaves them |
 | Title owners installed | `X4Runtime::registerOverrides()` -> each `registerOverride(s)` (`game/boot/x4_runtime.cpp`) | Which guest addresses are native, keyed by authenticated image plus address |
-| Control channel | `Game::dbg_server::attach` + `store_observe_attach` (`game/boot/main.cpp`) | Whether a client drives this run, and the frame cap it must use |
+| Control channel | `Game::dbg_server::start` + `store_observe_attach` (`game/boot/main.cpp`) | The loopback endpoint and store observer, before the title boots; the cap is `psx::host::RunBudget`'s in `native_boot_run` |
 | Finite boot prefix | `X4Runtime::bootInit()` -> `x4::frame::bootPrefix()` (`game/frame/x4_frame_driver.cpp`) | Executes the measured prefix of guest main 0x80012024 once, then the host shell owns repetition |
 | The loop | `native_boot_run` -> `psx::Machine::run` -> `FrameLoopShell::step` -> `psx::FieldTurn::beginField`/`endField` | Pause, watchdog and one serviced control command per field, around the title's body |
 
@@ -227,7 +227,7 @@ Framework hops name psxport files so a reader can follow them into `external/psx
 
 | Hop | Owner | What it decides |
 |---|---|---|
-| Attachment | `Game::dbg_server::attach(c, cfg_int("PSXPORT_NATIVE_FRAMES", 0))` (`game/boot/main.cpp`) | Whether a client drives the run, on loopback, before the frame loop starts |
+| Attachment | `Game::dbg_server::start(c)` (`game/boot/main.cpp`) | The loopback endpoint, before the frame loop starts |
 | Per-field service | `psx::FieldTurn::beginField` / `endField` (psxport, via `native_boot_run`) | Pause, watchdog re-arm, one serviced command per field |
 | Commands | `psxport`'s `DbgServer` (runtime/psx/debug/) | Reads, writes, `frame`, `pause`, `tap`, `cvars`, `quit` |
 | The live driver | `tools/live_play.py` + `tools/title_prompts.py` | Input edges, front-end census, frame captures, and the census's own denominators |
