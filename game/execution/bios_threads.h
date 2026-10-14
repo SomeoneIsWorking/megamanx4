@@ -69,7 +69,7 @@ public:
   [[nodiscard]] bool isOpen(uint32_t handle) const;
   [[nodiscard]] bool isDone(uint32_t handle) const;
 
-  // Run-end task census; not a destructor line because the product never deletes its Game.
+  // Run-end task census, reported through X4Runtime::reportRun.
   void reportCensus(std::string_view phase) const;
 
   static constexpr uint32_t handleForSlot(int slot) {

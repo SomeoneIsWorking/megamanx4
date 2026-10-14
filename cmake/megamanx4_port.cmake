@@ -14,8 +14,6 @@ set(X4_TITLE_DIRS
 )
 
 set(SEAM_SRC
-  game/boot/main.cpp
-  game/boot/command_line.cpp
   game/boot/x4_runtime.cpp
   game/boot/x4_context.cpp
   game/frame/x4_frame_driver.cpp
@@ -151,16 +149,6 @@ if(BUILD_TESTING)
     CXX_STANDARD_REQUIRED ON
   )
   add_test(NAME x4_movie_cleanup COMMAND mmx4_movie_cleanup_test)
-  add_executable(mmx4_command_line_test
-    ${CMAKE_SOURCE_DIR}/game/boot/command_line.cpp
-    ${CMAKE_SOURCE_DIR}/tests/test_x4_command_line.cpp
-  )
-  target_include_directories(mmx4_command_line_test PRIVATE ${X4_TITLE_DIRS})
-  set_target_properties(mmx4_command_line_test PROPERTIES
-    CXX_STANDARD 20
-    CXX_STANDARD_REQUIRED ON
-  )
-  add_test(NAME x4_command_line COMMAND mmx4_command_line_test)
   add_executable(mmx4_frame_driver_test
     ${CMAKE_SOURCE_DIR}/game/execution/bios_threads.cpp
     ${CMAKE_SOURCE_DIR}/game/media/cd_controller.cpp
@@ -359,7 +347,12 @@ if(BUILD_TESTING)
   endif()
 endif()
 
-add_executable(megamanx4_port ${SEAM_SRC})
+psxport_add_product(
+  megamanx4_port
+  CATALOG x4::createCatalog
+  HEADER x4_catalog.h
+  SOURCES game/boot/x4_catalog.cpp ${SEAM_SRC}
+)
 
 # gpu_vk.cpp in libpsxport needs the generated SDL_GPU shader header first.
 add_dependencies(megamanx4_port gen_gpu_shaders)
@@ -374,9 +367,9 @@ target_include_directories(megamanx4_port PRIVATE ${X4_TITLE_DIRS})
 target_compile_options(megamanx4_port PRIVATE -O2 -g
   ${SDL3_CFLAGS_OTHER} ${FREETYPE_CFLAGS_OTHER})
 
-target_link_libraries(megamanx4_port PRIVATE psxport)
-
 if(BUILD_TESTING)
+  add_test(NAME x4_product_help COMMAND $<TARGET_FILE:megamanx4_port> --help)
+  set_tests_properties(x4_product_help PROPERTIES PASS_REGULAR_EXPRESSION "Mega Man X4 \\(SLUS_005\\.61\\)")
   add_test(
     NAME no_temporal_binary_dependency
     COMMAND ${Python3_EXECUTABLE} -B ${CMAKE_SOURCE_DIR}/tools/verify_no_temporal_dependency.py

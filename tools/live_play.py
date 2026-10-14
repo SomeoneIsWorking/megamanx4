@@ -7,7 +7,8 @@
     uv run --frozen python tools/live_play.py --selftest
 
 The transport is `external/psxport/tools/dbgclient.py`; the menu model is `tools/title_prompts.py`.
-The endpoint services one command per presented frame, so each census is a few contiguous `r` reads.
+Budgets are presentation-fence steps (one present per step); the endpoint services one command per step,
+so each census is a few contiguous `r` reads. `quit` ends the product through its run-end report.
 Taps are offered only where `title_prompts.wants_start` says the guest reads the pad (`unkD == 1`).
 The run refuses rather than report zero when the endpoint never answers, a command is unimplemented,
 census reads keep timing out, frames present without guest blocks, a held input moves no guest word,
@@ -33,6 +34,7 @@ sys.path.insert(0, str(REPO / "external/psxport" / "tools" / "port"))
 sys.path.insert(0, str(REPO / "tools"))
 
 # Framework owners: agent_environment (launch policy), present_geometry (image reader), dbgclient (live endpoint).
+import run_end
 import title_prompts as prompts
 from dbgclient import LiveClient
 from launch_environment import agent_environment
@@ -518,8 +520,8 @@ def launch(port: int, sink: str, wide: str, log: Path, wav: Path,
            input_path_trace: bool = False) -> subprocess.Popen:
     """The product: headless, silent, unpaced, live endpoint on this run's own port.
 
-    `agent_environment` refuses without a named settings file. PSXPORT_DEBUG_SERVER lifts the headless
-    frame cap (native_boot.cpp). PSXPORT_DEBUG is set at launch so the movie phase is observed.
+    `agent_environment` refuses without a named settings file. PSXPORT_DEBUG_SERVER leaves the run
+    uncapped (`psx::host::RunBudget`); `quit` ends it. PSXPORT_DEBUG is set at launch so the movie phase is observed.
     PSXPORT_PRESENT_SINK fixes the readback size (1284x720 is 4/3 of the 428-wide widescreen
     projection). The caller's environment is kept so the product finds a Vulkan ICD and a config dir.
     """
@@ -1277,15 +1279,20 @@ def report(session: Session, client: LiveClient, log: Path) -> int:
     return failures
 
 
-def kill(process: subprocess.Popen) -> int:
-    """Kill by the PID this tool launched, never by name."""
-    if process.poll() is None:
+def finish(process: subprocess.Popen, log: Path) -> int:
+    """Wait for the run `quit` ended, then read its run-end report; signal the launched PID only if it hangs."""
+    try:
+        process.wait(timeout=60)
+    except subprocess.TimeoutExpired:
+        print(f"[live] product pid {process.pid} did not end after `quit`; terminating that pid")
         process.send_signal(signal.SIGTERM)
         try:
             process.wait(timeout=30)
         except subprocess.TimeoutExpired:
             process.kill()
             process.wait(timeout=30)
+    ended = run_end.read(log.read_text(errors="replace") if log.is_file() else "")
+    print(f"[live] run-end report: {ended.line}" if ended else "[live] NO run-end report: the run did not end through `quit`")
     return process.returncode
 
 
@@ -1294,9 +1301,7 @@ def selftest() -> int:
 
     Each function carrying a conclusion has a case that would change its answer. The census, route and
     falsifier live in `tools/title_prompts.py`, whose selftest is separate."""
-    import struct
     import tempfile
-    from pathlib import Path
 
     failures = 0
     total = 0
@@ -1753,12 +1758,8 @@ def main() -> int:
     parser.add_argument("--port", type=int, default=5974, help="live endpoint port (default 5974)")
     parser.add_argument("--executable", type=Path, default=EXECUTABLE)
     parser.add_argument("--budget-frames", type=int, default=60000,
-                        help="presented frames the whole window may spend (default 60000). Measured on "
-                             "this tree, 15,000 presented fields take about 38s unpaced, so this is "
-                             "roughly 150s — chosen because the post-movie boundary has been MEASURED at "
-                             "field 974 in one run and 13,153 in another, and a budget that stopped "
-                             "short of the later one would report 'the movie never finished' about a "
-                             "run that had simply not waited long enough")
+                        help="presentation-fence steps the whole window may spend (default 60000, about "
+                             "150s unpaced; the post-movie boundary lands anywhere from field 974 to 13,153)")
     parser.add_argument("--budget-seconds", type=float, default=900.0)
     parser.add_argument("--poll-seconds", type=float, default=0.30,
                         help="wall clock between census polls; each poll is at least "
@@ -1837,16 +1838,14 @@ def main() -> int:
             print(f"[live] the hold window was SKIPPED: the product is no longer running, so a held "
                   f"input could not be delivered. That is a skip, not a zero.")
         failures = report(session, client, LOG)
-        try:
-            client.quit()
-        except OSError:
-            pass
-        client = None
         return 1 if failures else 0
     finally:
         if client is not None:
-            client.close()
-        print(f"[live] product pid {process.pid} exited {kill(process)}")
+            try:
+                client.quit()
+            except OSError as error:
+                print(f"[live] `quit` could not be sent ({error}); the product is ended by its pid")
+        print(f"[live] product pid {process.pid} exited {finish(process, LOG)}")
 
 
 if __name__ == "__main__":

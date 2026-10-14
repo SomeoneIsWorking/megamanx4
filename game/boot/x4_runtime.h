@@ -27,6 +27,7 @@ public:
   const GuestProgramImage *guestProgramImage() const override;
   bool guestVramIsPicture(const Game &game) const override;
   const GuestWidescreenProjection *guestWidescreenProjection() const override;
+  void reportRun(Core &core) const override;
 
 private:
   WidescreenPolicy widescreenPolicy_;

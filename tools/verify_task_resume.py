@@ -20,6 +20,8 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+import run_end
+
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_EXE = ROOT / "scratch/bin/megamanx4/SLUS_005.61"
 DEFAULT_PRODUCT = ROOT / "build/ci/bin/megamanx4_port"
@@ -183,9 +185,11 @@ def verify_activation_has_no_return_address(inputs: Inputs) -> list[str]:
     ]
 
 def run_product(product: Path, fields: tuple[int, ...], log: Path) -> int:
-    """Run the product headless for `fields` display fields; return its exit code.
+    """Run the product headless for max(`fields`) presentation-fence steps; return its exit code.
 
-    The log is truncated first because PSXPORT_LOG_FILE appends.
+    `PSXPORT_NATIVE_FRAMES` is the run's step cap (`psx::host::RunBudget`); a product step presents
+    exactly once, so `PSXPORT_PRESENT_SHOT_AT` indices name steps. The log is truncated first because
+    PSXPORT_LOG_FILE appends.
     """
     environment = dict(os.environ)
     environment.update(
@@ -231,6 +235,15 @@ def verify_product_picture(product: Path, exe: Path, fields: tuple[int, ...], wo
         raise VerificationError(f"the product exited {exit_code}; the log is at {log}")
 
     text = log.read_text(encoding="utf-8", errors="replace")
+    ended = run_end.read(text)
+    if not ended:
+        raise VerificationError(f"the product exited 0 without its run-end report; the log is at {log}")
+    steps, fences = ended.product_steps, ended.presentation_fences
+    if steps != max(fields) or fences != steps:
+        raise VerificationError(
+            f"the run ended after {steps} step(s) and {fences} presentation fence(s); the cap was "
+            f"{max(fields)} and every step presents once"
+        )
     errors = ERROR_RE.findall(text)
     if errors:
         raise VerificationError(
@@ -263,7 +276,7 @@ def verify_product_picture(product: Path, exe: Path, fields: tuple[int, ...], wo
         )
     for (name, black_free, total), field in zip(presents, fields):
         share = black_free / total if total else 0.0
-        print(f"[verify-resume]   field {field:>4}: non-black {black_free}/{total} ({100.0 * share:.2f}%)")
+        print(f"[verify-resume]   step {field:>4}: non-black {black_free}/{total} ({100.0 * share:.2f}%)")
     final_name, final_free, final_total = presents[-1]
     final_share = final_free / final_total if final_total else 0.0
     if final_share < MIN_NON_BLACK_SHARE:
@@ -285,7 +298,7 @@ def verify_product_picture(product: Path, exe: Path, fields: tuple[int, ...], wo
 
     return [
         f"{len(resumed)} task turn(s) resumed at a host-turn budget and 0 retired over "
-        f"{max(fields)} display fields",
+        f"{steps} presentation-fence steps",
         f"last sampled present {final_name}: {final_free}/{final_total} non-black "
         f"({100.0 * final_share:.2f}%), and the two last presents differ "
         f"({penultimate[:12]} vs {last[:12]}) so the picture is advancing",
@@ -339,7 +352,8 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument(
         "--fields",
         default=",".join(str(field) for field in DEFAULT_FIELDS),
-        help="comma-separated display fields to sample a present at (the last one must be a picture)",
+        help="comma-separated presentation-fence steps to sample a present at (the last one, also the "
+        "run's cap, must be a picture)",
     )
     parser.add_argument(
         "--skip-product",

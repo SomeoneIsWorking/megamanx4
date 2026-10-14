@@ -6,6 +6,7 @@
 #include "core.h"
 #include "cull_overrides.h"
 #include "display_init.h"
+#include "enhancements.h"
 #include "game.h"
 #include "gpu_timeout.h"
 #include "guest_execution.h"
@@ -21,6 +22,7 @@
 #include "stream_interrupt.h"
 #include "stream_startup.h"
 #include "title_quad.h"
+#include "vram_rect_queue.h"
 #include "vsync_sync.h"
 #include "x4_context.h"
 #include "x4_frame_driver.h"
@@ -52,6 +54,7 @@ void X4Runtime::destroyContext(void *context) {
 }
 
 void X4Runtime::registerOverrides(Game &game) {
+  audit_declared_enhancements();
   bios_threads::install(game);
   display_init::registerOverride(game.core);
   gpu_timeout::registerOverride(game.core);
@@ -98,6 +101,11 @@ std::unique_ptr<FrameDriver> X4Runtime::createFrameDriver(Game &game) {
 
 const GuestPadBufferLayout *X4Runtime::guestPadBufferLayout() const {
   return &pad::kGuestBufferLayout;
+}
+
+void X4Runtime::reportRun(Core &core) const {
+  vram_rect::reportCensus("run end");
+  bios_threads::from(core).reportCensus("run end");
 }
 
 const GuestProgramImage *X4Runtime::guestProgramImage() const {

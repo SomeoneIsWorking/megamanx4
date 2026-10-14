@@ -14,8 +14,10 @@ features, and `docs/codemap.md` for ownership.
 (`boot`, `frame`, `execution`, `input`, `media`, `render`, `ui`, `widescreen`, `title`), and its
 namespace, its classes and its "Who owns it" chains say where a behaviour lives.
 
-- `x4::X4Runtime` (`game/boot/`) is the process-lifetime title owner. It composes the measured boot,
-  image-scoped native overrides, render-path policy, and `X4FrameDriver`. `GameConfig` and
+- `x4::createCatalog` (`game/boot/x4_catalog.cpp`) is the product: psxport's `SingleTitleCatalog` that the framework `main` runs
+  through `psx::host::ProductHost`, which owns the command line, provisioning, the boot order and the
+  loop. Its `x4::X4Runtime` is the title owner: the measured boot prefix (`bootInit`), image-scoped
+  native overrides, render-path policy, `X4FrameDriver` and the run-end censuses (`reportRun`). `GameConfig` and
   `GameHooks` are compatibility views through `x4::legacy::{measuredConfig,compatibilityHooks}`;
   add behavior to typed owners instead of extending those views.
 - `X4FrameDriver::stepFrame()` owns one retail field. The per-field host services belong in

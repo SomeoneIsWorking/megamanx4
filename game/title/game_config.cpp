@@ -89,9 +89,6 @@ const GameConfig g_x4_cfg = {
     .gameMain = kCrt0GameMain,
     .crt0 = kCrt0Entry,
 
-    // disc key (port fact)
-    .discEnvVar = "PSXPORT_X4_DISC",
-
     // Native-producer frame path only; X4FrameDriver calls the retail GTE/OT leaves, so zero.
     .otRegionBase = 0,
     .otRegionStride = 0,
@@ -162,7 +159,6 @@ const GameConfig g_x4_cfg = {
     // One pacing call per display field.
     .paceQuota = 1,
 
-    .windowTitle = "Mega Man X4 (psxport)",
     // declared = 1: crt0_plan refuses an undeclared bias of 0.
     .stackBias = {1, kCrt0StackBias},
 };

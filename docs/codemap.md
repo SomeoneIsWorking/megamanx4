@@ -14,9 +14,9 @@ addresses, its state, and its seam to the guest.
 run.sh -> bootstrap.py -> tools/run.py
                            |
                            +-- provision authenticated SLUS_005.61 runtime image
-                           +-- CMake -> megamanx4_port
+                           +-- CMake -> megamanx4_port (psxport main -> ProductHost -> TitleSession)
                                         |
-                                        +-- game/boot     X4Runtime (title policy + composition)
+                                        +-- game/boot     createCatalog + X4Runtime (title policy)
                                         +-- game/frame    X4FrameDriver + the per-field service
                                         +-- game/execution guest-call seam, override registry, BIOS tasks
                                         +-- game/input    pad layout facts, the input-path observer, the sequence skip
@@ -42,12 +42,11 @@ enters psxport.
 
 ## Source tree: directory -> namespace -> owner
 
-### `game/boot/` — process composition (namespace `x4`, `x4::cli`)
+### `game/boot/` — the product and the title owner (namespace `x4`)
 
 | Unit | Owner | Responsibility |
 |---|---|---|
-| `main.cpp` | `x4::g_runtime`, `main()` | The process entry point: parse the command line, install `X4Runtime`, self-provision the executable from a disc, bring up the PSX devices, attach the control channel, enter the framework spine, report the run-end censuses |
-| `command_line.{h,cpp}` | `x4::cli::Options`, `parse()`, `printUsage()` | Select help, the default executable, or one explicit path before any runtime or disc side effect; refuse an unknown option |
+| `x4_catalog.{h,cpp}` | `x4::createCatalog()` | The product: psxport's `SingleTitleCatalog` over `SLUS_005.61`'s `TitleIdentity`, disc key and path, provisioning root `scratch/bin`) holding the one `X4Runtime`; built by `psxport_add_product`, so the framework `main` and `ProductHost` own the command line, provisioning, boot and loop |
 | `x4_runtime.{h,cpp}` | `x4::X4Runtime` | The process-lifetime title owner: the framework-facing runtime seam (render capabilities: the record path, program image, pad buffers, widescreen aspect policy), the per-`Core` context, and the registration of every native owner |
 | `x4_context.{h,cpp}` | `x4::X4Context`, `context()` | The per-`Core` state every owner composes: BIOS threads, fast-wait, movie cleanup, music stream, widescreen, widened objects |
 
@@ -144,14 +143,17 @@ Framework hops name psxport files so a reader can follow them into `external/psx
 
 | Hop | Owner | What it decides |
 |---|---|---|
-| Command line | `x4::cli::parse()` (`game/boot/command_line.cpp`) | Help, the default executable, or one explicit path — before any runtime or disc side effect |
-| Title runtime installed | `psxport_install_game(g_runtime)` (`game/boot/main.cpp`) | The runtime `Core` snapshots at construction, so this precedes the first `Game` |
-| Executable provisioned | `Fs::exists` -> `disc_extract_file(kDiscExePath)` | `SLUS_005.61` from `$PSXPORT_X4_DISC`, `.env`, or a repository-root CHD |
-| Devices | `gte_init` / `mdec_init` / `spu_init` / `Game::spu_audio::init` / `Game::gpu::gpu_native_init` / `Game::cd::overridesInit` / `Game::platform_hle::initBuiltins` / `Game::pad::overridesInit` | The framework's PSX devices in the measured order; `r[4] = 1`, `r[5] = 0` as the BIOS leaves them |
-| Title owners installed | `X4Runtime::registerOverrides()` -> each `registerOverride(s)` (`game/boot/x4_runtime.cpp`) | Which guest addresses are native, keyed by authenticated image plus address |
-| Control channel | `Game::dbg_server::start` + `store_observe_attach` (`game/boot/main.cpp`) | The loopback endpoint and store observer, before the title boots; the cap is `psx::host::RunBudget`'s in `native_boot_run` |
+| Command line | `psx::host::ProductHost::run` (psxport `runtime/psx/host/product_host.cpp`, through `product_main.cpp`) | Help, the default executable, or one explicit path — before any runtime or disc side effect |
+| Executable provisioned | `psx::host::provisionExecutable` (psxport, called by `ProductHost` with the catalog's identity) | A missing `scratch/bin/megamanx4/SLUS_005.61` read from `$PSXPORT_X4_DISC`, `.env`, or a repository-root CHD, authenticated against the identity (size, header words, SHA-256), then written |
+| Title runtime installed | `SingleTitleCatalog::runtime(0)` -> `TitleSession::boot` (psxport) | The runtime `Core` snapshots at construction, so it is installed immediately before the `Game` |
+| Disc and executable | `psx::Machine::insertDisc` then `GameRuntime::admitExecutable` (default) | `PSXPORT_X4_DISC` is the disc key; the executable is mapped and its entry registers set |
+| Devices | `psx::Machine::bindDevices` (psxport) | The framework's PSX devices in the measured order; `r[4] = 1`, `r[5] = 0` as the BIOS leaves them |
+| Title owners installed | `psx::Machine::prepare` -> `X4Runtime::registerOverrides()` -> each `registerOverride(s)` (`game/boot/x4_runtime.cpp`) | The enhancement audit, then which guest addresses are native, keyed by authenticated image plus address |
+| Control channel | `psx::Machine::attachControlChannel` (psxport) | The loopback endpoint and store observer, before the title boots; the cap is `psx::host::RunBudget`'s |
+| Guest crt0 | `psx::Machine::setupGuestBoot` -> `crt0_setup` (psxport) | `bootEntry = Crt0`: the measured crt0 group from `x4::legacy::measuredProgramImage()` |
 | Finite boot prefix | `X4Runtime::bootInit()` -> `x4::frame::bootPrefix()` (`game/frame/x4_frame_driver.cpp`) | Executes the measured prefix of guest main 0x80012024 once, then the host shell owns repetition |
-| The loop | `native_boot_run` -> `psx::Machine::run` -> `FrameLoopShell::step` -> `psx::FieldTurn::beginField`/`endField` | Pause, watchdog and one serviced control command per field, around the title's body |
+| The loop | `TitleSession::step` -> `psx::FieldTurn::beginField` -> `FrameLoopShell::step` -> `psx::FieldTurn::endField` (psxport) | Pause, watchdog and one serviced control command per field, around the title's body; ends on the cap, a window close or a client `quit` |
+| Run end | `psx::RunEndReport` (psxport) -> `X4Runtime::reportRun` | The framework ledger and guest-call census, then the VRAM-rect queue and task-turn censuses |
 
 ### The frame turn
 
@@ -162,7 +164,7 @@ Framework hops name psxport files so a reader can follow them into `external/psx
 | The field itself | `x4::vsync::deliverField()` (`game/frame/vsync_sync.cpp`) | IRQ-0 delivery (with the counter advance as the proof it happened), pad service, SPU advance, snapshot tick, presentation commit — once per field |
 | The retail body | `runRetailFramePrefix` / `kUpdateTasks` / `runRetailFrameSuffix` | The preserved draw prefix, the retail task entry, and the drain/finish suffix, each a guest call through `x4::guest::callWithoutKnownReturn` |
 | A guest call that outlives its turn | `psx::cpu::ResumableGuestCall` via `x4::guest::dispatch` | The boundary latched into `r[31]`; one display field per segment; refusals name the owner |
-| The run's measure of those calls | `Core::guestCallCensus().log()` (`game/boot/main.cpp`, run end) | Completed, resumed, deepest turn, with denominators |
+| The run's measure of those calls | `Core::guestCallCensus().log()` (psxport `RunEndReport`, run end) | Completed, resumed, deepest turn, with denominators |
 
 ### Host input -> pad -> guest buffer
 
@@ -227,11 +229,11 @@ Framework hops name psxport files so a reader can follow them into `external/psx
 
 | Hop | Owner | What it decides |
 |---|---|---|
-| Attachment | `Game::dbg_server::start(c)` (`game/boot/main.cpp`) | The loopback endpoint, before the frame loop starts |
-| Per-field service | `psx::FieldTurn::beginField` / `endField` (psxport, via `native_boot_run`) | Pause, watchdog re-arm, one serviced command per field |
+| Attachment | `psx::Machine::attachControlChannel` (psxport, from `TitleSession::boot`) | The loopback endpoint, before the frame loop starts |
+| Per-field service | `psx::FieldTurn::beginField` / `endField` (psxport, via `TitleSession::step`) | Pause, watchdog re-arm, one serviced command per field |
 | Commands | `psxport`'s `DbgServer` (runtime/psx/debug/) | Reads, writes, `frame`, `pause`, `tap`, `cvars`, `quit` |
 | The live driver | `tools/live_play.py` + `tools/title_prompts.py` | Input edges, front-end census, frame captures, and the census's own denominators |
-| Store observation | `store_observe_attach` (psxport, armed by this title's spine) | Which guest word was written, with the store's own PC |
+| Store observation | `store_observe_attach` (psxport, armed by `attachControlChannel`) | Which guest word was written, with the store's own PC |
 | Title debug options | none: `x4::legacy::compatibilityHooks()` `devWarp` is a fail-fast stub, because this title has no debug warp | A future warp would be a title-owned module here, not a framework hook |
 
 ## Where does new work go?

@@ -24,7 +24,7 @@ a human action at a live console after launch, later and more specific than the 
 
 | knob | kind | default | persistable | C++ object | read path |
 |---|---|---|---|---|---|
-| `PSXPORT_X4_DISC` | path (port fact, not a CVar) | — | — | `GameConfig::discEnvVar` | `tools/resolve_disc.py` host-side; the framework's disc resolver guest-side |
+| `PSXPORT_X4_DISC` | path (port fact, not a CVar) | — | — | `kTitleIdentity.discEnvVar` (`game/boot/x4_catalog.cpp`) | `tools/resolve_disc.py` host-side; the framework's disc resolver guest-side |
 | `PSXPORT_X4_CARD` | path (port fact, not a CVar) | `scratch/saves/megamanx4.mcr` | — | `GameConfig::cardEnvVar` / `cardDefaultPath` | the framework's memory-card backend |
 | `PSXPORT_X4_WIDESCREEN` | Bool | `true` | yes | `x4::cv_widescreen` | **`x4::enh(x4::cv_widescreen)`** |
 | `PSXPORT_X4_COOP` | Bool | `false` | yes | `x4::cv_coop` | **`x4::enh(x4::cv_coop)`** — no consumer yet |
@@ -56,7 +56,7 @@ Lightrec original-call API. Diagnostic controls exercise the same runtime dispat
 generated implementation or static selector in the product.
 
 `PSXPORT_X4_DISC` is spelled identically in exactly three places and they must not diverge:
-`.env.example`, `GameConfig::discEnvVar`, and `tools/resolve_disc.py`'s `ENV_KEY`.
+`.env.example`, `kTitleIdentity.discEnvVar` in `game/boot/x4_catalog.cpp`, and `tools/resolve_disc.py`'s `ENV_KEY`.
 The launcher imports that key and publishes an explicit disc argument into the environment used by
 both executable extraction and the running CD backend. A command-line disc therefore takes precedence
 over an existing title or generic disc setting for the whole session, including relative paths and
@@ -132,7 +132,7 @@ not-implemented path was silent — the inverse of this repo's own "a diagnostic
 lying" rule.
 
 So `game/title/enhancements.cpp` carries a `kUnimplemented` list (knob → frontier step), and
-`x4::audit_declared_enhancements()` — called once from `main.cpp` right after the seam install — pushes
+`x4::audit_declared_enhancements()` — called once from `X4Runtime::registerOverrides`, before any owner registers — pushes
 every knob the user turned ON through the chokepoint, producing one line per knob:
 
 ```
