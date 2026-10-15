@@ -1,4 +1,4 @@
-#include "x4_runtime.h"
+#include "runtime/runtime.h"
 
 #include "bios_threads.h"
 #include "config_var.h"
@@ -6,16 +6,16 @@
 #include "core.h"
 #include "enhancements.h"
 #include "fast_wait.h"
+#include "frame/frame_driver.h"
 #include "game.h"
 #include "irq_edge.h"
 #include "native_dispatch.h"
 #include "psx_exe_image.h"
+#include "runtime/session.h"
 #include "stream_startup.h"
 #include "visibility_cull.h"
 #include "vsync_sync.h"
 #include "widescreen_controller.h"
-#include "x4_frame_driver.h"
-#include "x4_session.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -487,15 +487,15 @@ bool verify_vsync_query_reads_the_field_counter(Game &game) {
 } // namespace
 
 int main() {
-  static_assert(std::is_base_of_v<psx::game::GameRuntime, x4::X4Runtime>);
+  static_assert(std::is_base_of_v<psx::game::GameRuntime, x4::Runtime>);
 
-  x4::X4Runtime runtime;
+  x4::Runtime runtime;
   const RenderCapabilities capabilities = runtime.renderCapabilities();
   if (capabilities.defaultPath != RenderPath::Record || capabilities.nativeRenderPath || runtime.interpolates() ||
       !capabilities.supports(RenderPath::Record) || !capabilities.supports(RenderPath::Device) ||
       capabilities.supports(RenderPath::Native) || capabilities.playerSelectable(RenderPath::Native) ||
       render_path_resolve(RenderPath::Native, capabilities) != RenderPath::Record) {
-    std::fprintf(stderr, "X4Runtime did not select the record path without a native or temporal product\n");
+    std::fprintf(stderr, "x4::Runtime did not select the record path without a native or temporal product\n");
     return 1;
   }
 
@@ -503,11 +503,11 @@ int main() {
   config.fps60 = true;
   auto game = std::make_unique<Game>(runtime, config);
   if (game->mods.temporalInterpolationSupported() || game->mods.fps60 != 0) {
-    std::fprintf(stderr, "X4Runtime allowed the settings layer to arm synthetic interpolation\n");
+    std::fprintf(stderr, "x4::Runtime allowed the settings layer to arm synthetic interpolation\n");
     return 1;
   }
   if (!runtime.admitExecutable(game->core, syntheticExecutable())) {
-    std::fprintf(stderr, "X4Runtime refused the synthetic executable\n");
+    std::fprintf(stderr, "x4::Runtime refused the synthetic executable\n");
     return 1;
   }
   runtime.registerOverrides(*game);
@@ -516,16 +516,16 @@ int main() {
   if (identity == nullptr || std::string_view(identity->cardEnvVar) != "PSXPORT_X4_CARD" ||
       game->platform_hle.vsyncAddress() != x4::vsync::kVSync || game->dmaCallbacks.guestTable() == nullptr ||
       runtime.devWarp(*core) == nullptr) {
-    std::fprintf(stderr, "X4Runtime did not bind its card names, VSync, DMACallback table or warp\n");
+    std::fprintf(stderr, "x4::Runtime did not bind its card names, VSync, DMACallback table or warp\n");
     return 1;
   }
   if (game->temporalPresentation != nullptr || game->frameDriver == nullptr ||
       runtime.guestWidescreenProjection() == nullptr) {
-    std::fprintf(stderr, "X4Runtime omitted its frame driver/widescreen policy or constructed temporal history\n");
+    std::fprintf(stderr, "x4::Runtime omitted its frame driver/widescreen policy or constructed temporal history\n");
     return 1;
   }
   if (!runtime.guestVramIsPicture(*game) || !game_guest_vram_is_picture(*game)) {
-    std::fprintf(stderr, "X4Runtime did not declare the device VRAM as the record-path picture\n");
+    std::fprintf(stderr, "x4::Runtime did not declare the device VRAM as the record-path picture\n");
     return 1;
   }
 
@@ -611,7 +611,7 @@ int main() {
   }
   x4::widescreenCvar().clear(psx::config::Layer::Runtime);
 
-  std::puts("X4Runtime: stock VSync and DMACallback bindings, DMA-3 STR callback, retail BIOS threads, synchronous "
+  std::puts("x4::Runtime: stock VSync and DMACallback bindings, DMA-3 STR callback, retail BIOS threads, synchronous "
             "loading leaves, record path with "
             "canvas widescreen, no temporal pipeline");
   return 0;

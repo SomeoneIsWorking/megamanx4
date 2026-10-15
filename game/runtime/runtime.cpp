@@ -1,4 +1,4 @@
-#include "x4_runtime.h"
+#include "runtime/runtime.h"
 
 #include "background_overrides.h"
 #include "bios_threads.h"
@@ -6,6 +6,7 @@
 #include "cull_overrides.h"
 #include "display_init.h"
 #include "enhancements.h"
+#include "frame/frame_driver.h"
 #include "gpu_timeout.h"
 #include "guest_execution.h"
 #include "hud_overrides.h"
@@ -13,6 +14,7 @@
 #include "music_stream.h"
 #include "native_overrides.h"
 #include "pad_layout.h"
+#include "runtime/session.h"
 #include "sequence_skip_overrides.h"
 #include "startup_cd.h"
 #include "stream_interrupt.h"
@@ -20,8 +22,6 @@
 #include "title_quad.h"
 #include "vram_rect_queue.h"
 #include "vsync_sync.h"
-#include "x4_frame_driver.h"
-#include "x4_session.h"
 
 #include "core.h"
 #include "game.h"
@@ -63,17 +63,17 @@ void synchronizePresentation(Core &core) {
 } // namespace
 
 // The retail libcd stays guest code; its object only lends its bodies to the title's CD wrappers.
-X4Runtime::X4Runtime()
+Runtime::Runtime()
     : vsync_(vsync::kVSync, vsync::kVblankCounter), dmaCallbacks_(stream_startup::kDmaCallbackTable), libcd_({}, {}, 0),
       pad_({.slot0Buffer = pad::kSlot0Buffer, .slot1Buffer = pad::kSlot1Buffer}) {}
 
-void X4Runtime::startProgram(Core &core) {
+void Runtime::startProgram(Core &core) {
   psx::game::Crt0Boot{kCrt0}.run(core);
-  lucent::info("boot", "executing the finite prefix of gameMain 0x80012024; X4FrameDriver owns repetition");
+  lucent::info("boot", "executing the finite prefix of gameMain 0x80012024; x4::frame::FrameDriver owns repetition");
   frame::bootPrefix(core);
 }
 
-void X4Runtime::registerOverrides(Game &game) {
+void Runtime::registerOverrides(Game &game) {
   reportUnreadEnhancements();
   // vsync::serveVSync overrides the entry and answers VSync(<0) through this binding's counter.
   vsync_.bind(game);
@@ -96,13 +96,13 @@ void X4Runtime::registerOverrides(Game &game) {
   native_overrides::install(game.core);
 }
 
-std::unique_ptr<psx::game::TitleSessionState> X4Runtime::createSession(Game &game) {
-  return std::make_unique<X4Session>(game.core, libcd_);
+std::unique_ptr<psx::game::TitleSessionState> Runtime::createSession(Game &game) {
+  return std::make_unique<Session>(game.core, libcd_);
 }
 
-std::unique_ptr<psx::game::FrameDriver> X4Runtime::createFrameDriver(Game &game) {
-  X4Session &state = session(game.core);
-  return std::make_unique<frame::X4FrameDriver>(
+std::unique_ptr<psx::game::FrameDriver> Runtime::createFrameDriver(Game &game) {
+  Session &state = session(game.core);
+  return std::make_unique<frame::FrameDriver>(
       guest::callWithoutKnownReturn,
       frame::FieldServices{.deliverField = vsync::deliverField, .synchronizePresentation = synchronizePresentation},
       state.movieCleanup,
@@ -111,12 +111,12 @@ std::unique_ptr<psx::game::FrameDriver> X4Runtime::createFrameDriver(Game &game)
       state.stageWarp);
 }
 
-void X4Runtime::deliverPad(Core &core, const psx::input::PadDelivery &delivery) {
+void Runtime::deliverPad(Core &core, const psx::input::PadDelivery &delivery) {
   pad_.deliver(core, delivery);
 }
 
 // The device's GP0 work replayed from the frame record; no native producers.
-RenderCapabilities X4Runtime::renderCapabilities() const {
+RenderCapabilities Runtime::renderCapabilities() const {
   return RenderCapabilities{
       .defaultPath = RenderPath::Record,
       .nativeRenderPath = false,
@@ -124,15 +124,15 @@ RenderCapabilities X4Runtime::renderCapabilities() const {
 }
 
 // The device VRAM is the picture on the record path, STR frames included.
-bool X4Runtime::guestVramIsPicture(const Game &) const {
+bool Runtime::guestVramIsPicture(const Game &) const {
   return true;
 }
 
-const GuestWidescreenProjection *X4Runtime::guestWidescreenProjection() const {
+const GuestWidescreenProjection *Runtime::guestWidescreenProjection() const {
   return &widescreenPolicy_;
 }
 
-bool X4Runtime::titleCommand(Core &core, const psx::game::TitleCommandLine &input, std::FILE *reply) {
+bool Runtime::titleCommand(Core &core, const psx::game::TitleCommandLine &input, std::FILE *reply) {
   if (std::string_view(input.command) != "warp") {
     return false;
   }
@@ -141,16 +141,16 @@ bool X4Runtime::titleCommand(Core &core, const psx::game::TitleCommandLine &inpu
   return true;
 }
 
-psx::game::TitleDevWarp *X4Runtime::devWarp(Core &core) const {
+psx::game::TitleDevWarp *Runtime::devWarp(Core &core) const {
   return &session(core).stageWarp;
 }
 
-void X4Runtime::reportRun(Core &core) const {
+void Runtime::reportRun(Core &core) const {
   vram_rect::reportCensus("run end");
   bios_threads::from(core).reportCensus("run end");
 }
 
-const psx::game::HostIdentity *X4Runtime::hostIdentity() const {
+const psx::game::HostIdentity *Runtime::hostIdentity() const {
   return &kHostIdentity;
 }
 

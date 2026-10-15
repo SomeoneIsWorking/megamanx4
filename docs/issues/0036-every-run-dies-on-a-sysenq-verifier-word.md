@@ -82,7 +82,7 @@ twenty-bit stream offset through a sixteen-bit mask, so the guest decompressor r
 for player graphics and wrote past its buffer into the interrupt element and the class-0 table
 (`game/render/vram_rect_queue.h`: `kStreamOffsetMask`, `streamAddress`; `lui a0,0xf` / `ori a0,a0,0xffff` at
 `0x80015F44`/`0x80015F48` build `0xFFFFF` for the `and` at `0x80015F4C`).
-Test: `x4_vram_rect_queue` (`tests/test_x4_vram_rect_queue.cpp`) checks animation word `0x0191DFB4` resolves to
+Test: `x4_vram_rect_queue` (`tests/test_vram_rect_queue.cpp`) checks animation word `0x0191DFB4` resolves to
 25 bands at blob+`0x1DFB4`; it fails with the old mask. A 30,000-present run now exits 0 with no SysEnq
 verifier refusal. The "306 resumes then SIGSEGV" shape described above no longer occurs at HEAD; the earlier
 `StGetNext` retry loop was a separate defect fixed in psxport (`runtime/psx/cd/cdc_native.cpp`,

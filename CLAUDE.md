@@ -11,17 +11,17 @@ features, and `docs/codemap.md` for ownership.
 ## Title boundaries
 
 `docs/codemap.md` is the structural authority: every directory under `game/` owns one subsystem
-(`boot`, `debug`, `frame`, `execution`, `input`, `media`, `render`, `ui`, `widescreen`, `title`).
+(`runtime`, `debug`, `frame`, `execution`, `input`, `media`, `render`, `ui`, `widescreen`, `title`).
 `docs/features.md` traces each player-visible feature through its owners.
 
-- `x4::createCatalog` (`game/boot/x4_catalog.cpp`) is the product: psxport's `SingleTitleCatalog` that the framework `main` runs
+- `x4::createCatalog` (`game/runtime/catalog.cpp`) is the product: psxport's `SingleTitleCatalog` that the framework `main` runs
   through `psx::host::ProductHost`, which owns the command line, provisioning, the boot order and the
-  loop. Its `x4::X4Runtime : psx::game::GameRuntime` is the title owner: crt0 and the measured boot
+  loop. Its `x4::Runtime : psx::game::GameRuntime` is the title owner: crt0 and the measured boot
   prefix (`startProgram`), stock VSync/DMA-callback/libcd/pad bindings and image-scoped native
-  overrides (`registerOverrides`), the per-`Core` `X4Session`, render-path policy, `X4FrameDriver`,
+  overrides (`registerOverrides`), the per-`Core` `x4::Session`, render-path policy, `x4::frame::FrameDriver`,
   the `warp` debug option and the run-end censuses (`reportRun`). Title behaviour is a virtual on
-  `X4Runtime` or a typed owner it composes, never a config or callback table.
-- `X4FrameDriver::stepFrame()` owns one retail field. The per-field host services belong in
+  `x4::Runtime` or a typed owner it composes, never a config or callback table.
+- `x4::frame::FrameDriver::stepFrame()` owns one retail field. The per-field host services belong in
   `x4::vsync::deliverField` (`game/frame/vsync_sync.cpp`): retail IRQ-0 delivery, pad service, SPU
   advance, snapshot tick, and presentation commit. Full guest libetc VSync `0x800E4DB0` is served by
   the image-scoped override in the same file; do not alter movie bodies to simulate suspension or

@@ -188,7 +188,7 @@ checked against `CdlComplete` rather than assumed, so the owner can report the o
 contract through `stock_cd_publish_sync`; the machine-state word and the handshake byte are still
 written by the guest's own instructions.
 
-Hermetic coverage is `tests/test_x4_music_cd.cpp` (`ctest` `x4_music_cd`, 30/30 green with it), and
+Hermetic coverage is `tests/test_music_cd.cpp` (`ctest` `x4_music_cd`, 30/30 green with it), and
 it exercises the REAL framework owners rather than stand-ins: every measured edge is served and
 accepted, the simulated 6 → 5 → 1 chain advances, four unmeasured callers (including state 7's two
 edges) are provably NOT absorbed, and the state-1 published status is asserted to leave the

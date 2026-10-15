@@ -42,4 +42,4 @@ find_package(Threads REQUIRED)
 add_subdirectory(${PSXPORT_DIR}/vendor/beetle-psx/deps/libchdr
                  ${CMAKE_BINARY_DIR}/libchdr_build EXCLUDE_FROM_ALL)
 
-include(cmake/megamanx4_port.cmake)
+include(cmake/port.cmake)

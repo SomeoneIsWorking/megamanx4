@@ -19,7 +19,7 @@ public:
   Core &core() {
     return game_->core;
   }
-  // X4Runtime's libcd: guest code whose bodies the title's CD wrappers call.
+  // x4::Runtime's libcd: guest code whose bodies the title's CD wrappers call.
   const psx::cd::StockLibcd &libcd() const {
     return libcd_;
   }

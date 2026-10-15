@@ -1,12 +1,12 @@
 #include "bios_threads.h"
 #include "core.h"
 #include "coro.h"
+#include "frame/frame_driver.h"
 #include "game.h"
 #include "movie_cleanup.h"
 #include "music_stream.h"
 #include "stage_warp.h"
 #include "stub_game.h"
-#include "x4_frame_driver.h"
 
 #include <array>
 #include <cstdint>
@@ -156,7 +156,7 @@ bool verifyFrameStep(Core &core, x4::movie_cleanup::State &movieCleanup, x4::mus
   g_fieldServices = 0;
   g_presentationSyncs = 0;
 
-  x4::frame::X4FrameDriver driver(recordDispatch, kRecordedFields, movieCleanup, musicStream, *g_tasks, *g_warp);
+  x4::frame::FrameDriver driver(recordDispatch, kRecordedFields, movieCleanup, musicStream, *g_tasks, *g_warp);
   driver.stepFrame(core, 7u);
 
   if (!check(g_presentationSyncs == 1u, "one frame did not synchronize title presentation exactly once") ||
@@ -193,7 +193,7 @@ bool verifyMovieOwnedFrame(Core &core, x4::movie_cleanup::State &movieCleanup, x
   g_presentationSyncs = 0;
   g_releaseMovieOnUpdate = false;
 
-  x4::frame::X4FrameDriver driver(recordDispatch, kRecordedFields, movieCleanup, musicStream, *g_tasks, *g_warp);
+  x4::frame::FrameDriver driver(recordDispatch, kRecordedFields, movieCleanup, musicStream, *g_tasks, *g_warp);
   driver.stepFrame(core, 8u);
 
   return check(g_fieldServices == 1u && g_presentationSyncs == 1u,
@@ -216,7 +216,7 @@ bool verifyBgmStreamDoesNotOwnPicture(Core &core,
   g_fieldServices = 0;
   g_presentationSyncs = 0;
 
-  x4::frame::X4FrameDriver driver(recordDispatch, kRecordedFields, movieCleanup, musicStream, *g_tasks, *g_warp);
+  x4::frame::FrameDriver driver(recordDispatch, kRecordedFields, movieCleanup, musicStream, *g_tasks, *g_warp);
   driver.stepFrame(core, 7u);
   core.game->cd.stream_active = 0;
 
@@ -243,7 +243,7 @@ bool verifyMovieReleaseResumesFrameTail(Core &core,
   g_calls.clear();
   g_releaseMovieOnUpdate = true;
 
-  x4::frame::X4FrameDriver driver(recordDispatch, kRecordedFields, movieCleanup, musicStream, *g_tasks, *g_warp);
+  x4::frame::FrameDriver driver(recordDispatch, kRecordedFields, movieCleanup, musicStream, *g_tasks, *g_warp);
   driver.stepFrame(core, 9u);
   g_releaseMovieOnUpdate = false;
   g_movieCleanup = nullptr;
@@ -278,7 +278,7 @@ bool verifyMusicFieldTransaction(Core &core,
   g_musicStream = &musicStream;
   g_yieldMusicFields = true;
 
-  x4::frame::X4FrameDriver driver(recordDispatch, kRecordedFields, movieCleanup, musicStream, *g_tasks, *g_warp);
+  x4::frame::FrameDriver driver(recordDispatch, kRecordedFields, movieCleanup, musicStream, *g_tasks, *g_warp);
   driver.stepFrame(core, 10u);
   if (!check(musicStream.pending(), "music VSync(3) replacement did not suspend its retail call chain") ||
       !check(g_calls.size() == 6u && g_calls.back().entry == x4::music_stream::kBeforeObjectsB,
@@ -318,7 +318,7 @@ bool verifyCleanupFieldTransaction(Core &core,
   g_movieCleanup = &movieCleanup;
   g_cleanupTransaction.reset();
 
-  x4::frame::X4FrameDriver driver(recordDispatch, kRecordedFields, movieCleanup, musicStream, *g_tasks, *g_warp);
+  x4::frame::FrameDriver driver(recordDispatch, kRecordedFields, movieCleanup, musicStream, *g_tasks, *g_warp);
   driver.stepFrame(core, 20u);
   if (!check(movieCleanup.pending() && movieCleanup.phase() == x4::movie_cleanup::Phase::DisplayFence,
              "movie cleanup did not suspend at its first display field") ||
@@ -408,7 +408,7 @@ bool verifyBudgetParkedTaskKeepsFrame(Core &core,
   g_fieldServices = 0;
   g_presentationSyncs = 0;
 
-  x4::frame::X4FrameDriver driver(recordDispatch, kRecordedFields, movieCleanup, musicStream, tasks, *g_warp);
+  x4::frame::FrameDriver driver(recordDispatch, kRecordedFields, movieCleanup, musicStream, tasks, *g_warp);
   driver.stepFrame(core, 30u);
   const bool parked = tasks.frameInProgress();
   const std::size_t firstFieldCalls = g_calls.size();
@@ -454,7 +454,7 @@ bool verifyWarpEntersStageLoadAtFrameBoundary(Core &core,
       stateSeen = static_cast<std::uint8_t>(core.mem_r8(kEngine + x4::StageWarp::kStateOffset));
     }
   };
-  x4::frame::X4FrameDriver driver(recordDispatch, kRecordedFields, movieCleanup, musicStream, *g_tasks, *g_warp);
+  x4::frame::FrameDriver driver(recordDispatch, kRecordedFields, movieCleanup, musicStream, *g_tasks, *g_warp);
   driver.stepFrame(core, 90u);
   g_onDispatch = nullptr;
   return check(refused.rfind("refused", 0) == 0, "a stage past the table was armed") &&

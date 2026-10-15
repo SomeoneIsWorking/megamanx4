@@ -7,7 +7,7 @@
 #include "execution_services.h"
 #include "game.h"
 #include "r3000.h"
-#include "x4_session.h"
+#include "runtime/session.h"
 
 #include <cstdlib>
 #include <lucent/log.h>

@@ -14,7 +14,7 @@ updated: 2026-10-10
 The generic menu binds Aspect Ratio to `Mods::aspect`. That value controls the framework's
 host-native video plan and is deliberately locked out when `RenderMode::enhancementsAllowed()` is
 false. Mega Man X4 ships on the record path, where title-authored widescreen instead enters through
-`X4Runtime::guestWidescreenProjection()` and the separate `PSXPORT_X4_WIDESCREEN` Boolean CVar.
+`x4::Runtime::guestWidescreenProjection()` and the separate `PSXPORT_X4_WIDESCREEN` Boolean CVar.
 
 The row therefore remains visible and cycles Vanilla/16:9/21:9/Auto, but none of those four labels is
 the authority X4's guest projection reads. Its presence is not evidence that widescreen is working.
@@ -48,7 +48,7 @@ player row describes a different owner and therefore remains an open truthful-co
 `x4::WidescreenPolicy::presentationAspect` (`game/widescreen/widescreen_controller.cpp`) answers 4:3 while an
 STR owns the picture or enhancements are off, and otherwise defers to the framework's own mapping of the
 player's row (`Mods::aspect`: Vanilla 4:3, 16:9, 21:9, Auto). `PSXPORT_X4_WIDESCREEN` now only switches the
-enhancement off. `tests/test_x4_runtime.cpp` pins each row state. The tracked `psxport_settings.ini` carries
+enhancement off. `tests/test_runtime.cpp` pins each row state. The tracked `psxport_settings.ini` carries
 `aspect=1` for tool runs; comparison and recordcheck runs pass a settings file with `aspect=0`. The shared
 menu was not forked: the row already reaches the guest projection through the base policy, and the 21:9 row is
 capped by the background ring (`docs/behavior-map.md`).

@@ -10,7 +10,7 @@
 #include "guest_execution.h"
 #include "movie_cleanup.h"
 #include "native_dispatch.h"
-#include "x4_session.h"
+#include "runtime/session.h"
 
 #include <array>
 #include <cstdlib>

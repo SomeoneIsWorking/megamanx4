@@ -1,4 +1,4 @@
-#include "x4_session.h"
+#include "runtime/session.h"
 
 #include "core.h"
 #include "game.h"
@@ -9,20 +9,20 @@
 
 namespace x4 {
 
-X4Session &session(Core &core) {
+Session &session(Core &core) {
   if (core.game == nullptr || !core.game->sessionState) {
-    lucent::error("x4-runtime", "X4Session is absent from the Game");
+    lucent::error("x4-runtime", "x4::Session is absent from the Game");
     std::abort();
   }
-  return static_cast<X4Session &>(*core.game->sessionState);
+  return static_cast<Session &>(*core.game->sessionState);
 }
 
-const X4Session &session(const Core &core) {
+const Session &session(const Core &core) {
   if (core.game == nullptr || !core.game->sessionState) {
-    lucent::error("x4-runtime", "X4Session is absent from the Game");
+    lucent::error("x4-runtime", "x4::Session is absent from the Game");
     std::abort();
   }
-  return static_cast<const X4Session &>(*core.game->sessionState);
+  return static_cast<const Session &>(*core.game->sessionState);
 }
 
 void stockCdSync(Core *core) {

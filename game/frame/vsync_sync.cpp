@@ -190,7 +190,7 @@ void serveVSync(Core *core) {
       refuse("a positive VSync mode is a field wait, and this port expresses a field wait as a "
              "typed FrameBoundary exit that only a retail task's own turn loop can consume. The "
              "caller is not inside one, so there is nothing to consume it: the main thread's field "
-             "cadence is X4FrameDriver's, and the retail main loop's own VSync(0) at 0x80012048 is "
+             "cadence is x4::frame::FrameDriver's, and the retail main loop's own VSync(0) at 0x80012048 is "
              "replaced by that driver rather than executed",
              returnAddress,
              mode);

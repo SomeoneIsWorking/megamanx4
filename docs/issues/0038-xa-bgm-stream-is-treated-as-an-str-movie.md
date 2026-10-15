@@ -23,7 +23,7 @@ owners read that word as "an STR movie owns the picture":
 
 - `x4::WidescreenPolicy::presentationAspect` (`game/widescreen/widescreen_controller.cpp`) returns
   4:3 while it is set;
-- `movieOwnsPicture` (`game/frame/x4_frame_driver.cpp`) skips `runRetailFramePrefix` and
+- `movieOwnsPicture` (`game/frame/frame_driver.cpp`) skips `runRetailFramePrefix` and
   `runRetailFrameSuffix` while it is set.
 
 ## Proper fix
@@ -36,7 +36,7 @@ pump's word.
 
 Closed. `x4::movie_cleanup::State` now owns "an STR movie owns the picture": `stream_startup::run` calls
 `beginStream()`, `complete()` or a failed start releases it, and `ownsPicture()` is read by
-`X4FrameDriver::stepFrame` and `WidescreenPolicy::presentationAspect`. `Game::cd.stream_active` stays the CD
+`x4::frame::FrameDriver::stepFrame` and `WidescreenPolicy::presentationAspect`. `Game::cd.stream_active` stays the CD
 pump's word. Tests: `x4_frame_driver` (`verifyBgmStreamDoesNotOwnPicture`), `x4_runtime` (BGM keeps 16:9, a
 stream gives 4:3), `x4_movie_cleanup`, `x4_stream_startup`. Post-movie presents have non-black pictures
 (title at present ~13,500, demo stage ~15,000) where they were 0.00% before.

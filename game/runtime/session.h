@@ -1,4 +1,4 @@
-// x4_session.h — Mega Man X4's per-Core state, created with each Game.
+// Mega Man X4's per-Core state, created with each Game.
 #pragma once
 
 #include "bios_threads.h"
@@ -19,9 +19,9 @@ class StockLibcd;
 
 namespace x4 {
 
-class X4Session final : public psx::game::TitleSessionState {
+class Session final : public psx::game::TitleSessionState {
 public:
-  X4Session(Core &core, const psx::cd::StockLibcd &stockLibcd)
+  Session(Core &core, const psx::cd::StockLibcd &stockLibcd)
       : libcd(stockLibcd), biosThreads(core), movieCleanup(core), musicStream(core), stageWarp(core) {}
 
   // The runtime's libcd; the title's CD wrappers call its bodies.
@@ -36,8 +36,8 @@ public:
   StageWarp stageWarp;
 };
 
-X4Session &session(Core &core);
-const X4Session &session(const Core &core);
+Session &session(Core &core);
+const Session &session(const Core &core);
 
 // The session libcd's CdSync and CdControl bodies, as guest-body leaves for the CD wrappers.
 void stockCdSync(Core *core);

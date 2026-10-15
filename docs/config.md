@@ -24,8 +24,8 @@ a human action at a live console after launch, later and more specific than the 
 
 | knob | kind | default | persistable | C++ object | read path |
 |---|---|---|---|---|---|
-| `PSXPORT_X4_DISC` | path (port fact, not a CVar) | — | — | `kTitleIdentity.discEnvVar` (`game/boot/x4_catalog.cpp`) | `tools/resolve_disc.py` host-side; the framework's disc resolver guest-side |
-| `PSXPORT_X4_CARD` | path (port fact, not a CVar) | `scratch/saves/megamanx4.mcr` | — | `X4Runtime::hostIdentity()` (`game/boot/x4_runtime.cpp`) | the framework's memory-card backend |
+| `PSXPORT_X4_DISC` | path (port fact, not a CVar) | — | — | `kTitleIdentity.discEnvVar` (`game/runtime/catalog.cpp`) | `tools/resolve_disc.py` host-side; the framework's disc resolver guest-side |
+| `PSXPORT_X4_CARD` | path (port fact, not a CVar) | `scratch/saves/megamanx4.mcr` | — | `x4::Runtime::hostIdentity()` (`game/runtime/runtime.cpp`) | the framework's memory-card backend |
 | `PSXPORT_X4_WIDESCREEN` | Bool | `true` | yes | `x4::widescreenCvar()` | `psx::config::enh(widescreenCvar())` in game/widescreen/widescreen_controller.cpp |
 | `PSXPORT_X4_COOP` | Bool | `false` | yes | `x4::coopCvar()` | no reader yet; `x4::reportUnreadEnhancements()` says so each run |
 | `PSXPORT_X4_SKIP` | Bool | `true` | yes | `x4::skipCvar()` | `psx::config::enh(skipCvar())` in game/input/sequence_skip_overrides.cpp (Start skips the Hunter H.Q. briefing) |
@@ -35,7 +35,7 @@ a human action at a live console after launch, later and more specific than the 
 
 X4 (`SLUS_005.61`) deliberately consumes neither the framework's PC-native renderer nor its synthetic
 interpolated-frame tier. The retail title already owns the target cadence, and the guest's own GP0
-work is the picture. `X4Runtime::renderCapabilities()` is the title authority: it declares the record
+work is the picture. `x4::Runtime::renderCapabilities()` is the title authority: it declares the record
 path (psxport `docs/presentation.md`) as the default, no native renderer, and no temporal interpolation. The shared menu,
 settings loader/saver, and runtime render-path resolver consume that same declaration.
 
@@ -56,7 +56,7 @@ Lightrec original-call API. Diagnostic controls exercise the same runtime dispat
 generated implementation or static selector in the product.
 
 `PSXPORT_X4_DISC` is spelled identically in exactly three places and they must not diverge:
-`.env.example`, `kTitleIdentity.discEnvVar` in `game/boot/x4_catalog.cpp`, and `tools/resolve_disc.py`'s `ENV_KEY`.
+`.env.example`, `kTitleIdentity.discEnvVar` in `game/runtime/catalog.cpp`, and `tools/resolve_disc.py`'s `ENV_KEY`.
 The launcher imports that key and publishes an explicit disc argument into the environment used by
 both executable extraction and the running CD backend. A command-line disc therefore takes precedence
 over an existing title or generic disc setting for the whole session, including relative paths and
@@ -79,7 +79,7 @@ citing that suppression; `tools/behavior.py check` fails an `affect: full` entry
 
 A registered CVar with no reader resolves silently and the exit audit reports `0 UNKNOWN`, so a clean
 run cannot tell the user that co-op does nothing. `x4::reportUnreadEnhancements()`, called from
-`X4Runtime::registerOverrides`, logs one line per run naming every declared knob no feature reads yet
+`x4::Runtime::registerOverrides`, logs one line per run naming every declared knob no feature reads yet
 (today `PSXPORT_X4_COOP`, RE-07). Remove a knob from that line in the commit that adds its first reader.
 
 Judge knobs on the exit `[cfg] env audit AT EXIT` line, never the startup audit: the startup audit runs

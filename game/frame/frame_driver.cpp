@@ -1,4 +1,4 @@
-#include "x4_frame_driver.h"
+#include "frame/frame_driver.h"
 
 #include "core.h"
 #include "execution_services.h"
@@ -108,16 +108,16 @@ void bootPrefix(Core &core) {
   bootPrefix(core, guest::callWithoutKnownReturn);
 }
 
-X4FrameDriver::X4FrameDriver(guest::Dispatch dispatch,
-                             const FieldServices &fields,
-                             movie_cleanup::State &movieCleanup,
-                             music_stream::State &musicStream,
-                             bios_threads::Service &tasks,
-                             StageWarp &stageWarp)
+FrameDriver::FrameDriver(guest::Dispatch dispatch,
+                         const FieldServices &fields,
+                         movie_cleanup::State &movieCleanup,
+                         music_stream::State &musicStream,
+                         bios_threads::Service &tasks,
+                         StageWarp &stageWarp)
     : dispatch_(dispatch), fieldService_(fields.deliverField), presentationSync_(fields.synchronizePresentation),
       movieCleanup_(&movieCleanup), musicStream_(&musicStream), tasks_(&tasks), stageWarp_(&stageWarp) {}
 
-void X4FrameDriver::stepFrame(Core &core, std::uint32_t frame) {
+void FrameDriver::stepFrame(Core &core, std::uint32_t frame) {
   const bool resumingMusicField = musicStream_->pending();
   const bool resumingCleanupField = movieCleanup_->pending();
   // A task that ran out of turn budget is mid-frame, so retail's loop is still inside UpdateTasks.

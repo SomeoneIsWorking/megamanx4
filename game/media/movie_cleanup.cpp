@@ -7,7 +7,7 @@
 #include "guest_execution.h"
 #include "native_dispatch.h"
 
-#include "x4_session.h"
+#include "runtime/session.h"
 
 #include <cstdlib>
 #include <lucent/log.h>

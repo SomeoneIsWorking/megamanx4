@@ -5,7 +5,7 @@
 #include "enhancements.h"
 #include "game.h"
 #include "gpu_vk.h"
-#include "x4_session.h"
+#include "runtime/session.h"
 
 #include <cstdlib>
 #include <limits>

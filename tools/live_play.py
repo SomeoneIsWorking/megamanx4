@@ -1266,7 +1266,7 @@ def report(session: Session, client: LiveClient, log: Path) -> int:
         failures += 1
     if counts.get("interp") not in (0, None):
         print("[live]   REFUSED: the product emitted interpolated in-betweens, and Mega Man X4 declares "
-              "no temporal path (X4Runtime::renderCapabilities). That is out of scope for this "
+              "no temporal path (x4::Runtime::renderCapabilities). That is out of scope for this "
               "title and must not be counted as a cadence claim.")
         failures += 1
     if session.stopped:

@@ -26,19 +26,19 @@ struct FieldServices {
   PresentationSync synchronizePresentation;
 };
 
-// Run the finite prefix of retail gameMain 0x80012024; the frame shell then repeats via X4FrameDriver.
+// Run the finite prefix of retail gameMain 0x80012024; the frame shell then repeats via x4::frame::FrameDriver.
 void bootPrefix(Core &core, guest::Dispatch dispatch);
 void bootPrefix(Core &core);
 
 // One iteration of the retail main loop with VSync replaced by the field boundary.
-class X4FrameDriver final : public psx::game::FrameDriver {
+class FrameDriver final : public psx::game::FrameDriver {
 public:
-  X4FrameDriver(guest::Dispatch dispatch,
-                const FieldServices &fields,
-                cleanup::State &movieCleanup,
-                music::State &musicStream,
-                bios_threads::Service &tasks,
-                StageWarp &stageWarp);
+  FrameDriver(guest::Dispatch dispatch,
+              const FieldServices &fields,
+              cleanup::State &movieCleanup,
+              music::State &musicStream,
+              bios_threads::Service &tasks,
+              StageWarp &stageWarp);
   void stepFrame(Core &core, std::uint32_t frame) override;
 
 private:

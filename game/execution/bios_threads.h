@@ -68,7 +68,7 @@ public:
   [[nodiscard]] bool isOpen(uint32_t handle) const;
   [[nodiscard]] bool isDone(uint32_t handle) const;
 
-  // Run-end task census, reported through X4Runtime::reportRun.
+  // Run-end task census, reported through x4::Runtime::reportRun.
   void reportCensus(std::string_view phase) const;
 
   static constexpr uint32_t handleForSlot(int slot) {

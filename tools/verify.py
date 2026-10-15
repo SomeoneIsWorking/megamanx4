@@ -33,7 +33,7 @@ def main() -> int:
             build=build,
             psxport=PSXPORT,
             product=build / "bin" / "megamanx4_port",
-            cmake_module=ROOT / "cmake" / "megamanx4_port.cmake",
+            cmake_module=ROOT / "cmake" / "port.cmake",
             test_regex=(
                 r"^(cpp_policy|launcher_policy|no_temporal_source_dependency|"
                 r"x4_.*|no_temporal_binary_dependency)$"

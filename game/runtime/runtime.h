@@ -9,11 +9,11 @@
 
 namespace x4 {
 
-// Process-lifetime owner of Mega Man X4: replays crt0 and the gameMain prefix, then X4FrameDriver owns
+// Process-lifetime owner of Mega Man X4: replays crt0 and the gameMain prefix, then x4::frame::FrameDriver owns
 // each field. Retail cadence is already 60 fps, so nothing is interpolated.
-class X4Runtime final : public psx::game::GameRuntime {
+class Runtime final : public psx::game::GameRuntime {
 public:
-  X4Runtime();
+  Runtime();
 
   void startProgram(Core &core) override;
   void registerOverrides(Game &game) override;

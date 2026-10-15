@@ -9,9 +9,9 @@
 #include "resumable_guest_call.h"
 
 #include "music_cd.h"
+#include "runtime/session.h"
 #include "stream_interrupt.h"
 #include "vram_rect_queue.h"
-#include "x4_session.h"
 
 #include <cstdint>
 

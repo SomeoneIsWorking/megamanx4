@@ -10,7 +10,7 @@
 #include "resumable_guest_call.h"
 #include "sequence_skip.h"
 
-#include "x4_session.h"
+#include "runtime/session.h"
 
 namespace x4::sequence_skip {
 namespace {

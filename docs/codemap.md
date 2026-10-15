@@ -3,15 +3,16 @@
 Where X4's code lives and what each owner owns. Feature chains are in `docs/features.md`; the
 framework side is `external/psxport/docs/codemap.md`. The boot executable is the whole engine (no
 overlays); `external/mmx4` is an AGPL matching-decomp reference that never enters psxport.
+`runtime/` and `frame/frame_driver.h` are included through their directory (`"runtime/session.h"`); the other `game/` directories sit on the include path.
 
 ## Owners
 
 | owner | path | owns |
 |---|---|---|
-| `createCatalog` | `game/boot/x4_catalog.*` | The one-title catalog: `SLUS_005.61` identity, disc key and one `X4Runtime` |
-| `X4Runtime` | `game/boot/x4_runtime.*` | The `GameRuntime`: crt0 and boot prefix, stock VSync/DMA-callback/libcd/pad bindings, every native override, session, frame driver, Record path, card identity, `warp`, run report |
-| `X4Session`, `session` | `game/boot/x4_session.*` | Per-Core title state every owner composes; `stockCdSync`/`stockCdControl` |
-| `X4FrameDriver`, `bootPrefix` | `game/frame/x4_frame_driver.*` | One retail field: armed warp, field service, draw prefix, `UpdateTasks`, suffix; a blocking movie or mid-frame task skips the prefix |
+| `createCatalog` | `game/runtime/catalog.*` | The one-title catalog: `SLUS_005.61` identity, disc key and one `x4::Runtime` |
+| `x4::Runtime` | `game/runtime/runtime.*` | The `GameRuntime`: crt0 and boot prefix, stock VSync/DMA-callback/libcd/pad bindings, every native override, session, frame driver, Record path, card identity, `warp`, run report |
+| `x4::Session`, `session` | `game/runtime/session.*` | Per-Core title state every owner composes; `stockCdSync`/`stockCdControl` |
+| `x4::frame::FrameDriver`, `bootPrefix` | `game/frame/frame_driver.*` | One retail field: armed warp, field service, draw prefix, `UpdateTasks`, suffix; a blocking movie or mid-frame task skips the prefix |
 | `deliverField`, `serveVSync` | `game/frame/vsync_sync.*` | The one per-field service (IRQ-0, pad, SPU, snapshot, commit) and libetc VSync `0x800E4DB0` |
 | `guest::dispatch`, `guest::call`, `callWithoutKnownReturn` | `game/execution/guest_execution.*` | Guest calls, a retail `jal` site (`CallSite`) and their measured return boundaries |
 | `native_overrides::install` | `game/execution/native_overrides.*` | The loading-owner overrides against the authenticated image |
@@ -43,17 +44,17 @@ overlays); `external/mmx4` is an AGPL matching-decomp reference that never enter
 | live driver | `tools/live_play.py`, `tools/title_prompts.py` | Headless control-channel input, front-end census, captures |
 | checks | `tools/behavior.py`, `check_license_containment.py`, `verify_decomp_targets.py`, `verify_task_resume.py`, `run_end.py` | Behaviour-map, AGPL containment, decomp target identity, task resume, run-end report parsing |
 | disc files | `tools/discdump.py` | Lists or extracts disc files through psxport's `discdump` |
-| gate | `tools/verify.py`, `cmake/megamanx4_port.cmake` | Build and CTest: style policy, temporal-dependency checks, `x4_*` seams |
+| gate | `tools/verify.py`, `cmake/port.cmake` | Build and CTest: style policy, temporal-dependency checks, `x4_*` seams |
 | tests | `tests/` | One hermetic seam per owner; `tests/stub_game.h` is the shared stub runtime |
 
 ## Where new work goes
 
-- A guest function X4 replaces → the directory owning its subsystem, installed from `X4Runtime::registerOverrides`.
-- Per-Core title state → `X4Session`.
+- A guest function X4 replaces → the directory owning its subsystem, installed from `x4::Runtime::registerOverrides`.
+- Per-Core title state → `x4::Session`.
 - A per-field host service → `deliverField`.
-- A renderer or cadence decision → `X4Runtime::renderCapabilities`.
+- A renderer or cadence decision → `x4::Runtime::renderCapabilities`.
 - A widened draw → `game/render/`; the value gameplay reads stays retail.
 - A title knob → `game/title/enhancements.*`, `docs/config.md`, `docs/behavior-map.md`.
-- A debug route to a screen → `game/debug/`, armed by `titleCommand`, applied by `X4FrameDriver`.
-- Co-op → new owners under `game/input/` over `player_object.h`, composed by `X4Runtime`.
+- A debug route to a screen → `game/debug/`, armed by `titleCommand`, applied by `x4::frame::FrameDriver`.
+- Co-op → new owners under `game/input/` over `player_object.h`, composed by `x4::Runtime`.
 - Anything every title shares → psxport. AGPL-derived code stays here (`LICENSING.md`).

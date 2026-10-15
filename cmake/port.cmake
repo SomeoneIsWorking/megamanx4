@@ -2,7 +2,7 @@ include(${PSXPORT_DIR}/cmake/psxport.cmake)
 
 # Include path shared by every first-party target.
 set(X4_TITLE_DIRS
-  ${CMAKE_SOURCE_DIR}/game/boot
+  ${CMAKE_SOURCE_DIR}/game
   ${CMAKE_SOURCE_DIR}/game/debug
   ${CMAKE_SOURCE_DIR}/game/execution
   ${CMAKE_SOURCE_DIR}/game/frame
@@ -15,9 +15,9 @@ set(X4_TITLE_DIRS
 )
 
 set(SEAM_SRC
-  game/boot/x4_runtime.cpp
-  game/boot/x4_session.cpp
-  game/frame/x4_frame_driver.cpp
+  game/runtime/runtime.cpp
+  game/runtime/session.cpp
+  game/frame/frame_driver.cpp
   game/frame/vsync_sync.cpp
   game/input/input_path.cpp
   game/media/startup_cd.cpp
@@ -86,7 +86,7 @@ if(BUILD_TESTING)
     ${CMAKE_SOURCE_DIR}/game/media/cd_controller.cpp
     ${CMAKE_SOURCE_DIR}/game/render/display_init.cpp
     ${CMAKE_SOURCE_DIR}/game/media/fast_wait.cpp
-    ${CMAKE_SOURCE_DIR}/tests/test_x4_runtime.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_runtime.cpp
     ${CMAKE_SOURCE_DIR}/game/title/enhancements.cpp
     ${CMAKE_SOURCE_DIR}/game/debug/stage_warp.cpp
     ${CMAKE_SOURCE_DIR}/game/render/gpu_timeout.cpp
@@ -111,9 +111,9 @@ if(BUILD_TESTING)
     ${CMAKE_SOURCE_DIR}/game/frame/vsync_sync.cpp
     ${CMAKE_SOURCE_DIR}/game/input/input_path.cpp
     ${CMAKE_SOURCE_DIR}/game/widescreen/widescreen_controller.cpp
-    ${CMAKE_SOURCE_DIR}/game/boot/x4_session.cpp
-    ${CMAKE_SOURCE_DIR}/game/frame/x4_frame_driver.cpp
-    ${CMAKE_SOURCE_DIR}/game/boot/x4_runtime.cpp
+    ${CMAKE_SOURCE_DIR}/game/runtime/session.cpp
+    ${CMAKE_SOURCE_DIR}/game/frame/frame_driver.cpp
+    ${CMAKE_SOURCE_DIR}/game/runtime/runtime.cpp
   )
   target_include_directories(mmx4_runtime_test PRIVATE ${X4_TITLE_DIRS})
   target_link_libraries(mmx4_runtime_test PRIVATE x4_guest_execution)
@@ -124,7 +124,7 @@ if(BUILD_TESTING)
   add_test(NAME x4_runtime COMMAND mmx4_runtime_test)
   add_executable(mmx4_cd_control_boundary_test
     ${CMAKE_SOURCE_DIR}/game/media/cd_control_boundary.cpp
-    ${CMAKE_SOURCE_DIR}/tests/test_x4_cd_control_boundary.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_cd_control_boundary.cpp
   )
   target_include_directories(mmx4_cd_control_boundary_test PRIVATE ${X4_TITLE_DIRS})
   target_link_libraries(mmx4_cd_control_boundary_test PRIVATE x4_guest_execution)
@@ -138,8 +138,8 @@ if(BUILD_TESTING)
     ${CMAKE_SOURCE_DIR}/game/media/cd_control_boundary.cpp
     ${CMAKE_SOURCE_DIR}/game/media/cd_controller.cpp
     ${CMAKE_SOURCE_DIR}/game/media/movie_cleanup.cpp
-    ${CMAKE_SOURCE_DIR}/game/boot/x4_session.cpp
-    ${CMAKE_SOURCE_DIR}/tests/test_x4_movie_cleanup.cpp
+    ${CMAKE_SOURCE_DIR}/game/runtime/session.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_movie_cleanup.cpp
   )
   target_include_directories(mmx4_movie_cleanup_test PRIVATE ${X4_TITLE_DIRS})
   target_link_libraries(mmx4_movie_cleanup_test PRIVATE x4_guest_execution)
@@ -153,12 +153,12 @@ if(BUILD_TESTING)
     ${CMAKE_SOURCE_DIR}/game/media/cd_controller.cpp
     ${CMAKE_SOURCE_DIR}/game/media/movie_cleanup.cpp
     ${CMAKE_SOURCE_DIR}/game/media/music_stream.cpp
-    ${CMAKE_SOURCE_DIR}/game/boot/x4_session.cpp
-    ${CMAKE_SOURCE_DIR}/game/frame/x4_frame_driver.cpp
+    ${CMAKE_SOURCE_DIR}/game/runtime/session.cpp
+    ${CMAKE_SOURCE_DIR}/game/frame/frame_driver.cpp
     ${CMAKE_SOURCE_DIR}/game/frame/vsync_sync.cpp
     ${CMAKE_SOURCE_DIR}/game/input/input_path.cpp
     ${CMAKE_SOURCE_DIR}/game/debug/stage_warp.cpp
-    ${CMAKE_SOURCE_DIR}/tests/test_x4_frame_driver.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_frame_driver.cpp
   )
   target_include_directories(mmx4_frame_driver_test PRIVATE ${X4_TITLE_DIRS})
   target_link_libraries(mmx4_frame_driver_test PRIVATE x4_guest_execution)
@@ -169,8 +169,8 @@ if(BUILD_TESTING)
   add_test(NAME x4_frame_driver COMMAND mmx4_frame_driver_test)
   add_executable(mmx4_music_stream_test
     ${CMAKE_SOURCE_DIR}/game/media/music_stream.cpp
-    ${CMAKE_SOURCE_DIR}/game/boot/x4_session.cpp
-    ${CMAKE_SOURCE_DIR}/tests/test_x4_music_stream.cpp
+    ${CMAKE_SOURCE_DIR}/game/runtime/session.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_music_stream.cpp
   )
   target_include_directories(mmx4_music_stream_test PRIVATE ${X4_TITLE_DIRS})
   target_link_libraries(mmx4_music_stream_test PRIVATE x4_guest_execution)
@@ -181,8 +181,8 @@ if(BUILD_TESTING)
   add_test(NAME x4_music_stream COMMAND mmx4_music_stream_test)
   add_executable(mmx4_music_cd_test
     ${CMAKE_SOURCE_DIR}/game/media/music_cd.cpp
-    ${CMAKE_SOURCE_DIR}/game/boot/x4_session.cpp
-    ${CMAKE_SOURCE_DIR}/tests/test_x4_music_cd.cpp
+    ${CMAKE_SOURCE_DIR}/game/runtime/session.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_music_cd.cpp
   )
   target_include_directories(mmx4_music_cd_test PRIVATE ${X4_TITLE_DIRS})
   target_link_libraries(mmx4_music_cd_test PRIVATE x4_guest_execution)
@@ -194,7 +194,7 @@ if(BUILD_TESTING)
   add_executable(mmx4_startup_cd_test
     ${CMAKE_SOURCE_DIR}/game/media/cd_controller.cpp
     ${CMAKE_SOURCE_DIR}/game/media/startup_cd.cpp
-    ${CMAKE_SOURCE_DIR}/tests/test_x4_startup_cd.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_startup_cd.cpp
   )
   target_include_directories(mmx4_startup_cd_test PRIVATE ${X4_TITLE_DIRS})
   target_link_libraries(mmx4_startup_cd_test PRIVATE x4_guest_execution)
@@ -205,7 +205,7 @@ if(BUILD_TESTING)
   add_test(NAME x4_startup_cd COMMAND mmx4_startup_cd_test)
   add_executable(mmx4_gpu_timeout_test
     ${CMAKE_SOURCE_DIR}/game/render/gpu_timeout.cpp
-    ${CMAKE_SOURCE_DIR}/tests/test_x4_gpu_timeout.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_gpu_timeout.cpp
   )
   target_include_directories(mmx4_gpu_timeout_test PRIVATE ${X4_TITLE_DIRS})
   target_link_libraries(mmx4_gpu_timeout_test PRIVATE x4_guest_execution)
@@ -216,7 +216,7 @@ if(BUILD_TESTING)
   add_test(NAME x4_gpu_timeout COMMAND mmx4_gpu_timeout_test)
   add_executable(mmx4_vram_rect_queue_test
     ${CMAKE_SOURCE_DIR}/game/render/vram_rect_queue.cpp
-    ${CMAKE_SOURCE_DIR}/tests/test_x4_vram_rect_queue.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_vram_rect_queue.cpp
   )
   target_include_directories(mmx4_vram_rect_queue_test PRIVATE ${X4_TITLE_DIRS})
   target_link_libraries(mmx4_vram_rect_queue_test PRIVATE x4_guest_execution)
@@ -227,7 +227,7 @@ if(BUILD_TESTING)
   add_test(NAME x4_vram_rect_queue COMMAND mmx4_vram_rect_queue_test)
   add_executable(mmx4_display_init_test
     ${CMAKE_SOURCE_DIR}/game/render/display_init.cpp
-    ${CMAKE_SOURCE_DIR}/tests/test_x4_display_init.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_display_init.cpp
   )
   target_include_directories(mmx4_display_init_test PRIVATE ${X4_TITLE_DIRS})
   target_link_libraries(mmx4_display_init_test PRIVATE x4_guest_execution)
@@ -243,8 +243,8 @@ if(BUILD_TESTING)
     ${CMAKE_SOURCE_DIR}/game/media/stream_startup.cpp
     ${CMAKE_SOURCE_DIR}/game/frame/vsync_sync.cpp
     ${CMAKE_SOURCE_DIR}/game/input/input_path.cpp
-    ${CMAKE_SOURCE_DIR}/game/boot/x4_session.cpp
-    ${CMAKE_SOURCE_DIR}/tests/test_x4_stream_startup.cpp
+    ${CMAKE_SOURCE_DIR}/game/runtime/session.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_stream_startup.cpp
   )
   target_include_directories(mmx4_stream_startup_test PRIVATE ${X4_TITLE_DIRS})
   target_link_libraries(mmx4_stream_startup_test PRIVATE x4_guest_execution)
@@ -255,7 +255,7 @@ if(BUILD_TESTING)
   add_test(NAME x4_stream_startup COMMAND mmx4_stream_startup_test)
   add_executable(mmx4_stream_interrupt_test
     ${CMAKE_SOURCE_DIR}/game/media/stream_interrupt.cpp
-    ${CMAKE_SOURCE_DIR}/tests/test_x4_stream_interrupt.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_stream_interrupt.cpp
   )
   target_include_directories(mmx4_stream_interrupt_test PRIVATE ${X4_TITLE_DIRS})
   target_link_libraries(mmx4_stream_interrupt_test PRIVATE x4_guest_execution)
@@ -265,7 +265,7 @@ if(BUILD_TESTING)
   )
   add_test(NAME x4_stream_interrupt COMMAND mmx4_stream_interrupt_test)
   add_executable(mmx4_player_object_test
-    ${CMAKE_SOURCE_DIR}/tests/test_x4_player_object.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_player_object.cpp
   )
   target_include_directories(mmx4_player_object_test PRIVATE ${X4_TITLE_DIRS})
   target_link_libraries(mmx4_player_object_test PRIVATE psxport psxport_test_support)
@@ -276,7 +276,7 @@ if(BUILD_TESTING)
   add_test(NAME x4_player_object COMMAND mmx4_player_object_test)
   add_executable(mmx4_title_quad_test
     ${CMAKE_SOURCE_DIR}/game/ui/title_quad.cpp
-    ${CMAKE_SOURCE_DIR}/tests/test_x4_title_quad.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_title_quad.cpp
   )
   target_include_directories(mmx4_title_quad_test PRIVATE ${X4_TITLE_DIRS})
   target_link_libraries(mmx4_title_quad_test PRIVATE x4_guest_execution)
@@ -289,7 +289,7 @@ if(BUILD_TESTING)
   add_executable(mmx4_visibility_cull_test
     ${CMAKE_SOURCE_DIR}/game/render/visibility_cull.cpp
     ${CMAKE_SOURCE_DIR}/game/render/widened_objects.cpp
-    ${CMAKE_SOURCE_DIR}/tests/test_x4_visibility_cull.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_visibility_cull.cpp
   )
   target_include_directories(mmx4_visibility_cull_test PRIVATE ${X4_TITLE_DIRS})
   target_link_libraries(mmx4_visibility_cull_test PRIVATE psxport psxport_test_support)
@@ -301,7 +301,7 @@ if(BUILD_TESTING)
   # Layout only; background_overrides.cpp (guest dispatcher) stays out so the test is hermetic.
   add_executable(mmx4_background_tiles_test
     ${CMAKE_SOURCE_DIR}/game/render/background_tiles.cpp
-    ${CMAKE_SOURCE_DIR}/tests/test_x4_background_tiles.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_background_tiles.cpp
   )
   target_include_directories(mmx4_background_tiles_test PRIVATE ${X4_TITLE_DIRS})
   target_link_libraries(mmx4_background_tiles_test PRIVATE psxport psxport_test_support)
@@ -313,7 +313,7 @@ if(BUILD_TESTING)
   # Packet shifting only; hud_overrides.cpp (guest dispatcher) stays out so the test is hermetic.
   add_executable(mmx4_hud_anchor_test
     ${CMAKE_SOURCE_DIR}/game/render/hud_anchor.cpp
-    ${CMAKE_SOURCE_DIR}/tests/test_x4_hud_anchor.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_hud_anchor.cpp
   )
   target_include_directories(mmx4_hud_anchor_test PRIVATE ${X4_TITLE_DIRS})
   target_link_libraries(mmx4_hud_anchor_test PRIVATE psxport psxport_test_support)
@@ -325,7 +325,7 @@ if(BUILD_TESTING)
   # The skip rule only; sequence_skip_overrides.cpp (guest dispatcher) stays out so the test is hermetic.
   add_executable(mmx4_sequence_skip_test
     ${CMAKE_SOURCE_DIR}/game/input/sequence_skip.cpp
-    ${CMAKE_SOURCE_DIR}/tests/test_x4_sequence_skip.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_sequence_skip.cpp
   )
   target_include_directories(mmx4_sequence_skip_test PRIVATE ${X4_TITLE_DIRS})
   target_link_libraries(mmx4_sequence_skip_test PRIVATE psxport psxport_test_support)
@@ -351,8 +351,8 @@ endif()
 psxport_add_product(
   megamanx4_port
   CATALOG x4::createCatalog
-  HEADER x4_catalog.h
-  SOURCES game/boot/x4_catalog.cpp ${SEAM_SRC}
+  HEADER runtime/catalog.h
+  SOURCES game/runtime/catalog.cpp ${SEAM_SRC}
 )
 
 # gpu_vk.cpp in libpsxport needs the generated SDL_GPU shader header first.
@@ -379,7 +379,7 @@ if(BUILD_TESTING)
 endif()
 
 add_executable(mmx4_thread_global_pointer_test
-  ${CMAKE_SOURCE_DIR}/tests/test_x4_thread_global_pointer.cpp)
+  ${CMAKE_SOURCE_DIR}/tests/test_thread_global_pointer.cpp)
 # r3000.h (via bios_threads.h) comes through psxport's exported include directories.
 target_include_directories(mmx4_thread_global_pointer_test PRIVATE ${X4_TITLE_DIRS})
 target_link_libraries(mmx4_thread_global_pointer_test PRIVATE psxport psxport_test_support)

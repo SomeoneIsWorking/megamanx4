@@ -3,7 +3,7 @@
 #include "core.h"
 #include "native_dispatch.h"
 #include "resumable_guest_call.h"
-#include "x4_session.h"
+#include "runtime/session.h"
 
 #include <array>
 #include <cstdlib>
