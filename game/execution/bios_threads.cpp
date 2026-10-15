@@ -66,8 +66,10 @@ void Service::runGuestEntry(Core &core, uint32_t entry) {
   for (;;) {
     // First turn dispatches the entry; later turns resume mid-function but stay attributed to `entry`.
     const psx::cpu::ExecutionResult result =
-        suspended ? psx::cpu::resumeGuestToReturnFrom(
-                        core, entry, resumeAddress, taskReturnAddress, psx::cpu::ExecutionBudget::currentTurn(core))
+        suspended ? psx::cpu::resumeGuestToReturn(core,
+                                                  psx::cpu::GuestCallSite{entry, taskReturnAddress},
+                                                  resumeAddress,
+                                                  psx::cpu::ExecutionBudget::currentTurn(core))
                   : guest::dispatch(core, resumeAddress);
     ++turnCensus_.turns;
     if (result.returned()) {

@@ -31,17 +31,15 @@ a human action at a live console after launch, later and more specific than the 
 | `PSXPORT_X4_SKIP` | Bool | `true` | yes | `x4::skipCvar()` | `psx::config::enh(skipCvar())` in game/input/sequence_skip_overrides.cpp (Start skips the Hunter H.Q. briefing) |
 | `PSXPORT_X4_FASTWAIT` | Bool | `true` | yes | `x4::fastWaitCvar()` | `psx::config::enh(fastWaitCvar())` in game/media/fast_wait.cpp (loading-coroutine conversion) |
 
-## Title render policy: Native and synthetic 60fps are not player options
+## Title render policy: synthetic 60fps is not a player option
 
-X4 (`SLUS_005.61`) deliberately consumes neither the framework's PC-native renderer nor its synthetic
-interpolated-frame tier. The retail title already owns the target cadence, and the guest's own GP0
-work is the picture. `x4::Runtime::renderCapabilities()` is the title authority: it declares the record
-path (psxport `docs/presentation.md`) as the default, no native renderer, and no temporal interpolation. The shared menu,
-settings loader/saver, and runtime render-path resolver consume that same declaration.
+X4 (`SLUS_005.61`) presents on psxport's record path (`docs/presentation.md`) and takes no synthetic
+interpolated frames. The retail title already owns the target cadence, and the guest's own GP0 work is
+the picture. `x4::Runtime::interpolates()` is false, and the shared menu and settings loader/saver
+consume that answer.
 
-The menu therefore offers neither Native rendering nor 60fps interpolation, and this repository's
-settings file carries no `fps60` key. An explicit diagnostic request for an unsupported mode remains a
-loud refusal or capability-owned fallback; it does not silently enable a product X4 does not own.
+The menu therefore offers no 60fps interpolation, and this repository's settings file carries no
+`fps60` key.
 
 The no-argument policy is therefore unambiguous. `PSXPORT_X4_WIDESCREEN` is the product default and only
 switches the enhancement off: when it is on, the player's Aspect Ratio row (`Mods::aspect`, the `aspect=`

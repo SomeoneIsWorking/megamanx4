@@ -49,7 +49,8 @@ features, and `docs/codemap.md` for ownership.
   that boundary. Sony PSY-Q headers in the reference are not available for copying. Fetch only
   `external/mmx4`, without recursively initializing its build-tool submodules.
 - `external/psxport` resolves to the workspace's live framework checkout, or to a clone of its main
-  where there is none. `tools/psxport_fetch.py --auto` establishes it; there is no framework pin, so a
+  where there is none. psxport's `tools/psxport_fetch.py`, run from psxport `main` by `tools/run.py` and
+  CI, establishes it; there is no framework pin, so a
   framework change in psxport is immediately this port's framework.
 - Disc resolution is implemented once in `tools/resolve_disc.py`: explicit argument,
   `PSXPORT_X4_DISC`, `.env`, then an unambiguous repository-root CHD. The exact executable must pass

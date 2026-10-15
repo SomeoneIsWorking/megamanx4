@@ -120,7 +120,7 @@ def selftest() -> list[str]:
         "hook adapter": "0000 T game_fps60_world_pass()\n",
         "GPU pass": "0000 T gpu_fps60_present_pass()\n",
     }
-    if linked_violations("0000 T FramePresenter::commit(TemporalFramePresentation*)\n"):
+    if linked_violations("0000 T FramePresenter::commit(Core*, int)\n"):
         raise VerificationError("neutral abstract presentation seam was rejected by the link gate")
     results.append("PASS positive neutral link seam")
     for name, mutation in linked_mutations.items():

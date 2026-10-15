@@ -1202,9 +1202,8 @@ def report(session: Session, client: LiveClient, log: Path) -> int:
         if name in configuration["knobs"]:
             print(f"[live]   {name} = {configuration['knobs'][name]} [{configuration['layers'][name]}]")
     print(f"[live]   {configuration['audit']}")
-    print("[live]   knobs this run SET that matched no declared CVar — they were read through the "
-          "legacy path, which is why the audit calls them legacy, and the boot line calls them "
-          "UNKNOWN:")
+    print("[live]   knobs this run SET that matched no declared CVar (title-supplied disc/card keys, "
+          "or UNKNOWN):")
     for name in configuration["unmatched"]:
         print(f"[live]     {name}")
     wide_lines = [line.strip() for line in text.splitlines() if "[wide]" in line]
@@ -1266,7 +1265,7 @@ def report(session: Session, client: LiveClient, log: Path) -> int:
         failures += 1
     if counts.get("interp") not in (0, None):
         print("[live]   REFUSED: the product emitted interpolated in-betweens, and Mega Man X4 declares "
-              "no temporal path (x4::Runtime::renderCapabilities). That is out of scope for this "
+              "no temporal path (x4::Runtime::interpolates). That is out of scope for this "
               "title and must not be counted as a cadence claim.")
         failures += 1
     if session.stopped:
@@ -1481,7 +1480,7 @@ def selftest() -> int:
                         "invalidations=0 faults=0\n"
                         "fallback: calls=0 instructions=0 refused_calls=0 compilation_failed=0\n")
             if line == "cvars":
-                return "env audit: 0 PSXPORT_* set -> 0 declared, 0 legacy, 0 UNKNOWN\n"
+                return "env audit: 0 PSXPORT_* set -> 0 declared, 0 title-supplied, 0 UNKNOWN\n"
             if line.startswith("shot "):
                 return "shot -> (refused in this fixture)\n"
             # The pad drive commands; the route offers edges and holds.

@@ -4,7 +4,7 @@
 #include "enhancement_gate.h"
 #include "enhancements.h"
 #include "game.h"
-#include "gpu_vk.h"
+#include "guest_widescreen_projection.h"
 #include "runtime/session.h"
 
 #include <cstdlib>
@@ -32,7 +32,7 @@ PresentationAspect WidescreenPolicy::presentationAspect(const Core &core) const 
   return GuestWidescreenProjection::presentationAspect(core);
 }
 
-WidescreenController::WidescreenController() : WidescreenController(gpu_vk_latch_guest_projection) {}
+WidescreenController::WidescreenController() : WidescreenController(psx::present::latchGuestProjection) {}
 
 WidescreenController::WidescreenController(ProjectionLatch latch) : latch_(latch) {
   if (!latch_) {
@@ -47,7 +47,7 @@ void WidescreenController::publishProjection(Core &core, GuestBody retailBody) {
     std::abort();
   }
 
-  plan_ = latch_(&core, kRetailProjection);
+  plan_ = latch_(core, kRetailProjection);
   if (plan_.projectionCenterX <= 0 || plan_.guestDrawWidth <= 0 ||
       plan_.guestDrawWidth > std::numeric_limits<uint16_t>::max()) {
     lucent::error("x4-wide",
@@ -97,7 +97,7 @@ void WidescreenController::synchronizePresentation(Core &core) {
   }
 
   // Re-latch so the cull margin follows the policy: 4:3 during movies, wide again after.
-  plan_ = latch_(&core, kRetailProjection);
+  plan_ = latch_(core, kRetailProjection);
 }
 
 } // namespace x4

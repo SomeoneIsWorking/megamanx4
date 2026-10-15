@@ -64,7 +64,8 @@ void synchronizePresentation(Core &core) {
 
 // The retail libcd stays guest code; its object only lends its bodies to the title's CD wrappers.
 Runtime::Runtime()
-    : vsync_(vsync::kVSync, vsync::kVblankCounter), dmaCallbacks_(stream_startup::kDmaCallbackTable), libcd_({}, {}, 0),
+    : vsync_({.entry = vsync::kVSync, .queryCounter = vsync::kVblankCounter}),
+      dmaCallbacks_(stream_startup::kDmaCallbackTable), libcd_({}, {}, 0),
       pad_({.slot0Buffer = pad::kSlot0Buffer, .slot1Buffer = pad::kSlot1Buffer}) {}
 
 void Runtime::startProgram(Core &core) {
@@ -113,19 +114,6 @@ std::unique_ptr<psx::game::FrameDriver> Runtime::createFrameDriver(Game &game) {
 
 void Runtime::deliverPad(Core &core, const psx::input::PadDelivery &delivery) {
   pad_.deliver(core, delivery);
-}
-
-// The device's GP0 work replayed from the frame record; no native producers.
-RenderCapabilities Runtime::renderCapabilities() const {
-  return RenderCapabilities{
-      .defaultPath = RenderPath::Record,
-      .nativeRenderPath = false,
-  };
-}
-
-// The device VRAM is the picture on the record path, STR frames included.
-bool Runtime::guestVramIsPicture(const Game &) const {
-  return true;
 }
 
 const GuestWidescreenProjection *Runtime::guestWidescreenProjection() const {

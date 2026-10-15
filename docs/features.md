@@ -36,12 +36,6 @@ no row runs on the framework alone.
 | 2 | psxport F-CD.1 | `game/media/fast_wait.cpp:load_synchronously` — each measured load completes in one call, no loading screen |
 | 3 | psxport F-CD.1 | `game/media/stream_startup.cpp:run` — the STR read, completed through the DMA-3 entry of `StockDmaCallbacks` |
 
-## F-RENDER
-
-| hop | joins | owner |
-|---|---|---|
-| 1 | psxport F-RENDER.1 | `game/runtime/runtime.cpp:x4::Runtime::renderCapabilities` — Record, no producers; guest VRAM is the picture |
-
 ## F-WIDE
 
 | hop | joins | owner |

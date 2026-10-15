@@ -137,7 +137,7 @@ void load_synchronously(Core *core, const SynchronousLoad &request) {
   }
   load.phase = Phase::Delivering;
   for (uint32_t sector = 0; sector < sectorCount; ++sector) {
-    if (!disc_read_raw(&core->game->disc, load.requestLba + sector, load.rawSector.data(), load.rawSector.size())) {
+    if (!core->game->disc.readRaw(load.requestLba + sector, load.rawSector.data(), load.rawSector.size())) {
       refuse(request.what, "disc backend could not read a required raw sector", load);
     }
     load.sectorCursor = kRawDataOffset;

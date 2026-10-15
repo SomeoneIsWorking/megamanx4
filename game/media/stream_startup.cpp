@@ -95,11 +95,11 @@ bool startNativeCdStream(Core &core, const StreamRequest &request, FieldService 
   serviceFields(core, serviceField, 3u);
 
   Game &game = *core.game;
-  CdcState &controller = game.cdc;
+  psx::cd::CdController &controller = game.cdc;
   const std::uint8_t file = static_cast<std::uint8_t>(core.mem_r8(request.filter));
   const std::uint8_t channel = static_cast<std::uint8_t>(core.mem_r8(request.filter + 1u));
-  xa_stream_stop(&game.xa);
-  xa_stream_setfilter(&game.xa, file, channel);
+  game.xa.stop();
+  game.xa.setFilter(file, channel);
   core.r[4] = 3u;
   serviceFields(core, serviceField, 3u);
 
@@ -107,7 +107,7 @@ bool startNativeCdStream(Core &core, const StreamRequest &request, FieldService 
   cd_controller::setMode(core, mode);
 
   std::array<std::uint8_t, 8> position{};
-  if (!disc_get_subq_position(&game.disc, request.lba, position.data())) {
+  if (!game.disc.subqPosition(request.lba, position.data())) {
     lucent::error("x4-stream-startup", "cannot resolve STR start LBA {} to a disc position", request.lba);
     return false;
   }
@@ -122,12 +122,11 @@ bool startNativeCdStream(Core &core, const StreamRequest &request, FieldService 
   game.cd.stream_active = 1;
   game.cd.stream_t0_ns = 0;
   game.cd.stream_delivered = 0;
-  xa_stream_setloc(&game.xa,
-                   static_cast<std::uint8_t>(core.mem_r8(kStreamLocation + 0u)),
-                   static_cast<std::uint8_t>(core.mem_r8(kStreamLocation + 1u)),
-                   static_cast<std::uint8_t>(core.mem_r8(kStreamLocation + 2u)));
-  xa_stream_start(&game.xa);
-  cdc_begin_read(&controller, request.lba);
+  game.xa.setLoc(static_cast<std::uint8_t>(core.mem_r8(kStreamLocation + 0u)),
+                 static_cast<std::uint8_t>(core.mem_r8(kStreamLocation + 1u)),
+                 static_cast<std::uint8_t>(core.mem_r8(kStreamLocation + 2u)));
+  game.xa.start();
+  controller.beginRead(request.lba);
   core.r[4] = 3u;
   serviceFields(core, serviceField, 3u);
   return true;

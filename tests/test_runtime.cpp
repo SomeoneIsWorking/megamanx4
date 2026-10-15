@@ -38,7 +38,7 @@ void mark_retail_body(Core *core) {
   core->r[2] = 0xC0DEC0DEu;
 }
 
-GuestProjectionPlan latch_projection(Core *, GuestProjectionGeometry geometry) {
+GuestProjectionPlan latch_projection(Core &, GuestProjectionGeometry geometry) {
   g_projectionGeometry = geometry;
   return g_projectionPlan;
 }
@@ -161,8 +161,8 @@ bool verify_widescreen_controller(Core &core) {
 }
 
 // The framework's plan builder for the record path at 16:9, fed the title's own geometry.
-GuestProjectionPlan latch_record_projection(Core *, GuestProjectionGeometry geometry) {
-  return guest_projection_plan({
+GuestProjectionPlan latch_record_projection(Core &, GuestProjectionGeometry geometry) {
+  return psx::present::guestProjectionPlan({
       .path = RenderPath::Record,
       .requested = PresentationAspect::Wide16x9,
       .nativePresentation = {320, 240},
@@ -490,12 +490,8 @@ int main() {
   static_assert(std::is_base_of_v<psx::game::GameRuntime, x4::Runtime>);
 
   x4::Runtime runtime;
-  const RenderCapabilities capabilities = runtime.renderCapabilities();
-  if (capabilities.defaultPath != RenderPath::Record || capabilities.nativeRenderPath || runtime.interpolates() ||
-      !capabilities.supports(RenderPath::Record) || !capabilities.supports(RenderPath::Device) ||
-      capabilities.supports(RenderPath::Native) || capabilities.playerSelectable(RenderPath::Native) ||
-      render_path_resolve(RenderPath::Native, capabilities) != RenderPath::Record) {
-    std::fprintf(stderr, "x4::Runtime did not select the record path without a native or temporal product\n");
+  if (runtime.interpolates()) {
+    std::fprintf(stderr, "x4::Runtime declared a temporal product\n");
     return 1;
   }
 
@@ -519,13 +515,12 @@ int main() {
     std::fprintf(stderr, "x4::Runtime did not bind its card names, VSync, DMACallback table or warp\n");
     return 1;
   }
-  if (game->temporalPresentation != nullptr || game->frameDriver == nullptr ||
-      runtime.guestWidescreenProjection() == nullptr) {
-    std::fprintf(stderr, "x4::Runtime omitted its frame driver/widescreen policy or constructed temporal history\n");
+  if (game->frameDriver == nullptr || runtime.guestWidescreenProjection() == nullptr) {
+    std::fprintf(stderr, "x4::Runtime omitted its frame driver or widescreen policy\n");
     return 1;
   }
-  if (!runtime.guestVramIsPicture(*game) || !game_guest_vram_is_picture(*game)) {
-    std::fprintf(stderr, "x4::Runtime did not declare the device VRAM as the record-path picture\n");
+  if (game->core.rsub.mode.path() != RenderPath::Record) {
+    std::fprintf(stderr, "the X4 Game did not present on the record path\n");
     return 1;
   }
 

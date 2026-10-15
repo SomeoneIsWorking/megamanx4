@@ -43,7 +43,8 @@ cp .env.example .env && $EDITOR .env                # point it at your own disc 
 ./run.sh --prepare-only                              # same cold path, but stop before launch
 ```
 
-`tools/psxport_fetch.py` links the workspace's live framework checkout, or clones psxport `main` where
+psxport's `tools/psxport_fetch.py` (`uv run --no-project https://raw.githubusercontent.com/SomeoneIsWorking/psxport/main/tools/psxport_fetch.py --auto`,
+run by `run.sh` when `external/psxport` is missing) links the workspace's live framework checkout, or clones psxport `main` where
 there is none, and initializes its required direct vendors without recursing into Beetle's URL-less
 `gnulib` path. There is no framework pin to keep in step. Do not recursively initialize `external/mmx4`;
 its nested build-tool submodules are not needed by this port.

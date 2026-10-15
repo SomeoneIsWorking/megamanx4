@@ -52,7 +52,7 @@ overlays); `external/mmx4` is an AGPL matching-decomp reference that never enter
 - A guest function X4 replaces → the directory owning its subsystem, installed from `x4::Runtime::registerOverrides`.
 - Per-Core title state → `x4::Session`.
 - A per-field host service → `deliverField`.
-- A renderer or cadence decision → `x4::Runtime::renderCapabilities`.
+- A cadence decision → `x4::Runtime::interpolates`.
 - A widened draw → `game/render/`; the value gameplay reads stays retail.
 - A title knob → `game/title/enhancements.*`, `docs/config.md`, `docs/behavior-map.md`.
 - A debug route to a screen → `game/debug/`, armed by `titleCommand`, applied by `x4::frame::FrameDriver`.

@@ -15,7 +15,7 @@ public:
 class WidescreenController {
 public:
   using GuestBody = void (*)(Core *);
-  using ProjectionLatch = GuestProjectionPlan (*)(Core *, GuestProjectionGeometry);
+  using ProjectionLatch = GuestProjectionPlan (*)(Core &, GuestProjectionGeometry);
 
   WidescreenController();
   explicit WidescreenController(ProjectionLatch latch);

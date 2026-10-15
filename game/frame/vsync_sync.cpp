@@ -13,7 +13,6 @@
 
 #include "image_identity.h"
 #include "input_path.h"
-#include "snapshot.h"
 #include <cstdlib>
 #include <lucent/log.h>
 
@@ -137,7 +136,7 @@ void deliverField(Core &core) {
   c->game->spu_audio.frame();
 
   // The neutral presenter owns capture and pacing; pass the one-field-per-step cadence explicitly.
-  snapshot_tick(c);
+  c->game->snapshots.tick(*c);
   c->game->presentation.commit(c, 1);
   lucent::debug("x4-vsync", "native field {} -> {}", before, after);
 }

@@ -35,18 +35,18 @@ void reset(Core &core) {
     std::abort();
   }
 
-  CdcState &controller = core.game->cdc;
-  XaState *const xa = controller.xa;
+  psx::cd::CdController &controller = core.game->cdc;
+  psx::audio::XaStream *const xa = controller.xa;
   void *const tickContext = controller.tick_context;
-  const CdcTickNowFn tickNow = controller.tick_now;
-  cdc_state_init(&controller);
+  const psx::cd::CdcTickNowFn tickNow = controller.tick_now;
+  controller.reset();
   controller.xa = xa;
-  cdc_bind_tick_source(&controller, tickContext, tickNow);
+  controller.bindTickSource(tickContext, tickNow);
   controller.irq_en = kLibCdInterruptMask;
 
   core.game->cd.stock_reading = 0;
   core.game->cd.stream_active = 0;
-  xa_stream_stop(&core.game->xa);
+  core.game->xa.stop();
 }
 
 void setMode(Core &core, std::uint8_t mode) {
@@ -54,8 +54,8 @@ void setMode(Core &core, std::uint8_t mode) {
     lucent::error("x4-cd-controller", "native controller mode publication requires a bound Game");
     std::abort();
   }
-  xa_stream_setmode(&core.game->xa, mode);
-  cdc_set_mode(&core.game->cdc, mode);
+  core.game->xa.setMode(mode);
+  core.game->cdc.setMode(mode);
 }
 
 } // namespace x4::cd_controller

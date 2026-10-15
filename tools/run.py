@@ -21,6 +21,7 @@ else:
 
 ROOT = Path(__file__).resolve().parents[1]
 PLAYER_BUILD_DIR = "build/player"
+FRAMEWORK_FETCH = ["uv", "run", "--no-project", "https://raw.githubusercontent.com/SomeoneIsWorking/psxport/main/tools/psxport_fetch.py", "--auto"]
 CYAN = "\033[1;36m"
 RED = "\033[1;31m"
 RESET = "\033[0m"
@@ -253,10 +254,10 @@ def run_launcher(
         jobs = cpu_jobs(machine, root=root)
 
         psxport_setting = environment.get("PSXPORT_DIR") or "external/psxport"
-        if not environment.get("PSXPORT_DIR"):
+        if not environment.get("PSXPORT_DIR") and not (root / "external/psxport/cmake/psxport.cmake").is_file():
             run_stage(
                 machine,
-                [python_executable, "tools/psxport_fetch.py", "--auto"],
+                FRAMEWORK_FETCH,
                 "could not resolve external/psxport",
                 root=root,
                 env=environment,
