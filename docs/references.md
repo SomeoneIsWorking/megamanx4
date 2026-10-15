@@ -40,9 +40,8 @@ rood-reverse states `sha1:` inside each splat.yaml; mmx4 does not, which is why 
 ## Three rules for using it
 
 **1. A borrowed address is a HYPOTHESIS until measured against these bytes.** Where a reference and a
-measurement disagree, the measurement wins. Nothing in `game/title/game_config.cpp` is filled in from it
-and nothing should be without the disassembly line that justifies it pasted alongside (the shape
-`spider1/game/title/game_config.cpp` uses). This repo has a *tempting* supply of addresses sitting there,
+measurement disagree, the measurement wins. No guest address in `game/` is taken from it without the
+measurement that justifies it recorded beside it or in `docs/re-frontier.md`. This repo has a *tempting* supply of addresses sitting there,
 which is exactly why the rule is stated twice — here and in `CLAUDE.md`.
 
 **2. THE LICENCE FIREWALL, as a hard engineering rule.** AGPL-derived code may live in THIS repo and may

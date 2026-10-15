@@ -11,15 +11,16 @@ features, and `docs/codemap.md` for ownership.
 ## Title boundaries
 
 `docs/codemap.md` is the structural authority: every directory under `game/` owns one subsystem
-(`boot`, `frame`, `execution`, `input`, `media`, `render`, `ui`, `widescreen`, `title`), and its
-namespace, its classes and its "Who owns it" chains say where a behaviour lives.
+(`boot`, `debug`, `frame`, `execution`, `input`, `media`, `render`, `ui`, `widescreen`, `title`).
+`docs/features.md` traces each player-visible feature through its owners.
 
 - `x4::createCatalog` (`game/boot/x4_catalog.cpp`) is the product: psxport's `SingleTitleCatalog` that the framework `main` runs
   through `psx::host::ProductHost`, which owns the command line, provisioning, the boot order and the
-  loop. Its `x4::X4Runtime` is the title owner: the measured boot prefix (`bootInit`), image-scoped
-  native overrides, render-path policy, `X4FrameDriver` and the run-end censuses (`reportRun`). `GameConfig` and
-  `GameHooks` are compatibility views through `x4::legacy::{measuredConfig,compatibilityHooks}`;
-  add behavior to typed owners instead of extending those views.
+  loop. Its `x4::X4Runtime : psx::game::GameRuntime` is the title owner: crt0 and the measured boot
+  prefix (`startProgram`), stock VSync/DMA-callback/libcd/pad bindings and image-scoped native
+  overrides (`registerOverrides`), the per-`Core` `X4Session`, render-path policy, `X4FrameDriver`,
+  the `warp` debug option and the run-end censuses (`reportRun`). Title behaviour is a virtual on
+  `X4Runtime` or a typed owner it composes, never a config or callback table.
 - `X4FrameDriver::stepFrame()` owns one retail field. The per-field host services belong in
   `x4::vsync::deliverField` (`game/frame/vsync_sync.cpp`): retail IRQ-0 delivery, pad service, SPU
   advance, snapshot tick, and presentation commit. Full guest libetc VSync `0x800E4DB0` is served by
@@ -28,9 +29,9 @@ namespace, its classes and its "Who owns it" chains say where a behaviour lives.
 - The guest's own GP0 work, replayed on psxport's record path, is the picture. X4 already runs at
   60 fps, so native producers, frame interpolation, and native depth are outside this port's scope.
   Do not link temporal `Fps60` machinery or select a guaranteed-black native render path.
-- Widescreen, loading removal, and co-op are `pc_enh` changes with `affect: full`. Typed comparison
-  runs suppress them. Route every enhancement read through `x4::enh()` in
-  `game/title/enhancements.cpp`, not direct CVar `.get()` calls. `docs/config.md` owns the knobs;
+- Widescreen, loading removal, co-op and sequence skip are `pc_enh` changes with `affect: full`.
+  Typed comparison runs suppress them. Read every enhancement knob through
+  `psx::config::enh(x4::<knob>Cvar())`, never `.get()`. `docs/config.md` owns the knobs;
   `docs/behavior-map.md` owns their divergence and comparison behavior, and
   `tools/behavior.py check` is its machine gate.
 - Keep raw CD I/O latency and removal of the retail loading coroutine as separate behaviors. A

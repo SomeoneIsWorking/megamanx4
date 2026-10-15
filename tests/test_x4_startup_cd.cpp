@@ -1,6 +1,7 @@
 #include "core.h"
 #include "game.h"
 #include "startup_cd.h"
+#include "stub_game.h"
 
 #include <array>
 #include <cstdint>
@@ -146,7 +147,8 @@ bool verifyNoGuestSynchronization() {
 } // namespace
 
 int main() {
-  auto game = std::make_unique<Game>();
+  x4::test::StubGame stub;
+  Game *game = &stub.game();
   Core &core = game->core;
   constexpr std::uint32_t kInitialStack = 0x801FFF00u;
   constexpr std::uint32_t kInitialReturnAddress = 0x81234567u;

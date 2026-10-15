@@ -8,6 +8,8 @@
 #include "game.h"
 #include "guest_execution.h"
 #include "native_dispatch.h"
+#include "platform_hle.h"
+#include "stock_vsync.h"
 
 #include "image_identity.h"
 #include "input_path.h"
@@ -169,8 +171,8 @@ void serveVSync(Core *core) {
   const std::uint32_t elapsed = (c.mem_r32(c.mem_r32(kRegisterCell1)) - c.mem_r32(kLastSample)) & 0xFFFFu;
 
   if (mode < 0) {
-    // mode < 0 (0x800E4DE8) skips both waits and returns the counter; the display-mode init 0x800E68F4 calls VSync(-1).
-    c.r[2] = c.mem_r32(kVblankCounter);
+    // mode < 0 (0x800E4DE8) skips both waits; the display-mode init 0x800E68F4 calls VSync(-1).
+    c.game->platform_hle.vsync()->serve(c);
     lucent::debug("x4-vsync", "VSync({}) query -> field {} (ra=0x{:08X})", mode, c.r[2], returnAddress);
     return;
   }

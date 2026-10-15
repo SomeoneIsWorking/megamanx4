@@ -1,35 +1,38 @@
 #pragma once
 
 #include "game_runtime.h"
+#include "stock_dma_callbacks.h"
+#include "stock_libcd.h"
+#include "stock_pad_buffers.h"
+#include "stock_vsync.h"
 #include "widescreen_controller.h"
 
 namespace x4 {
 
-class X4Runtime final : public GameRuntime {
+// Process-lifetime owner of Mega Man X4: replays crt0 and the gameMain prefix, then X4FrameDriver owns
+// each field. Retail cadence is already 60 fps, so nothing is interpolated.
+class X4Runtime final : public psx::game::GameRuntime {
 public:
   X4Runtime();
 
-  // Retail cadence is already 60 fps, so there is nothing to interpolate.
-  RenderCapabilities renderCapabilities() const override {
-    return RenderCapabilities{
-        .defaultPath = RenderPath::Record,
-        .nativeRenderPath = false,
-        .temporalInterpolation = false,
-    };
-  }
-
-  void *createContext(Core &core) override;
-  void destroyContext(void *context) override;
+  void startProgram(Core &core) override;
   void registerOverrides(Game &game) override;
-  void bootInit(Core &core) override;
-  std::unique_ptr<FrameDriver> createFrameDriver(Game &game) override;
-  const GuestPadBufferLayout *guestPadBufferLayout() const override;
-  const GuestProgramImage *guestProgramImage() const override;
+  std::unique_ptr<psx::game::TitleSessionState> createSession(Game &game) override;
+  std::unique_ptr<psx::game::FrameDriver> createFrameDriver(Game &game) override;
+  void deliverPad(Core &core, const psx::input::PadDelivery &delivery) override;
+  RenderCapabilities renderCapabilities() const override;
   bool guestVramIsPicture(const Game &game) const override;
   const GuestWidescreenProjection *guestWidescreenProjection() const override;
+  bool titleCommand(Core &core, const psx::game::TitleCommandLine &input, std::FILE *reply) override;
+  psx::game::TitleDevWarp *devWarp(Core &core) const override;
   void reportRun(Core &core) const override;
+  const psx::game::HostIdentity *hostIdentity() const override;
 
 private:
+  psx::hle::StockVSync vsync_;
+  psx::hle::StockDmaCallbacks dmaCallbacks_;
+  psx::cd::StockLibcd libcd_;
+  psx::input::StockPadBuffers pad_;
   WidescreenPolicy widescreenPolicy_;
 };
 

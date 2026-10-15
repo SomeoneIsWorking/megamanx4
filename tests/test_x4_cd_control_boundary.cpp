@@ -1,14 +1,17 @@
 #include "cd_control_boundary.h"
 
-#include "cd_control.h"
 #include "core.h"
 #include "game.h"
+#include "stock_libcd.h"
+#include "stub_game.h"
 
 #include <cstdint>
 #include <cstdio>
 #include <memory>
 
 namespace {
+
+const psx::cd::StockLibcd *gLibcd = nullptr;
 
 std::uint32_t gRetailCalls = 0u;
 std::uint32_t gExistingPolicyCalls = 0u;
@@ -31,7 +34,7 @@ void retainedSuper(Core *core) {
 
 void synchronousPause(Core *core) {
   ++gSynchronousCalls;
-  cd_control_sync(core);
+  gLibcd->control(*core);
 }
 
 void existingPolicy(Core *core, x4::cd_control_boundary::GuestBody retailBody, bool blocking) {
@@ -175,7 +178,9 @@ bool verifyOtherSetModePreservation(Core &core) {
 } // namespace
 
 int main() {
-  auto game = std::make_unique<Game>();
+  x4::test::StubGame stub;
+  gLibcd = &stub.libcd();
+  Game *game = &stub.game();
   if (!verifyPause(game->core, *game) || !verifyNonPausePreservation(game->core) || !verifyCleanupSetMode(game->core) ||
       !verifyMusicSetMode(game->core) || !verifyOtherSetModePreservation(game->core)) {
     return 1;

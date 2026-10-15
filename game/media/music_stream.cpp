@@ -1,14 +1,12 @@
 #include "music_stream.h"
 
-#include "cd_control.h"
-#include "cfg.h"
 #include "core.h"
 #include "coro.h"
 #include "execution_services.h"
 #include "guest_execution.h"
 #include "native_dispatch.h"
 
-#include "x4_context.h"
+#include "x4_session.h"
 
 #include <cstdlib>
 #include <lucent/log.h>
@@ -39,8 +37,8 @@ void require(Core *core, GuestBody body, const char *name) {
   }
 }
 
-void yieldSetModeFields(Core &core, std::uint32_t returnAddress, std::uint32_t fields) {
-  x4::context(core).musicStream.yieldFields(returnAddress, fields);
+void yieldSetModeFields(Core &core) {
+  x4::session(core).musicStream.yieldFields();
 }
 
 void cdControl(Core *core) {
@@ -50,7 +48,7 @@ void cdControl(Core *core) {
 void runSetMode(Core *core) {
   // Retail's CdSync(1, nullptr) at 0x80016E9C would poll guest VSync(-1); the controller is
   // synchronous, so call its completion owner directly.
-  setMode(core, cd_sync_stock_sync, cdControl, yieldSetModeFields);
+  setMode(core, stockCdSync, cdControl, yieldSetModeFields);
 }
 
 } // namespace
@@ -92,7 +90,7 @@ void setMode(Core *core, GuestBody cdSync, GuestBody cdControl, FieldYield yield
       core->r[31] = kSetModeFieldReturn;
       core->r[4] = kSetModeFields;
       psx::cpu::accountGuestInstructions(*core, 2u);
-      yieldFields(*core, core->r[31], core->r[4]);
+      yieldFields(*core);
 
       core->r[2] = core->mem_r8(core->r[16]);
       core->r[3] = kNextState;
@@ -118,7 +116,7 @@ State::State(Core &core) : core_(core) {}
 
 State::~State() = default;
 
-bool State::dispatchBeforeObjectsB(GuestDispatch dispatch) {
+bool State::dispatchBeforeObjectsB(guest::Dispatch dispatch) {
   if (!dispatch) {
     refuse("retained dispatcher is absent");
   }
@@ -146,18 +144,18 @@ bool State::dispatchBeforeObjectsB(GuestDispatch dispatch) {
   return true;
 }
 
-void State::yieldFields(std::uint32_t returnAddress, std::uint32_t fields) {
+void State::yieldFields() {
   if (!transaction_ || !transaction_->started() || transaction_->done()) {
     refuse("field yield ran outside the state-7 transaction");
   }
-  if (returnAddress != kSetModeFieldReturn || core_.r[31] != returnAddress) {
+  if (core_.r[31] != kSetModeFieldReturn) {
     refuse("field yield return address is not the binary-authenticated 0x80016ED4 call edge");
   }
-  if (fields != kSetModeFields || core_.r[4] != fields) {
+  if (core_.r[4] != kSetModeFields) {
     refuse("field yield count is not the binary-authenticated VSync(3) argument");
   }
 
-  for (std::uint32_t field = 0; field < fields; ++field) {
+  for (std::uint32_t field = 0; field < kSetModeFields; ++field) {
     transaction_->yield();
   }
   core_.r[2] = 0u;

@@ -2,11 +2,11 @@
 
 #include "c_subsys.h"
 #include "cdc_state.h"
-#include "cfg.h"
 #include "core.h"
 #include "game.h"
 
 #include <cstdlib>
+#include <lucent/log.h>
 
 namespace x4::cd_controller {
 namespace {
@@ -31,7 +31,7 @@ void clearCommandState(Core &core) {
 
 void reset(Core &core) {
   if (!core.game) {
-    cfg_loge("x4-cd-controller", "native controller reset requires a bound Game");
+    lucent::error("x4-cd-controller", "native controller reset requires a bound Game");
     std::abort();
   }
 
@@ -51,7 +51,7 @@ void reset(Core &core) {
 
 void setMode(Core &core, std::uint8_t mode) {
   if (!core.game) {
-    cfg_loge("x4-cd-controller", "native controller mode publication requires a bound Game");
+    lucent::error("x4-cd-controller", "native controller mode publication requires a bound Game");
     std::abort();
   }
   xa_stream_setmode(&core.game->xa, mode);

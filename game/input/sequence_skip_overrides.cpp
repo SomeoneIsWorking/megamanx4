@@ -3,21 +3,22 @@
 #include "sequence_skip_overrides.h"
 
 #include "core.h"
+#include "enhancement_gate.h"
 #include "enhancements.h"
 #include "native_dispatch.h"
 #include "player_object.h"
 #include "resumable_guest_call.h"
 #include "sequence_skip.h"
 
-#include "x4_context.h"
+#include "x4_session.h"
 
 namespace x4::sequence_skip {
 namespace {
 
 void padRoute(Core *core) {
   psx::cpu::callOriginalResumingToReturn(*core, "sequence_skip::padRoute original", guest::kInputRouterFn, core->r[31]);
-  if (enh(skipCvar())) {
-    context(*core).sequenceSkip.afterPadRoute(*core);
+  if (psx::config::enh(skipCvar())) {
+    session(*core).sequenceSkip.afterPadRoute(*core);
   }
 }
 

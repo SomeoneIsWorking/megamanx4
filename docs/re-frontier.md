@@ -1,13 +1,11 @@
 # RE Frontier — the ordered RE dependency chain toward a faithful port
 
-Tracked by `tools/re_frontier.py` (a shim onto `external/psxport/tools/port/re_frontier.py` — consult
-it FIRST; update it in the SAME commit that changes a step). This is the fine-grained companion to
+Update a step in the same commit that changes it. This is the fine-grained companion to
 `docs/codemap.md`: the codemap says *what subsystem exists*, this says *which ordered RE step is real
 reverse-engineering vs a hack that jumped ahead*.
 
 **Hard rule (no hacks / no fallbacks):** a `⛔ hack` status is DEBT, never an acceptable resting
 state. It marks a shortcut standing in for absent RE and MUST be removed as its real mechanism lands.
-`re_frontier.py hacks` is the debt list; `re_frontier.py next` tells you the next RE-ready step.
 
 **`re-verified` MEANS FAITHFUL to the real target — not "the mechanism runs."** A step is
 `re-verified` only when its OUTPUT matches the real game/binary on real data. An internal trace is a
@@ -90,11 +88,11 @@ not evidence for this gate.
 
 ## boot
 
-### RE-01 — crt0 / boot layout: the GameConfig boot group for SLUS_005.61
+### RE-01 — crt0 / boot layout for SLUS_005.61
 - status: re-verified
 - deps:
 - evidence: Claim C005 retains the retail SLUS_005.61 derivation (SHA-1 213733031136d095ca275d6957695aa25011cfa5). The group is bss [0x8012F418,0x80175F38), stackTopBase 0x800DAF3C with bias 0, stackTopBase2 0x8011CB74, heapBase 0x80175F38, gp 0x8012F418, libcInit 0x800EDCDC, gameMain 0x80012024, crt0 0x800DAE8C. heapSizePtr/heapBasePtr are measured absent: the function has one absolute store and it saves ra. Current conformance must be demonstrated at the native/Lightrec boot boundary.
-- where: game/title/game_config.cpp (bssZeroLo/Hi, stackTopBase/2, heapBase, heapSizePtr, heapBasePtr, gp, libcInit, gameMain, crt0)
+- where: game/boot/x4_runtime.cpp (`kCrt0`, consumed by `X4Runtime::startProgram`)
 - gap: The group is runtime-confirmed through InitHeap and guest-main dispatch. CD initialization now advances through its measured IRQ2 callback path; remaining loader work is RE-04, not an RE-01 field.
 - notes: psxport 726d10c9 made the boot mechanism generic; issue #5 preserves the root cause. The cross-control re-derives all 12 independently recorded Tomba!2 values.
 
@@ -102,7 +100,7 @@ not evidence for this gate.
 - status: re-partial
 - deps: RE-01
 - evidence: Retail SLUS_005.61 has SHA-1 `213733031136d095ca275d6957695aa25011cfa5`, resident range `[0x80010000,0x80130000)`, crt0 `0x800DAE8C`, gameMain `0x80012024`, and no code overlays. A recorded pre-migration measurement found 6,193 binary roots and 7,534 functions, including live HookEntryInt continuation `0x800E5194`; FNTRACE reached it through shared BIOS delivery and then CD callback `0x800E7944`. `tools/verify_cd_irq.py` independently proves from retail bytes that setjmp saves this mid-function continuation. These are retained binary/runtime facts.
-- where: target shared psxport per-Core Lightrec executor and authenticated `GuestProgramImage`; target title image-and-address-keyed override/original-call registry; retained identity and control-flow verifiers under `tools/`
+- where: shared psxport per-Core Lightrec executor; `X4Runtime::startProgram` runs `Crt0Boot` over the title's `Crt0Image`; target title image-and-address-keyed override/original-call registry; retained identity and control-flow verifiers under `tools/`
 - gap: The native/Lightrec product enters the authenticated title and now completes it: both STR movies
   finish (completion owner `0x80018E50` at display field 974 and 13,153), `cd.stream_active` releases,
   the guest's own field counter `0x80141BD8` leaves its movie-frozen 7 and reaches 351, and
@@ -138,8 +136,8 @@ not evidence for this gate.
 ### RE-04 — CD load chokepoints and the loader's contract
 - status: re-partial
 - deps: RE-01
-- evidence: Retail SLUS_005.61 (SHA-1 213733031136d095ca275d6957695aa25011cfa5): tools/verify_cd_irq.py checks six interrupt/result-state groups. tools/verify_threads.py independently derives all three B0 service thunks, the 128-byte task records at 0x801F8100, current-task pointer 0x801F8300, entry/SP/GP/handle fields, three task->main yield helpers, shipping runtime constants, and the exact HLE window; its positive plus five mutations pass 6/6. mmx4_runtime_test proves three distinct non-main handles, task SP/GP and register persistence across yield/resume, intact main registers, capacity refusal, invalid-handle refusal, deferred self-close while the task fiber is live, and TCB reuse only after returning to the main stack. scratch/logs/re04-bios-thread-runtime-final-ad5cf802.log is the clean-pin real-disc positive: untouched func_80012740 creates entry 0x8001D064, X4Runtime OpenTh returns 0xFF000001, untouched func_80012600 selects it, and FNTRACE reaches 0x8001D064 once with zero ABI violations before 418 scheduler calls in the bounded run. No synchronous-success override, direct entry dispatch, or polling bypass exists.
-- where: game/execution/bios_threads.{h,cpp}; game/boot/x4_context.{h,cpp}; game/boot/x4_runtime.cpp; tools/verify_cd_irq.py; tools/verify_threads.py; scratch/logs/re04-bios-thread-runtime-final-ad5cf802.log (untracked runtime evidence)
+- evidence: Retail SLUS_005.61 (SHA-1 213733031136d095ca275d6957695aa25011cfa5): tools/verify_cd_irq.py checks six interrupt/result-state groups. The three B0 service thunks are bound with `PlatformHle::bindStock` (`bios_threads::install`); the task records sit at 0x801F8100 and the current-task pointer at 0x801F8300. mmx4_runtime_test proves three distinct non-main handles, task SP/GP and register persistence across yield/resume, intact main registers, capacity refusal, invalid-handle refusal, deferred self-close while the task fiber is live, and TCB reuse only after returning to the main stack. scratch/logs/re04-bios-thread-runtime-final-ad5cf802.log is the clean-pin real-disc positive: untouched func_80012740 creates entry 0x8001D064, X4Runtime OpenTh returns 0xFF000001, untouched func_80012600 selects it, and FNTRACE reaches 0x8001D064 once with zero ABI violations before 418 scheduler calls in the bounded run. No synchronous-success override, direct entry dispatch, or polling bypass exists.
+- where: game/execution/bios_threads.{h,cpp}; game/boot/x4_session.{h,cpp}; game/boot/x4_runtime.cpp; tools/verify_cd_irq.py; scratch/logs/re04-bios-thread-runtime-final-ad5cf802.log (untracked runtime evidence)
 - gap: The IRQ/callback/result-state and retail scheduler->BIOS-thread transfer are complete. Issue #13 identifies the older cause exactly: request `0x40` is LBA 222 / `0x18800`, but the former shared CDC applied physical 2x deadlines to sparse `guestInstructionTicks` while the loader yielded each field. Retail `func_80014C70` consequently exhausted its 601-iteration wait, wrote `D_801406AC=0xC0`, and rearmed. Recorded pin 9c2e3f1c plus the title-owned synchronous operation completes real-disc requests 64, 65, 113, and 51 without FNTRACE. Exact destination-byte comparison across the current synchronous route remains before this step can become re-verified. A fresh true-oracle state capture is unavailable because no true-oracle executable is installed.
 - notes: This separates enhancement job A from job B. Raw CD IRQ delivery is faithful and shared; do not replace it with synchronous CdInit success or a title-local fast-CD override. The title service implements the BIOS execution contract underneath the retail scheduler; it does not replace func_80012600 or direct-call a task entry. Historical FNTRACE runs that covered the three HLE thunk addresses displaced PlatformHle's handler, so only the unshadowed observations are retained. Issue #10 records the separate frame-fence cause and fix; issue #12 records why that non-temporal fence must leave Fps60.
 
@@ -149,17 +147,17 @@ not evidence for this gate.
 - status: skip-by-design
 - deps:
 - evidence: USER decision, 2026-08-12, verbatim: "Mega Man doesn't need native producers or lerp or native depth, it's already 60fps." Quoted in full in CLAUDE.md and recorded as a claim in docs/info/claims/ so a later session cannot 'discover' this as a missing subsystem and start building it.
-- where: game/title/game_config.cpp (otRegionBase/Stride, packetPoolBase/Stride, otBasePtr, poolPtrCur/Last, clearOtagR, putDrawEnv, drawSync) — zero, with no reader
-- gap: The host now owns loop repetition through `X4FrameDriver`, but that driver still calls the retail GTE/OT leaves and needs none of the framework's native-producer packet-pool configuration. `GameHooks::frameUpdate` and `drawOTag` remain fail-fast because they are a different native-renderer path. This skip is about picture production, not frame-loop ownership.
+- where: none; `X4Runtime::renderCapabilities()` declares no native renderer
+- gap: The host now owns loop repetition through `X4FrameDriver`, but that driver still calls the retail GTE/OT leaves and needs none of the framework's native-producer packet-pool configuration. This skip is about picture production, not frame-loop ownership.
 - notes: If native picture production is ever authorized, this is where that separate work starts.
 
 ### RE-06 — pad driver buffers
 - status: re-verified
 - deps: RE-01
-- evidence: Retail SLUS_005.61 (SHA-1 213733031136d095ca275d6957695aa25011cfa5): a whole-text scan of 294,400 loaded words finds exactly one jal to the matching-decomp-identified InitPAD target 0x800EE0D0, at 0x80012194; immediate dataflow gives (a0,a1,a2,a3)=(0x80166D68,0x22,0x8012F46C,0x22). tools/verify_pad.py --check compares all four arguments to the typed GuestPadBufferLayout, its direct-runtime publication, and the legacy compatibility bindings; --selftest proves both answers, 4/4.
-- where: game/input/pad_layout.h (single typed fact authority); game/boot/x4_runtime.cpp and game/title/game_config.cpp (direct and compatibility consumers); tools/verify_pad.py
+- evidence: Retail SLUS_005.61 (SHA-1 213733031136d095ca275d6957695aa25011cfa5): a whole-text scan of 294,400 loaded words finds exactly one jal to the matching-decomp-identified InitPAD target 0x800EE0D0, at 0x80012194; immediate dataflow gives (a0,a1,a2,a3)=(0x80166D68,0x22,0x8012F46C,0x22). `X4Runtime::deliverPad` publishes into the same two buffers through `StockPadBuffers`.
+- where: game/input/pad_layout.h; game/boot/x4_runtime.cpp (`StockPadBuffers`)
 - gap: The two fixed buffers are complete and execution now passes CD initialization. Runtime input injection remains a separate gate because the observed boot path has not yet consumed a host-injected pad state.
-- notes: padDriverFn/padSlotPtrTable/padSlotPtrStride remain zero deliberately: the retail InitPAD call passes the two buffers directly. Native frame service now reaches the same typed layout without dereferencing a null legacy config. This lands drop-in co-op input plumbing only; RE-07 still has no player-object, camera, routing or spawn implementation.
+- notes: The retail InitPAD call passes the two buffers directly; there is no pad driver function or slot pointer table to bind. This lands drop-in co-op input plumbing only; RE-07 still has no player-object, camera, routing or spawn implementation.
 
 ## enhancements
 
@@ -183,7 +181,7 @@ not evidence for this gate.
 - status: re-partial
 - deps: RE-01, RE-02
 - evidence: JOB A's stock-path timing fault remains resolved by recorded framework pin 9c2e3f1c (issue #13). JOB B implements synchronous direct/archive owners and retains its measured callbacks, request table, ring drain, terminal-state checks, and loading-presentation omission. Native owners now replace the complete direct/archive CD setup bodies and the set_alarm counter query without dispatching guest VSync. Focused production-leaf tests pass, and full-trap real-disc runs complete request 64 (49 sectors) and request 65 (6 sectors) before reaching the separate XA startup frontier.
-- where: game/media/fast_wait.{h,cpp}; game/execution/native_overrides.cpp; game/boot/x4_context.h; tests/test_x4_runtime.cpp; docs/behavior-map.md (fastwait row)
+- where: game/media/fast_wait.{h,cpp}; game/execution/native_overrides.cpp; game/boot/x4_session.h; tests/test_x4_runtime.cpp; docs/behavior-map.md (fastwait row)
 - gap: Re-run destination-byte and presentation-absence comparisons on the current full-trap build after XA startup advances far enough to exercise later requests. The game's OTHER scripted waits/fades remain separately unclassified.
 - notes: Depends on RE-04 in practice — you cannot say what is a wait state until you know where the loads are.
 
@@ -194,6 +192,13 @@ not evidence for this gate.
 - where: game/render/background_tiles.*, background_overrides.*, cull_overrides.*, widened_objects.*, hud_anchor.*, hud_overrides.*; tests/test_x4_background_tiles.cpp, test_x4_visibility_cull.cpp, test_x4_hud_anchor.cpp
 - gameplay versus draw: GAMEPLAY (kept exactly retail): the three off-screen-verdict sites, the retail `+3` value every flag writer stores, the camera scroll and clamp (`0x80027850` family), and the spawn strips of `0x80028E24` / `0x80028FEC` (they spawn from scroll+0x150..0x170 on the right and scroll-0x30..-0x10 on the left), so objects still appear at the 4:3 edges and pop in inside the wide margin. DRAW (widened): the background margin columns, the `+3` byte while the object draw pass runs, and the HUD packet x.
 - gap: the cell ring has 32 columns of which retail uses 21, so each side reaches at most 5 columns (80 px); 16:9 (54 px) fits, 21:9 (120 px) is capped. Looping layers can mutate the scroll in `0x80027344`, so their margins are not refilled from the wrap. Screen fades are 320-wide guest quads and leave the margins unfaded. Retail stops linking tile sprites at 1000 per frame; the margin sprites reserve their budget per later layer.
+
+### RE-13 — stage entry: the engine state machine's load transition
+- status: re-partial
+- deps: RE-04
+- evidence: Retail SLUS_005.61, Ghidra via `decomp_pipeline.py`: `engine_obj` `0x801721C0` holds state +0, sub-state +1, step +2, stage +0xC, part +0xD, stage-end cause +0xF, checkpoint marker +0x1E. The part-2 transition `0x800200D4` writes part, clears +0xF/+0x1E and sets state 4; state 4 runs loader `0x80013014`, which loads the stage archives for the stage/part bytes, state 5 (`0x8001FC20`) sets the stage up and state 6 sub-state 0 (`0x8001FF8C`) is play. The per-character archive is loaded after character select (`0x80012EB8`), so a stage is entered only from state 6. Product run (`scratch/restructure/warp/warp.log`): from the intro stage in state 6 sub-state 0, `warp 3` was applied at f4761 and reached Split Mushroom state 6 sub-state 0 with X controllable (`after_f5945.png`); 3,890 recordcheck lines, all mismatched=0.
+- where: game/debug/stage_warp.{h,cpp}; game/frame/x4_frame_driver.cpp (applies an armed warp at a frame boundary); tests/test_x4_frame_driver.cpp
+- gap: Part 1 and the checkpoint byte are not exercised in product. Arming before a stage runs is `docs/issues/0041`: player select's own exit (`character_select_state_6`) loads the character archive and sets state 3, which a pending warp would redirect to state 4.
 
 ## ownership
 
@@ -211,6 +216,6 @@ not evidence for this gate.
 - status: re-partial
 - deps: RE-01
 - evidence: `tools/verify_vsync.py` derives the retail VSync/helper/counter/IRQ chain and proves the native field owner dispatches the current class-0 handler, pad and SPU advance once, and presentation commits once. Binary/Ghidra evidence grounds the BGM Setmode edge and the three measured movie-cleanup fences. `music_stream.*`, `cd_control_boundary.*`, and `movie_cleanup.*` preserve their measured call/stack/state contracts without guest VSync. The authenticated libetc VSync address is now an image-scoped native override: measured movie callers request a typed `FrameBoundary`, and the BIOS-thread host explicitly resumes from its reported guest PC. Focused phase/resume/CD-state contracts remain the retained evidence; the deleted static dispatcher is not an oracle.
-- where: game/media/cd_control_boundary.{h,cpp}; game/media/cd_controller.{h,cpp}; game/media/movie_cleanup.{h,cpp}; game/frame/x4_frame_driver.{h,cpp}; game/media/music_stream.{h,cpp}; game/frame/vsync_sync.{h,cpp}; game/title/game_config.cpp; tests/test_x4_cd_control_boundary.cpp; tests/test_x4_movie_cleanup.cpp; tests/test_x4_movie_cleanup_shipping.cpp; tests/test_x4_frame_driver.cpp; tests/test_x4_music_stream.cpp; tools/verify_vsync.py
-- gap: PID 4013759 proves the complete seven-field cleanup in product with no guest VSync. Retail table/disc evidence grounds `OP_U.STR` release at authored frame 1346 (final chunks LBA 27613..27622), and PID 4031142 crosses it, runs cleanup again, completes archive requests 113/51, and reaches BGM state 7 at field 2834. Its retained `CdSync(1)` then aborts through guest VSync at return `0x80016E9C`; that status check now uses `cd_sync_stock_sync`. A later diagnostic crossed it and exposed BGM `CdlSetmode(0x0E, 0xC8, 0x80139554)` at return `0x80016EC4`, whose generic policy reached retained `CdSync -> VSync(-1)`. The title now owns only that authenticated Setmode edge through `cd_controller::setMode`, preserving the authored three-field fence and every unrelated caller. Linked shipping positives and controlled negatives prove both ownership answers; full Clang build/tidy and 25/25 CTests pass. Exact-PID run 4086465 exits normally at 4000 fields without guest VSync but reaches only cleanup field 2052 and OP_U LBA 14265, so it never exercises state 7 and is not BGM proof. The native/Lightrec discriminator must ground that field-progression difference, reach state 6/5/1 and first `CdlReadS`, and verify later `CdlGetlocP`/Sub-Q absolute BCD MSF with presented-picture/audio evidence. Later memory-card callers remain separately open under issue #25.
+- where: game/boot/x4_runtime.cpp (`StockVSync`, `StockDmaCallbacks` bindings); game/media/cd_control_boundary.{h,cpp}; game/media/cd_controller.{h,cpp}; game/media/movie_cleanup.{h,cpp}; game/frame/x4_frame_driver.{h,cpp}; game/media/music_stream.{h,cpp}; game/frame/vsync_sync.{h,cpp}; tests/test_x4_cd_control_boundary.cpp; tests/test_x4_movie_cleanup.cpp; tests/test_x4_movie_cleanup_shipping.cpp; tests/test_x4_frame_driver.cpp; tests/test_x4_music_stream.cpp; tools/verify_vsync.py
+- gap: PID 4013759 proves the complete seven-field cleanup in product with no guest VSync. Retail table/disc evidence grounds `OP_U.STR` release at authored frame 1346 (final chunks LBA 27613..27622), and PID 4031142 crosses it, runs cleanup again, completes archive requests 113/51, and reaches BGM state 7 at field 2834. Its retained `CdSync(1)` then aborts through guest VSync at return `0x80016E9C`; that status check now uses `x4::stockCdSync`. A later diagnostic crossed it and exposed BGM `CdlSetmode(0x0E, 0xC8, 0x80139554)` at return `0x80016EC4`, whose generic policy reached retained `CdSync -> VSync(-1)`. The title now owns only that authenticated Setmode edge through `cd_controller::setMode`, preserving the authored three-field fence and every unrelated caller. Linked shipping positives and controlled negatives prove both ownership answers; full Clang build/tidy and 25/25 CTests pass. Exact-PID run 4086465 exits normally at 4000 fields without guest VSync but reaches only cleanup field 2052 and OP_U LBA 14265, so it never exercises state 7 and is not BGM proof. The native/Lightrec discriminator must ground that field-progression difference, reach state 6/5/1 and first `CdlReadS`, and verify later `CdlGetlocP`/Sub-Q absolute BCD MSF with presented-picture/audio evidence. Later memory-card callers remain separately open under issue #25.
 - notes: Native frame-loop ownership is independent of native rendering or temporal interpolation. X4 remains guest-GTE, widescreen-only.

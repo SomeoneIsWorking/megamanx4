@@ -16,11 +16,11 @@ std::int32_t signExtendByte(std::uint8_t value) {
 
 ScreenWindow ScreenWindow::horizontal(int half, int margin) {
   const int shifted = half + margin;
-  return {shifted, 2 * shifted + RetailScreen::kWidth};
+  return ScreenWindow{Arc{.offset = shifted, .bound = 2 * shifted + RetailScreen::kWidth}};
 }
 
 ScreenWindow ScreenWindow::vertical(int half) {
-  return {half, 2 * half + RetailScreen::kHeight};
+  return ScreenWindow{Arc{.offset = half, .bound = 2 * half + RetailScreen::kHeight}};
 }
 
 bool ScreenWindow::contains(int value) const {

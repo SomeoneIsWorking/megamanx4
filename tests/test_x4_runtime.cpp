@@ -4,24 +4,26 @@
 #include "config_var.h"
 #include "config_vars.h"
 #include "core.h"
-#include "dma_irq.h"
 #include "enhancements.h"
 #include "fast_wait.h"
 #include "game.h"
-#include "game_iface.h"
-#include "hw_bind.h"
+#include "irq_edge.h"
+#include "native_dispatch.h"
+#include "psx_exe_image.h"
 #include "stream_startup.h"
 #include "visibility_cull.h"
 #include "vsync_sync.h"
 #include "widescreen_controller.h"
-#include "x4_context.h"
 #include "x4_frame_driver.h"
+#include "x4_session.h"
 
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <memory>
+#include <string_view>
 #include <type_traits>
+#include <vector>
 
 namespace {
 
@@ -44,8 +46,8 @@ GuestProjectionPlan latch_projection(Core *, GuestProjectionGeometry geometry) {
 void publish_geom_offset(Core *core) {
   g_publishedOfx = core->r[4];
   g_publishedOfy = core->r[5];
-  gte_write_ctrl(24, core->r[4] << 16);
-  gte_write_ctrl(25, core->r[5] << 16);
+  core->gte().writeControl(24, core->r[4] << 16);
+  core->gte().writeControl(25, core->r[5] << 16);
   core->r[4] <<= 16;
   core->r[5] <<= 16;
 }
@@ -90,12 +92,12 @@ bool verify_widescreen_controller(Core &core) {
   core.r[8] = kUv;
   core.r[9] = kColor;
   core.r[10] = kOrder;
-  gte_write_ctrl(26, kProjectionH);
+  core.gte().writeControl(26, kProjectionH);
   controller.publishProjection(core, publish_geom_offset);
   if (g_projectionGeometry.extent.width != 320 || g_projectionGeometry.extent.height != 240 ||
       g_projectionGeometry.drawWidth != 320 || g_publishedOfx != 214 || g_publishedOfy != 120 ||
-      gte_read_ctrl(26) != kProjectionH || core.r[6] != kUnrelatedRegister || core.r[8] != kUv || core.r[9] != kColor ||
-      core.r[10] != kOrder) {
+      core.gte().readControl(26) != kProjectionH || core.r[6] != kUnrelatedRegister || core.r[8] != kUv ||
+      core.r[9] != kColor || core.r[10] != kOrder) {
     std::fprintf(stderr, "widescreen projection changed OFY/H or missed the measured 320x240 publication\n");
     return false;
   }
@@ -335,7 +337,7 @@ bool verify_title_stream_field_yield(Core &core) {
 bool verify_synchronous_loader_leaves(Core &core) {
   constexpr uint32_t kDestination = 0x80110080u;
   constexpr uint32_t kResult = 0x801100C0u;
-  x4::fast_wait::State &load = x4::context(core).fastWait;
+  x4::fast_wait::State &load = x4::session(core).fastWait;
 
   load.phase = x4::fast_wait::Phase::Inactive;
   g_retailBodyCalls = 0;
@@ -418,55 +420,103 @@ bool verify_synchronous_loader_leaves(Core &core) {
   return true;
 }
 
+// A PS-X EXE with X4's header fields and zeroed text.
+std::vector<uint8_t> syntheticExecutable() {
+  constexpr uint32_t kEntry = 0x800DAE8Cu;
+  constexpr uint32_t kTextAddress = 0x80010000u;
+  constexpr uint32_t kTextBytes = 0x11F800u;
+  std::vector<uint8_t> bytes(psx::cpu::kPsxExeHeaderBytes + kTextBytes);
+  const auto word = [&bytes](std::size_t offset, uint32_t value) {
+    for (std::size_t index = 0; index < 4; ++index) {
+      bytes[offset + index] = static_cast<uint8_t>(value >> (index * 8u));
+    }
+  };
+  const char magic[] = "PS-X EXE";
+  for (std::size_t index = 0; index < 8; ++index) {
+    bytes[index] = static_cast<uint8_t>(magic[index]);
+  }
+  word(0x10, kEntry);
+  word(0x18, kTextAddress);
+  word(0x1C, kTextBytes);
+  word(0x30, 0x801FFFF0u);
+  return bytes;
+}
+
+uint32_t g_strCallbackCalls = 0;
+
+void strCallback(Core *) {
+  ++g_strCallbackCalls;
+}
+
+// STR startup puts its data-ready callback in libapi's DMACallback table; the framework's DMA-3 completion
+// must reach it through the table X4 binds, not through the native registry.
+bool verify_dma3_completion_reaches_the_str_callback(Game &game) {
+  Core &core = game.core;
+  constexpr uint32_t kDicr = 0x1F8010F4u;
+  psx::cpu::installNativeOverride(core, x4::stream_startup::kStDataReadyCallback, "test::strCallback", strCallback);
+  core.mem_w32(x4::stream_startup::kDmaChannel3CallbackSlot, x4::stream_startup::kStDataReadyCallback);
+  game.hle.i_mask = 1u << IRQ_BIT_DMA;
+  core.mem_w32(kDicr, 0x00880000u);
+  core.mem_w32(0x1F8010B0u, 0x80100000u);
+  core.mem_w32(0x1F8010B4u, 1u);
+  core.mem_w32(0x1F8010B8u, 0x11000000u);
+  g_strCallbackCalls = 0;
+  game.hle.irqPoll(&core);
+  if (g_strCallbackCalls != 1u) {
+    std::fprintf(stderr, "a DMA-3 completion did not call the STR callback in X4's DMACallback table\n");
+    return false;
+  }
+  return true;
+}
+
+// VSync(-1) is answered by the stock binding X4 registers, from libetc's field counter.
+bool verify_vsync_query_reads_the_field_counter(Game &game) {
+  Core &core = game.core;
+  constexpr uint32_t kField = 0x1234u;
+  core.mem_w32(x4::vsync::kVblankCounter, kField);
+  core.r[4] = 0xFFFFFFFFu;
+  core.r[2] = 0u;
+  x4::vsync::serveVSync(&core);
+  if (core.r[2] != kField) {
+    std::fprintf(stderr, "VSync(-1) returned 0x%X instead of the libetc field counter\n", core.r[2]);
+    return false;
+  }
+  return true;
+}
+
 } // namespace
 
 int main() {
-  static_assert(std::is_base_of_v<GameRuntime, x4::X4Runtime>);
-  static_assert(!std::is_base_of_v<LegacyGameRuntimeAdapter, x4::X4Runtime>);
+  static_assert(std::is_base_of_v<psx::game::GameRuntime, x4::X4Runtime>);
 
   x4::X4Runtime runtime;
   const RenderCapabilities capabilities = runtime.renderCapabilities();
-  if (capabilities.defaultPath != RenderPath::Record || capabilities.nativeRenderPath ||
-      capabilities.temporalInterpolation || !capabilities.supports(RenderPath::Record) ||
-      !capabilities.supports(RenderPath::Device) || capabilities.supports(RenderPath::Native) ||
-      capabilities.playerSelectable(RenderPath::Native) ||
+  if (capabilities.defaultPath != RenderPath::Record || capabilities.nativeRenderPath || runtime.interpolates() ||
+      !capabilities.supports(RenderPath::Record) || !capabilities.supports(RenderPath::Device) ||
+      capabilities.supports(RenderPath::Native) || capabilities.playerSelectable(RenderPath::Native) ||
       render_path_resolve(RenderPath::Native, capabilities) != RenderPath::Record) {
     std::fprintf(stderr, "X4Runtime did not select the record path without a native or temporal product\n");
     return 1;
   }
 
-  psx::config::cv_fps60.set(psx::config::Layer::Value, true);
-  psxport_install_game(runtime);
-  auto game = std::make_unique<Game>();
-  psx::config::cv_fps60.clear(psx::config::Layer::Value);
+  psx::config::Config config;
+  config.fps60 = true;
+  auto game = std::make_unique<Game>(runtime, config);
   if (game->mods.temporalInterpolationSupported() || game->mods.fps60 != 0) {
     std::fprintf(stderr, "X4Runtime allowed the settings layer to arm synthetic interpolation\n");
     return 1;
   }
+  if (!runtime.admitExecutable(game->core, syntheticExecutable())) {
+    std::fprintf(stderr, "X4Runtime refused the synthetic executable\n");
+    return 1;
+  }
+  runtime.registerOverrides(*game);
   Core *core = &game->core;
-  gte_init();
-  gte_bind(core);
-  const GameHooks *legacyHooks = runtime.legacyHooksForMigration();
-  const GameConfig *legacyConfig = runtime.legacyConfigForMigration();
-  const GuestProgramImage *programImage = runtime.guestProgramImage();
-  const GuestPadBufferLayout *padLayout = runtime.guestPadBufferLayout();
-  if (psxport_game_runtime() != &runtime || core->runtime != &runtime || game->runtime != &runtime ||
-      legacyConfig == nullptr || legacyHooks == nullptr || programImage == nullptr || padLayout == nullptr ||
-      padLayout->slot0Buffer != 0x80166D68u || padLayout->slot1Buffer != 0x8012F46Cu ||
-      padLayout->slotPointerTable != 0u || programImage->gameMainEntry != 0x80012024u ||
-      programImage->residentText.begin != 0x00010000u || programImage->residentText.end != 0x0012F800u) {
-    std::fprintf(stderr, "X4Runtime did not own the installed compatibility seam\n");
-    return 1;
-  }
-  if (legacyConfig->dmaCallbackTable != x4::stream_startup::kDmaCallbackTable ||
-      dma_callback_slot(legacyConfig->dmaCallbackTable, 3) != x4::stream_startup::kDmaChannel3CallbackSlot) {
-    std::fprintf(stderr, "X4Runtime did not publish the measured per-channel DMA callback table\n");
-    return 1;
-  }
-  if (legacyHooks->bootInit != nullptr || legacyHooks->registerOverrides != nullptr ||
-      legacyHooks->fps60ReadSceneCam != nullptr || legacyHooks->fps60WorldPass != nullptr ||
-      legacyHooks->fps60BbSwapPrev != nullptr || legacyHooks->fps60TemporalRotate != nullptr) {
-    std::fprintf(stderr, "boot, override, or temporal ownership remained in legacy GameHooks\n");
+  const psx::game::HostIdentity *identity = runtime.hostIdentity();
+  if (identity == nullptr || std::string_view(identity->cardEnvVar) != "PSXPORT_X4_CARD" ||
+      game->platform_hle.vsyncAddress() != x4::vsync::kVSync || game->dmaCallbacks.guestTable() == nullptr ||
+      runtime.devWarp(*core) == nullptr) {
+    std::fprintf(stderr, "X4Runtime did not bind its card names, VSync, DMACallback table or warp\n");
     return 1;
   }
   if (game->temporalPresentation != nullptr || game->frameDriver == nullptr ||
@@ -506,12 +556,12 @@ int main() {
     return 1;
   }
   game->cd.stream_active = 0;
-  x4::context(*core).movieCleanup.beginStream();
+  x4::session(*core).movieCleanup.beginStream();
   if (runtime.guestWidescreenProjection()->presentationAspect(*core) != PresentationAspect::Standard4x3) {
     std::fprintf(stderr, "active 24-bit STR movie did not preserve its authored 4:3 picture\n");
     return 1;
   }
-  x4::context(*core).movieCleanup.abandonStream();
+  x4::session(*core).movieCleanup.abandonStream();
   if (runtime.guestWidescreenProjection()->presentationAspect(*core) != PresentationAspect::Wide16x9) {
     std::fprintf(stderr, "widescreen gameplay did not resume after the STR stream stopped\n");
     return 1;
@@ -546,8 +596,14 @@ int main() {
   if (!verify_synchronous_loader_leaves(*core)) {
     return 1;
   }
+  if (!verify_dma3_completion_reaches_the_str_callback(*game)) {
+    return 1;
+  }
+  if (!verify_vsync_query_reads_the_field_counter(*game)) {
+    return 1;
+  }
 
-  x4::context(*core).movieCleanup.begin();
+  x4::session(*core).movieCleanup.begin();
   x4::widescreenCvar().set(psx::config::Layer::Runtime, true);
   if (runtime.guestWidescreenProjection()->presentationAspect(*core) != PresentationAspect::Standard4x3) {
     std::fprintf(stderr, "movie cleanup widened the final STR picture during its retained fields\n");
@@ -555,7 +611,8 @@ int main() {
   }
   x4::widescreenCvar().clear(psx::config::Layer::Runtime);
 
-  std::puts("X4Runtime: derived install, retail BIOS threads, synchronous loading leaves, record path with "
+  std::puts("X4Runtime: stock VSync and DMACallback bindings, DMA-3 STR callback, retail BIOS threads, synchronous "
+            "loading leaves, record path with "
             "canvas widescreen, no temporal pipeline");
   return 0;
 }

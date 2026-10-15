@@ -69,7 +69,13 @@ std::uint16_t mapTile(Core &core, int layer, int column, int row) {
 }
 
 // A SPRT_16 of the arena (@ 0x80026BC0..0x80026C84), then appended to its bucket's chain.
-void linkSprite(Core &core, std::uint32_t sprite, std::uint16_t cell, int layer, int x, int y) {
+// A sprite's top-left on screen.
+struct ScreenPoint {
+  int x;
+  int y;
+};
+
+void linkSprite(Core &core, std::uint32_t sprite, std::uint16_t cell, int layer, const ScreenPoint &at) {
   const std::uint32_t attribute = core.mem_r32(core.mem_r32(kTileAttributes) + (cell & kCellTileMask) * 4u);
   core.mem_w16(sprite + 14u,
                static_cast<std::uint16_t>((((attribute & 0xF000u) >> 6) + 0x7900u) | ((attribute & 0xF00u) >> 8)));
@@ -77,8 +83,8 @@ void linkSprite(Core &core, std::uint32_t sprite, std::uint16_t cell, int layer,
   core.mem_w8(sprite + 7u, (cell & kCellSemiTransparent) != 0 ? (code | 2u) : (code & ~2u));
   core.mem_w8(sprite + 12u, static_cast<std::uint8_t>((attribute >> 12) & 0xF0u));
   core.mem_w8(sprite + 13u, static_cast<std::uint8_t>((attribute >> 16) & 0xF0u));
-  core.mem_w16(sprite + 8u, static_cast<std::uint16_t>(x));
-  core.mem_w16(sprite + 10u, static_cast<std::uint16_t>(y));
+  core.mem_w16(sprite + 8u, static_cast<std::uint16_t>(at.x));
+  core.mem_w16(sprite + 10u, static_cast<std::uint16_t>(at.y));
 
   const std::uint32_t group =
       static_cast<std::uint32_t>(layer) + ((cell & kCellForeground) != 0 ? kForegroundGroupOffset : 0u);
@@ -165,7 +171,7 @@ void WideBackground::drawLayer(Core &core, int layer) const {
         return;
       }
       ++count;
-      linkSprite(core, sprite, cell, layer, originX + offset * kTile, originY + row * kTile);
+      linkSprite(core, sprite, cell, layer, {originX + offset * kTile, originY + row * kTile});
       sprite += 16u;
     }
   }

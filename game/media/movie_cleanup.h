@@ -1,12 +1,13 @@
 #pragma once
 
+#include "guest_execution.h"
+
 #include <cstdint>
 
 class Core;
 
 namespace x4::movie_cleanup {
 
-using GuestDispatch = void (*)(Core *, std::uint32_t);
 using ControllerReset = void (*)(Core &);
 using SuspendField = void (*)(Core &);
 
@@ -59,7 +60,7 @@ private:
 
 // Native owner of movie cleanup 0x80018E50: ordinary calls stay in the guest; controller commands
 // are synchronous and the three VSync fences are host fields.
-void run(Core &core, State &state, GuestDispatch dispatch, ControllerReset resetController);
+void run(Core &core, State &state, guest::Dispatch dispatch, ControllerReset resetController);
 void run(Core *core);
 void registerOverride(Core &core);
 

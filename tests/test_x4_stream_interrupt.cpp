@@ -1,6 +1,7 @@
 #include "core.h"
 #include "game.h"
 #include "stream_interrupt.h"
+#include "stub_game.h"
 
 #include <cstdint>
 #include <cstdio>
@@ -54,7 +55,8 @@ void publishResponse(Core &core, std::uint32_t address, std::uint8_t firstByte) 
 } // namespace
 
 int main() {
-  auto game = std::make_unique<Game>();
+  x4::test::StubGame stub;
+  Game *game = &stub.game();
   Core &core = game->core;
   constexpr std::uint32_t kStatus = 4u;
 

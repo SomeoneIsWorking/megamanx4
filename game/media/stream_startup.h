@@ -1,5 +1,7 @@
 #pragma once
 
+#include "guest_execution.h"
+
 #include <cstdint>
 
 class Core;
@@ -19,9 +21,14 @@ inline constexpr std::uint32_t kDmaCallbackTable = 0x8011DC5Cu;
 inline constexpr std::uint32_t kDmaChannel3CallbackSlot = kDmaCallbackTable + 3u * sizeof(std::uint32_t);
 inline constexpr std::uint32_t kStDataReadyCallback = 0x800E8188u;
 
-using GuestDispatch = void (*)(Core *, std::uint32_t);
 using FieldService = void (*)(Core &);
-using CdTransaction = bool (*)(Core &, std::uint32_t, std::uint32_t, std::uint32_t, FieldService);
+// CdRead2's stream request: start sector, read mode and the address of its XA file/channel filter.
+struct StreamRequest {
+  std::uint32_t lba;
+  std::uint32_t readMode;
+  std::uint32_t filter;
+};
+using CdTransaction = bool (*)(Core &, const StreamRequest &, FieldService);
 
 // CdRead2's non-wait side effects. The per-channel DMACallback table is 0x8011DC5C; 0x8011CB98 is the
 // generic interrupt-class table.
@@ -34,7 +41,7 @@ void awaitField(Core &core, bios_threads::Service &threads);
 // Native SLUS_005.61 STR/MDEC startup; hardware waits go through the injected services. `movie` owns
 // the picture from the first wait until the cleanup completes, or until this startup fails.
 void run(Core &core,
-         GuestDispatch dispatch,
+         guest::Dispatch dispatch,
          FieldService serviceField,
          CdTransaction startCdStream,
          movie_cleanup::State &movie);

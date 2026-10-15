@@ -3,6 +3,7 @@
 
 #include "core.h"
 #include "game.h"
+#include "stub_game.h"
 
 #include <cstdio>
 #include <memory>
@@ -32,8 +33,15 @@ GuestProjectionPlan planWithMargin(int margin) {
   return plan;
 }
 
+// A primitive's packet address and its left screen x.
+struct Placement {
+  std::uint32_t at;
+  int x;
+};
+
 struct Fixture {
-  std::unique_ptr<Game> game = std::make_unique<Game>();
+  x4::test::StubGame stub;
+  Game *game = &stub.game();
   Core &core = game->core;
 
   // SPRT_16: tag (length 3), colour + command, xy, uv + clut.
@@ -45,12 +53,12 @@ struct Fixture {
     core.mem_w32(at + 12, 0u);
   }
   // POLY_G4: tag (length 8), then colour/vertex pairs.
-  void shadedQuad(std::uint32_t at, int x) {
-    core.mem_w32(at, 0x08000000u);
-    core.mem_w32(at + 4, 0x38808080u);
+  void shadedQuad(const Placement &quad) {
+    core.mem_w32(quad.at, 0x08000000u);
+    core.mem_w32(quad.at + 4, 0x38808080u);
     for (std::uint32_t i = 0; i < 4; ++i) {
-      const std::uint32_t vertex = at + 8 + i * 8;
-      core.mem_w16(vertex, static_cast<std::uint16_t>(x + static_cast<int>(i % 2) * 8));
+      const std::uint32_t vertex = quad.at + 8 + i * 8;
+      core.mem_w16(vertex, static_cast<std::uint16_t>(quad.x + static_cast<int>(i % 2) * 8));
       core.mem_w16(vertex + 2, static_cast<std::uint16_t>(i / 2 * 8));
       if (i < 3) {
         core.mem_w32(vertex + 4, 0x00808080u);
@@ -101,7 +109,7 @@ bool verifyPolygonsMoveAsOne(Fixture &f) {
   const HudAnchor anchor{planWithMargin(kMargin)};
   f.setCursors(kPolygonArena, kSpriteArena);
   const ArenaPositions before = HudAnchor::positions(f.core);
-  f.shadedQuad(kPolygonArena, 300);
+  f.shadedQuad({.at = kPolygonArena, .x = 300});
   f.core.mem_w32(kArenaCursors[0], kPolygonArena + 36);
   anchor.anchor(f.core, before);
   CHECK(static_cast<std::int16_t>(f.core.mem_r16(kPolygonArena + 8)) == 300 + kMargin);

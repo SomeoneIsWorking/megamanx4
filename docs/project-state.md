@@ -2,8 +2,7 @@
 
 Factual capability coverage for the Mega Man X4 enhancement port. Epic intent lives in
 `docs/project-goals.md`, ownership in `docs/codemap.md`, open defects and missing features in
-`docs/issues/`, and the reverse-engineering step chain in `docs/re-frontier.md` (read through
-`tools/re_frontier.py`).
+`docs/issues/`, and the reverse-engineering step chain in `docs/re-frontier.md`.
 
 | ID | Capability | State | Evidence or gap |
 |---|---|---|---|
@@ -17,7 +16,8 @@ Factual capability coverage for the Mega Man X4 enhancement port. Epic intent li
 | S008 | A second player can join and leave during play as the other hunter | missing | Two pads decode and the player/camera/spawn pillars are mapped (`docs/re-player-object.md`), but no second player object, P2 route, camera policy, mid-stage join, or co-op correctness gate exists |
 | S009 | Representative gameplay is verified playable end to end | partial | At `ires=1`, a headless session driven by pad taps reaches the first stage with X: holding right moves the player x from 0x0C8 to 0x161 to 0x21E and a jump is drawn (shots `stage_idle`, `stage_right`, `stage_jump`); `recordcheck` stays `mismatched=0`. Audio, saves, loading removal and widescreen are not demonstrated together, and only the first stage is reached |
 | S010 | Asset-free hosted verification builds and checks the real supported host product boundary | verified | `tools/verify.py` over the Linux x86_64 product, run in CI (`.github/workflows/ci.yml`); composition only. Windows, macOS and Android remain unsupported hosts, not green jobs |
-| S011 | Dialogue and the other non-interactive sequences are skippable through the game's own route | partial | `PSXPORT_X4_SKIP` (`x4::enh(skipCvar())`, off in comparison runs): holding Start in the Hunter H.Q. briefing (engine state 3, sub-state 9, `0x8002F4C4`) raises the guest's own Cross edge every fourth field after the retail pad route `0x80012328`, so the retail owner pages itself to the stage start (`tests/test_x4_sequence_skip.cpp`). Measured at 4:3, `ires=1`: stage 1 is controllable (player state `0x201`) at field 16,330 instead of 17,333, and at that field the engine, misc, item and entity blocks equal the Cross-tap route's byte for byte. Per sequence: DONE Hunter H.Q. briefing dialogue; DONE opening movie (the retail Start skip, `docs/project-state.md` S004); NOT DONE first-stage intro (READY text, then the beam-in: player state `0` for about 90 fields, a 24-field drop, then `0x201` about 100 fields later; it needs no input, so the game has no skip route and only a field fast-forward would shorten it, which psxport has only for pad-replay resume); NOT DONE stage-select and loading screens' transitions, boss warnings and boss intros, weapon-get, stage-clear results, in-stage dialogue boxes and the ending movies (not enumerated against guest owners; the decomp leads are engine states 3, sub-states 0-11 in `external/mmx4/src/main/1A5BC.c` and `1FD10.c`) |
+| S011 | Dialogue and the other non-interactive sequences are skippable through the game's own route | partial | `PSXPORT_X4_SKIP` (`psx::config::enh(x4::skipCvar())`, off in comparison runs): holding Start in the Hunter H.Q. briefing (engine state 3, sub-state 9, `0x8002F4C4`) raises the guest's own Cross edge every fourth field after the retail pad route `0x80012328`, so the retail owner pages itself to the stage start (`tests/test_x4_sequence_skip.cpp`). Measured at 4:3, `ires=1`: stage 1 is controllable (player state `0x201`) at field 16,330 instead of 17,333, and at that field the engine, misc, item and entity blocks equal the Cross-tap route's byte for byte. Per sequence: DONE Hunter H.Q. briefing dialogue; DONE opening movie (the retail Start skip, `docs/project-state.md` S004); NOT DONE first-stage intro (READY text, then the beam-in: player state `0` for about 90 fields, a 24-field drop, then `0x201` about 100 fields later; it needs no input, so the game has no skip route and only a field fast-forward would shorten it, which psxport has only for pad-replay resume); NOT DONE stage-select and loading screens' transitions, boss warnings and boss intros, weapon-get, stage-clear results, in-stage dialogue boxes and the ending movies (not enumerated against guest owners; the decomp leads are engine states 3, sub-states 0-11 in `external/mmx4/src/main/1A5BC.c` and `1FD10.c`) |
+| S012 | A title-owned debug route reaches any stage through the game's own load owner | partial | `warp <stage> [part]` (`game/debug/stage_warp.cpp`) arms over the control channel and the frame driver enters engine state 4 at the next frame boundary; from the intro stage it reached Split Mushroom with X controllable and recordcheck mismatched=0 (`scratch/restructure/warp/warp.log`). Open: it is legal only once a stage is running, so the title, player select and opening movie still need Start taps (`docs/issues/0041`); part 1 and the checkpoint byte are not exercised in a product run |
 
 ## Current focus
 
@@ -25,7 +25,7 @@ S004/S009: gameplay beyond the first stage.
 
 - The post-movie phase is reachable: Start from the title opens the menu, Start again opens player select, a
   third Start picks X and plays the opening movie, Start skips it, and Cross taps move through the Hunter H.Q.
-  dialogue into the first stage. No title-owned warp option was needed.
+  dialogue into the first stage. From there `warp <stage>` reaches other stages (S012).
 - Next: the stage select and later stages, then `task_resume_evidence`, whose premise (a window with no budget
   resumes) is now measurable because task `0x8001DAF8` resumes across budget turns at normal frame cost.
 - Retired blockers (2026-10-09): the libstr ring refill (psxport `cdc_native.cpp`, Pause kept an announced

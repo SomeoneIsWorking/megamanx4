@@ -39,7 +39,7 @@ inline constexpr std::uint32_t kPositionIntegerX = 0x0Au;
 inline constexpr std::uint32_t kPositionIntegerY = 0x0Eu;
 
 // QuadObj repeats the header flat, so its background byte is at +0x37, not +0x14.
-enum class ObjectLayout {
+enum class ObjectLayout : std::uint8_t {
   BaseObject,
   QuadObject,
 };
@@ -74,7 +74,11 @@ public:
   }
 
 private:
-  ScreenWindow(int offset, int bound) : offset_(offset), bound_(bound) {}
+  struct Arc {
+    int offset;
+    int bound;
+  };
+  explicit ScreenWindow(Arc arc) : offset_(arc.offset), bound_(arc.bound) {}
 
   int offset_;
   int bound_;

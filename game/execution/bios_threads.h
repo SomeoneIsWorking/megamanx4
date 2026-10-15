@@ -13,11 +13,10 @@ class Game;
 class Core;
 
 namespace x4::bios_threads {
-// SLUS_005.61 links the three BIOS-thread thunks contiguously; the half-open window is the HLE range.
+// The three BIOS-thread thunks of SLUS_005.61.
 constexpr uint32_t kOpenThread = 0x800EDD9Cu;
 constexpr uint32_t kCloseThread = 0x800EDDACu;
 constexpr uint32_t kChangeThread = 0x800EDDBCu;
-constexpr uint32_t kThreadWindowEnd = 0x800EDDCCu;
 
 // SYSTEM.CNF TCB=4: slot 0 is main, slots 1-3 are scheduler tasks (created at 0x80012740).
 // Handles carry the slot in the low byte; the game switches back to 0xFF000000 after each task slice.

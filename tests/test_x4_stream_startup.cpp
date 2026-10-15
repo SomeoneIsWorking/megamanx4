@@ -2,6 +2,7 @@
 #include "game.h"
 #include "movie_cleanup.h"
 #include "stream_startup.h"
+#include "stub_game.h"
 
 #include <array>
 #include <cstdint>
@@ -36,14 +37,12 @@ void recordField(Core &) {
 }
 
 bool recordCdTransaction(Core &core,
-                         std::uint32_t lba,
-                         std::uint32_t readMode,
-                         std::uint32_t filter,
+                         const x4::stream_startup::StreamRequest &request,
                          x4::stream_startup::FieldService serviceField) {
   g_events.push_back(kCdTransactionEvent);
-  g_cdReadMode = readMode;
-  g_cdFilter = filter;
-  if (lba != kStreamLba || core.mem_r8(filter) != 1u) {
+  g_cdReadMode = request.readMode;
+  g_cdFilter = request.filter;
+  if (request.lba != kStreamLba || core.mem_r8(request.filter) != 1u) {
     return false;
   }
 
@@ -54,7 +53,7 @@ bool recordCdTransaction(Core &core,
     serviceField(core);
   }
 
-  const std::uint32_t absolute = lba + 150u;
+  const std::uint32_t absolute = request.lba + 150u;
   core.mem_w8(0x8013964Du, bcd(absolute / (60u * 75u)));
   core.mem_w8(0x8013964Eu, bcd((absolute / 75u) % 60u));
   core.mem_w8(0x8013964Fu, bcd(absolute % 75u));
@@ -202,12 +201,13 @@ bool verifyShippingCallbackRegistration(Core &core) {
   return check(core.mem_r32(kStSectorMode) == 0u, "whole-sector stream mode did not publish sector framing 0");
 }
 
-} // namespace
-
 void ignoreField(Core &) {}
 
+} // namespace
+
 int main() {
-  auto game = std::make_unique<Game>();
+  x4::test::StubGame stub;
+  Game *game = &stub.game();
   Core &core = game->core;
   x4::movie_cleanup::State movie(core, ignoreField);
   constexpr std::uint32_t kStack = 0x801FFF00u;

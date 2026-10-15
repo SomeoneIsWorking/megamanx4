@@ -1,10 +1,11 @@
 #include "widescreen_controller.h"
 
 #include "core.h"
+#include "enhancement_gate.h"
 #include "enhancements.h"
 #include "game.h"
 #include "gpu_vk.h"
-#include "x4_context.h"
+#include "x4_session.h"
 
 #include <cstdlib>
 #include <limits>
@@ -21,10 +22,10 @@ constexpr uint32_t kDrawEnvironmentWidthOffset = 4u;
 
 PresentationAspect WidescreenPolicy::presentationAspect(const Core &core) const {
   // STR movies are 320x240 pictures without the widened GTE projection, so they stay 4:3 while streaming.
-  if (context(core).movieCleanup.ownsPicture()) {
+  if (session(core).movieCleanup.ownsPicture()) {
     return PresentationAspect::Standard4x3;
   }
-  if (!enh(widescreenCvar())) {
+  if (!psx::config::enh(widescreenCvar())) {
     return PresentationAspect::Standard4x3;
   }
   // The player's Aspect Ratio row (Mods::aspect) picks the widening.

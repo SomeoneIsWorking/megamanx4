@@ -1,7 +1,8 @@
-
+#include "guest_execution.h"
 
 #include "core.h"
 #include "execution_exit.h"
+#include "execution_services.h"
 #include "native_dispatch.h"
 #include "resumable_guest_call.h"
 
@@ -27,6 +28,12 @@ void requireOwnedEntry(Core *core, std::uint32_t address, const char *owner) {
 }
 
 } // namespace
+
+void call(Core &core, Dispatch dispatch, const CallSite &site) {
+  core.r[31] = site.returnAddress;
+  psx::cpu::accountGuestInstructions(core, site.ticks);
+  dispatch(&core, site.entry);
+}
 
 void callWithoutKnownReturn(Core *core, std::uint32_t address) {
   if (!core) {

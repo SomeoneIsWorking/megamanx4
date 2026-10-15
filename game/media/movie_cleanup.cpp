@@ -2,13 +2,12 @@
 
 #include "bios_threads.h"
 #include "cd_controller.h"
-#include "cfg.h"
 #include "core.h"
 #include "execution_services.h"
 #include "guest_execution.h"
 #include "native_dispatch.h"
 
-#include "x4_context.h"
+#include "x4_session.h"
 
 #include <cstdlib>
 #include <lucent/log.h>
@@ -35,12 +34,6 @@ constexpr std::uint32_t kDataMode = 0x80u;
 
 void suspendRetailTask(Core &core) {
   bios_threads::from(core).yieldToMain();
-}
-
-void call(Core &core, GuestDispatch dispatch, std::uint32_t entry, std::uint32_t returnAddress, std::uint32_t ticks) {
-  core.r[31] = returnAddress;
-  psx::cpu::accountGuestInstructions(core, ticks);
-  dispatch(&core, entry);
 }
 
 } // namespace
@@ -131,7 +124,7 @@ std::uint32_t State::completedFields() const {
   return completedFields_;
 }
 
-void run(Core &core, State &state, GuestDispatch dispatch, ControllerReset resetController) {
+void run(Core &core, State &state, guest::Dispatch dispatch, ControllerReset resetController) {
   if (!dispatch || !resetController) {
     refuse("retained dispatcher or controller-reset owner is absent");
   }
@@ -153,7 +146,7 @@ void run(Core &core, State &state, GuestDispatch dispatch, ControllerReset reset
   do {
     core.r[5] = 0u;
     core.r[6] = 0u;
-    call(core, dispatch, kCdControlBlocking, 0x80018E74u, 3u);
+    guest::call(core, dispatch, {kCdControlBlocking, 0x80018E74u, 3u});
     core.r[4] = kPause;
     psx::cpu::accountGuestInstructions(core, 2u);
   } while (core.r[2] == 0u);
@@ -164,12 +157,12 @@ void run(Core &core, State &state, GuestDispatch dispatch, ControllerReset reset
   state.yieldFields(core.r[31], core.r[4]);
 
   core.r[4] = 0u;
-  call(core, dispatch, kCdDataCallback, 0x80018E8Cu, 2u);
+  guest::call(core, dispatch, {kCdDataCallback, 0x80018E8Cu, 2u});
   core.r[4] = 0u;
-  call(core, dispatch, kCdReadyCallback, 0x80018E94u, 2u);
+  guest::call(core, dispatch, {kCdReadyCallback, 0x80018E94u, 2u});
   core.r[4] = 0u;
-  call(core, dispatch, kDecDctOutCallback, 0x80018E9Cu, 2u);
-  call(core, dispatch, kStUnsetRing, 0x80018EA4u, 2u);
+  guest::call(core, dispatch, {kDecDctOutCallback, 0x80018E9Cu, 2u});
+  guest::call(core, dispatch, {kStUnsetRing, 0x80018EA4u, 2u});
 
   // CdReset(0) is synchronous natively: clear libcd command state and publish a ready controller.
   core.r[4] = 0u;
@@ -190,7 +183,7 @@ void run(Core &core, State &state, GuestDispatch dispatch, ControllerReset reset
   do {
     core.r[5] = core.r[29] + 16u;
     core.r[6] = 0u;
-    call(core, dispatch, kCdControl, 0x80018ECCu, 3u);
+    guest::call(core, dispatch, {kCdControl, 0x80018ECCu, 3u});
     core.r[4] = kSetMode;
     psx::cpu::accountGuestInstructions(core, 2u);
   } while (core.r[2] == 0u);
@@ -210,7 +203,7 @@ void run(Core *core) {
   if (!core) {
     refuse("Core is null");
   }
-  run(*core, context(*core).movieCleanup, guest::callWithRegisterReturn, cd_controller::reset);
+  run(*core, session(*core).movieCleanup, guest::callWithRegisterReturn, cd_controller::reset);
 }
 
 void registerOverride(Core &core) {

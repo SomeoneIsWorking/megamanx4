@@ -1,7 +1,6 @@
 #include "startup_cd.h"
 
 #include "cd_controller.h"
-#include "cfg.h"
 #include "core.h"
 #include "game.h"
 #include "guest_execution.h"
@@ -42,16 +41,19 @@ constexpr std::uint32_t kArchiveEnqueuedCount = 0x80137CF4u;
 
 constexpr std::uint8_t kRetailMode = 0xA0u;
 
-void call(Core &core,
-          GuestDispatch dispatch,
-          std::uint32_t entry,
-          std::uint32_t returnAddress,
-          std::uint32_t a0,
-          std::uint32_t a1) {
-  core.r[4] = a0;
-  core.r[5] = a1;
-  core.r[31] = returnAddress;
-  dispatch(&core, entry);
+// A retail `jal` with its a0/a1; CD_init's calls charge no guest instructions here.
+struct ArgumentCall {
+  std::uint32_t entry;
+  std::uint32_t returnAddress;
+  std::uint32_t a0;
+  std::uint32_t a1;
+};
+
+void call(Core &core, guest::Dispatch dispatch, const ArgumentCall &site) {
+  core.r[4] = site.a0;
+  core.r[5] = site.a1;
+  core.r[31] = site.returnAddress;
+  dispatch(&core, site.entry);
 }
 
 void setupNativeController(Core &core, std::uint8_t mode) {
@@ -63,9 +65,9 @@ void setupNativeController(Core &core, std::uint8_t mode) {
 
 } // namespace
 
-void run(Core &core, GuestDispatch dispatch, ControllerSetup setupController) {
+void run(Core &core, guest::Dispatch dispatch, ControllerSetup setupController) {
   if (!dispatch || !setupController) {
-    cfg_loge("x4-startup-cd", "func_80013588 requires finite dispatch and controller services");
+    lucent::error("x4-startup-cd", "func_80013588 requires finite dispatch and controller services");
     std::abort();
   }
 
@@ -75,22 +77,22 @@ void run(Core &core, GuestDispatch dispatch, ControllerSetup setupController) {
   core.mem_w8(core.r[29] + 16u, kRetailMode);
 
   // CD_init's diagnostics run before any state mutation.
-  call(core, dispatch, kCdInitLog, 0x800E74F4u, kCdInitLogString, core.r[5]);
-  call(core, dispatch, kCdInitLogDetail, 0x800E750Cu, kCdInitDetailString, kCdRegisterPointers);
+  call(core, dispatch, {kCdInitLog, 0x800E74F4u, kCdInitLogString, core.r[5]});
+  call(core, dispatch, {kCdInitLogDetail, 0x800E750Cu, kCdInitDetailString, kCdRegisterPointers});
 
   // libcd RAM resets; the hardware command/alarm chain is replaced by the controller reset below.
   cd_controller::clearCommandState(core);
 
-  call(core, dispatch, kResetCallback, 0x800E7544u, core.r[4], core.r[5]);
-  call(core, dispatch, kInterruptCallback, 0x800E7554u, 2u, kCdInterruptHandler);
+  call(core, dispatch, {kResetCallback, 0x800E7544u, core.r[4], core.r[5]});
+  call(core, dispatch, {kInterruptCallback, 0x800E7554u, 2u, kCdInterruptHandler});
 
   // CdReset(1) volume init.
-  call(core, dispatch, kCdInitVolume, 0x800E5C60u, core.r[4], core.r[5]);
+  call(core, dispatch, {kCdInitVolume, 0x800E5C60u, core.r[4], core.r[5]});
 
   // The three title callbacks are published after reset and volume init.
-  call(core, dispatch, kCdSyncCallback, 0x800E5B00u, kInitialSyncCallback, core.r[5]);
-  call(core, dispatch, kCdReadyCallback, 0x800E5B10u, kInitialReadyCallback, core.r[5]);
-  call(core, dispatch, kCdReadCallback, 0x800E5B20u, kInitialReadCallback, core.r[5]);
+  call(core, dispatch, {kCdSyncCallback, 0x800E5B00u, kInitialSyncCallback, core.r[5]});
+  call(core, dispatch, {kCdReadyCallback, 0x800E5B10u, kInitialReadyCallback, core.r[5]});
+  call(core, dispatch, {kCdReadCallback, 0x800E5B20u, kInitialReadCallback, core.r[5]});
 
   // Retail loops CdControl(CdlSetmode, 0xA0) and VSync(3) here; the controller completes Setmode.
   setupController(core, kRetailMode);
@@ -102,7 +104,7 @@ void run(Core &core, GuestDispatch dispatch, ControllerSetup setupController) {
   core.mem_w8(kCdStateC, 0u);
   core.mem_w8(kArchiveProcessedCount, 0u);
   core.mem_w8(kArchiveEnqueuedCount, 0u);
-  call(core, dispatch, kInitializeTitleCdState, 0x80013604u, core.r[4], core.r[5]);
+  call(core, dispatch, {kInitializeTitleCdState, 0x80013604u, core.r[4], core.r[5]});
 
   core.r[31] = core.mem_r32(core.r[29] + 24u);
   core.r[29] += 32u;
@@ -110,7 +112,7 @@ void run(Core &core, GuestDispatch dispatch, ControllerSetup setupController) {
 
 void run(Core *core) {
   if (!core) {
-    cfg_loge("x4-startup-cd", "func_80013588 received a null Core");
+    lucent::error("x4-startup-cd", "func_80013588 received a null Core");
     std::abort();
   }
   run(*core, guest::callWithoutKnownReturn, setupNativeController);

@@ -1,13 +1,15 @@
 #include "core.h"
 #include "game.h"
 #include "gpu_timeout.h"
+#include "stub_game.h"
 
 #include <cstdint>
 #include <cstdio>
 #include <memory>
 
 int main() {
-  auto game = std::make_unique<Game>();
+  x4::test::StubGame stub;
+  Game *game = &stub.game();
   Core *core = &game->core;
   constexpr std::uint32_t kStack = 0x801FFF00u;
   constexpr std::uint32_t kReturnAddress = 0x81234567u;

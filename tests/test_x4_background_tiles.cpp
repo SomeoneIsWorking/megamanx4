@@ -5,6 +5,7 @@
 #include "core.h"
 #include "game.h"
 #include "player_object.h"
+#include "stub_game.h"
 
 #include <cstdio>
 #include <memory>
@@ -91,8 +92,14 @@ bool verifyColumnsAreBoundedByTheRing() {
   return true;
 }
 
+struct Scroll {
+  int x;
+  int y;
+};
+
 struct Fixture {
-  std::unique_ptr<Game> game;
+  x4::test::StubGame stub;
+  Game *game;
   Core *core;
 
   static constexpr std::uint32_t kMap = 0x80100000u;
@@ -103,7 +110,7 @@ struct Fixture {
   static constexpr int kMapColumnsBlocks = 4;
   static constexpr int kMapRowsBlocks = 2;
 
-  Fixture() : game(std::make_unique<Game>()), core(&game->core) {
+  Fixture() : game(&stub.game()), core(&game->core) {
     core->mem_w32(kMapBase, kMap);
     core->mem_w32(kTilePool, kPool);
     core->mem_w32(kTileAttributes, kAttributes);
@@ -120,10 +127,10 @@ struct Fixture {
     }
   }
 
-  void scroll(int layer, int x, int y) {
+  void scroll(int layer, const Scroll &scroll) {
     const std::uint32_t base = kCameraLayersAddress + static_cast<std::uint32_t>(layer) * kCameraLayerStride;
-    core->mem_w16(base + CameraLayerOffsets::kScrollX, static_cast<std::uint16_t>(x));
-    core->mem_w16(base + CameraLayerOffsets::kScrollY, static_cast<std::uint16_t>(y));
+    core->mem_w16(base + CameraLayerOffsets::kScrollX, static_cast<std::uint16_t>(scroll.x));
+    core->mem_w16(base + CameraLayerOffsets::kScrollY, static_cast<std::uint16_t>(scroll.y));
   }
   // The block id of map cell (blockColumn, blockRow) for `layer`.
   void setBlock(int layer, int blockColumn, int blockRow, std::uint8_t block) {
@@ -167,7 +174,7 @@ bool verifyRingMarginsComeFromTheMap() {
     f.setBlock(1, column, 1, 2);
   }
   // Scroll 6 tiles in plus 9 pixels, 3 tiles down: columns 6..26 are the retail window.
-  f.scroll(1, 6 * 16 + 9, 3 * 16 + 5);
+  f.scroll(1, {6 * 16 + 9, 3 * 16 + 5});
   const MarginColumns columns = marginColumns(6 * 16 + 9, kMargin);
   // A sentinel in every retail cell: the refill must leave them alone.
   for (int row = 0; row < 32; ++row) {
@@ -216,7 +223,7 @@ bool verifyRingMarginsAreEmptyOutsideTheMap() {
     }
   }
   // Scroll 0: columns -4..-1 are left of the map.
-  f.scroll(0, 0, 0);
+  f.scroll(0, {0, 0});
   WideBackground{planWithMargin(kMargin)}.refillRing(*f.core);
   for (int row = 0; row < RetailWindow::kRows; ++row) {
     for (int column = -4; column < 0; ++column) {
@@ -227,7 +234,7 @@ bool verifyRingMarginsAreEmptyOutsideTheMap() {
     }
   }
   // Scroll to the map's right end: its last column is 63, so 64.. is outside.
-  f.scroll(0, 64 * 16 - 320, 0);
+  f.scroll(0, {64 * 16 - 320, 0});
   WideBackground{planWithMargin(kMargin)}.refillRing(*f.core);
   const int first = (64 * 16 - 320) >> 4;
   for (int row = 0; row < RetailWindow::kRows; ++row) {
@@ -241,7 +248,7 @@ bool verifyRingMarginsAreEmptyOutsideTheMap() {
 bool verifyNoMarginChangesNothing() {
   Fixture f;
   f.fillPool(4);
-  f.scroll(0, 40, 0);
+  f.scroll(0, {40, 0});
   for (int column = 0; column < Fixture::kMapColumnsBlocks; ++column) {
     f.setBlock(0, column, 0, 1);
   }
@@ -268,7 +275,7 @@ std::uint32_t bucketAddress(int frame, int group, int bucket) {
 
 bool verifySpritesAreLinkedLikeRetail() {
   Fixture f;
-  f.scroll(2, 3 * 16 + 4, 2 * 16 + 7);
+  f.scroll(2, {3 * 16 + 4, 2 * 16 + 7});
   const int firstColumn = 3;
   const int firstRow = 2;
   // Tile index 5: foreground, semi-transparent; 6: background. Attributes pick bucket 2 and 6.
@@ -323,7 +330,7 @@ bool verifySpritesAreLinkedLikeRetail() {
 // Layers drawn later still get their retail window: margin sprites stop where their reserve begins.
 bool verifySpriteBudgetKeepsTheLaterLayers() {
   Fixture f;
-  f.scroll(0, 3 * 16, 0);
+  f.scroll(0, {3 * 16, 0});
   f.core->mem_w32(Fixture::kAttributes + 5 * 4, attribute(0, 0, 0, 0, 0));
   f.core->mem_w32(bucketAddress(1, 0, 0), Fixture::kTails);
   f.core->mem_w32(Fixture::kTails, 0x03000000u);
@@ -337,7 +344,7 @@ bool verifySpriteBudgetKeepsTheLaterLayers() {
   CHECK(f.core->mem_r32(kSpriteCursor) == Fixture::kArena + 2 * 16);
   // With the later layers disabled the same layer may link all sixteen.
   Fixture g;
-  g.scroll(0, 3 * 16, 0);
+  g.scroll(0, {3 * 16, 0});
   g.core->mem_w8(kCameraLayersAddress + 1 * kCameraLayerStride + CameraLayerOffsets::kEnabled, 0);
   g.core->mem_w8(kCameraLayersAddress + 2 * kCameraLayerStride + CameraLayerOffsets::kEnabled, 0);
   g.core->mem_w32(Fixture::kAttributes + 5 * 4, attribute(0, 0, 0, 0, 0));

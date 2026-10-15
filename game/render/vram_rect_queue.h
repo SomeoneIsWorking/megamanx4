@@ -144,8 +144,14 @@ void clear(Core &core);
 // LoadImages every entry with a non-null source in order, then republishes kQueueBase.
 void upload(Core &core);
 
+// The caller's rectangle origin, s16 in the guest.
+struct RectOrigin {
+  std::int32_t x;
+  std::int32_t y;
+};
+
 // One 16-pixel band per entry; reached from 17 guest call sites.
-void append(Core &core, std::uint32_t object, std::int32_t x, std::int32_t y);
+void append(Core &core, std::uint32_t object, const RectOrigin &origin);
 
 // Run census; `calls` includes calls that emitted nothing.
 struct Census {

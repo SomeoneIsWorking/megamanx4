@@ -5,6 +5,7 @@
 
 #include "core.h"
 #include "game.h"
+#include "stub_game.h"
 
 #include <cstdio>
 #include <memory>
@@ -65,10 +66,15 @@ GuestProjectionPlan widePlan(int margin) {
 
 // Retail compare from the disassembly: addiu t,v,A / andi t,t,0xFFFF / sltiu c,t,B at 0x8002B2E8..0x8002B2F0
 // (also 0x8002B1BC, 0x8002B420, 0x800B84B0). The sltu form at 0x8002B38C is the same predicate.
-bool retailWindow(int value, int addend, int bound) {
+struct RetailCompare {
+  int addend;
+  int bound;
+};
+
+bool retailWindow(int value, const RetailCompare &compare) {
   const unsigned int shifted = static_cast<unsigned int>(static_cast<int>(static_cast<short>(value)) +
-                                                         static_cast<int>(static_cast<short>(addend)));
-  return static_cast<unsigned short>(shifted) < static_cast<unsigned short>(bound);
+                                                         static_cast<int>(static_cast<short>(compare.addend)));
+  return static_cast<unsigned short>(shifted) < static_cast<unsigned short>(compare.bound);
 }
 
 // Per window shape: per-side slack and the retail addiu/sltiu immediates, transcribed from the image.
@@ -113,9 +119,9 @@ bool verify_4x3_identity_exhaustive() {
     for (int coordinate = -32768; coordinate < 32768; ++coordinate) {
       ++g_windows;
       const bool mineX = windowX.contains(coordinate);
-      const bool retailX = retailWindow(coordinate, shape.retailAddendX, shape.retailBoundX);
+      const bool retailX = retailWindow(coordinate, {shape.retailAddendX, shape.retailBoundX});
       const bool mineY = windowY.contains(coordinate);
-      const bool retailY = retailWindow(coordinate, shape.retailAddendY, shape.retailBoundY);
+      const bool retailY = retailWindow(coordinate, {shape.retailAddendY, shape.retailBoundY});
       if (mineX != retailX || mineY != retailY) {
         ++g_differences;
         std::fprintf(stderr,
@@ -227,11 +233,11 @@ bool verify_sixteen_bit_parameter_wrap() {
   const ScreenWindow negative = ScreenWindow::horizontal(-100, 0);
   CHECK(negative.offset() == -100);
   CHECK(negative.bound() == -200 + RetailScreen::kWidth);
-  CHECK(negative.contains(0) == retailWindow(0, -100, 120));
+  CHECK(negative.contains(0) == retailWindow(0, {-100, 120}));
   // Exhaustive identity for the overflowing parameter too.
   for (int coordinate = -32768; coordinate < 32768; ++coordinate) {
     ++g_windows;
-    if (window.contains(coordinate) != retailWindow(coordinate, huge, bound)) {
+    if (window.contains(coordinate) != retailWindow(coordinate, {huge, bound})) {
       ++g_differences;
       std::fprintf(stderr, "FAIL 16-bit wrap v=%d\n", coordinate);
       return false;
@@ -280,16 +286,28 @@ bool verify_wide_requires_the_plan() {
 
 // Bare Game with hand-written RAM; the cull owner reads only guest memory. Game owns a 2 MB array, so it is
 // heap-allocated.
+// A guest object's address and the bytes planted there.
+struct GuestBlock {
+  std::uint32_t base;
+  std::uint32_t size;
+};
+
+struct Scroll {
+  int x;
+  int y;
+};
+
 struct Fixture {
-  std::unique_ptr<Game> game;
+  x4::test::StubGame stub;
+  Game *game;
   Core *core;
 
-  Fixture() : game(std::make_unique<Game>()), core(&game->core) {}
+  Fixture() : game(&stub.game()), core(&game->core) {}
 
   // Identity pattern so an offset error reads a wrong but plausible byte.
-  void plantObject(std::uint32_t object, std::uint32_t size) {
-    for (std::uint32_t i = 0; i < size; ++i) {
-      core->mem_w8(object + i, static_cast<std::uint8_t>(0xA0u + i));
+  void plantObject(const GuestBlock &block) {
+    for (std::uint32_t i = 0; i < block.size; ++i) {
+      core->mem_w8(block.base + i, static_cast<std::uint8_t>(0xA0u + i));
     }
   }
   // xField is the measured x-integer offset; y is +4 (0x0A -> 0x0E) in both layouts.
@@ -297,10 +315,10 @@ struct Fixture {
     core->mem_w16(object + xField, static_cast<std::uint16_t>(x));
     core->mem_w16(object + xField + 4u, static_cast<std::uint16_t>(y));
   }
-  void setScroll(int layer, int x, int y) {
+  void setScroll(int layer, const Scroll &scroll) {
     const std::uint32_t base = kCameraLayersAddress + static_cast<std::uint32_t>(layer) * kCameraLayerStride;
-    core->mem_w16(base + CameraLayerOffsets::kScrollX, static_cast<std::uint16_t>(x));
-    core->mem_w16(base + CameraLayerOffsets::kScrollY, static_cast<std::uint16_t>(y));
+    core->mem_w16(base + CameraLayerOffsets::kScrollX, static_cast<std::uint16_t>(scroll.x));
+    core->mem_w16(base + CameraLayerOffsets::kScrollY, static_cast<std::uint16_t>(scroll.y));
   }
 };
 
@@ -311,21 +329,21 @@ constexpr std::uint32_t kQuad = 0x80101000u;
 // answer.
 bool verify_background_relative_recovery(Fixture &f) {
   const VisibilityCull retail{retailPlan()};
-  f.plantObject(kObject, 0x40u);
-  f.plantObject(kQuad, 0x60u);
+  f.plantObject({kObject, 0x40u});
+  f.plantObject({kQuad, 0x60u});
 
   // Screen space: a negative background byte means no scroll is subtracted.
   f.core->mem_w8(kObject + 0x14u, 0xFFu);
-  f.setScroll(0, 1000, 1000);
+  f.setScroll(0, {1000, 1000});
   f.setScreenPosition(kObject, 0x0Au, 160, 120);
   CHECK(retail.screenX(*f.core, kObject, ObjectLayout::BaseObject).value == 160);
   CHECK(retail.screenY(*f.core, kObject, ObjectLayout::BaseObject).value == 120);
 
   // Layer 1's scroll is subtracted; the layer index comes from the byte (84 = 0x54 stride).
   f.core->mem_w8(kObject + 0x14u, 1);
-  f.setScroll(0, 11, 12);
-  f.setScroll(1, 100, 200);
-  f.setScroll(2, 300, 400);
+  f.setScroll(0, {11, 12});
+  f.setScroll(1, {100, 200});
+  f.setScroll(2, {300, 400});
   f.setScreenPosition(kObject, 0x0Au, 260, 320);
   CHECK(retail.screenX(*f.core, kObject, ObjectLayout::BaseObject).value == 160);
   CHECK(retail.screenY(*f.core, kObject, ObjectLayout::BaseObject).value == 120);
@@ -359,7 +377,7 @@ bool verify_background_relative_recovery(Fixture &f) {
 bool verify_quad_corners(Fixture &f) {
   const VisibilityCull retail{retailPlan()};
   const VisibilityCull wide{widePlan(54)};
-  f.plantObject(kQuad, 0x60u);
+  f.plantObject({kQuad, 0x60u});
   f.core->mem_w8(kQuad + 0x37u, 0xFFu);
 
   // Corner 0 far outside on the right, corner 3 well inside. Only a four-corner OR admits this.
@@ -421,7 +439,7 @@ bool verify_quad_corners(Fixture &f) {
   CHECK(wide.quadOnScreen(*f.core, kQuad));
 
   // Background-relative quad: only corner 0 is inside, isolating the scroll from the OR; scroll x = 100, byte SET.
-  f.setScroll(0, 100, 0);
+  f.setScroll(0, {100, 0});
   f.setScreenPosition(kQuad, 0x0Au, 0, 0);
   for (int corner = 1; corner < 4; ++corner) {
     f.core->mem_w16(kQuad + kQuadCornerX[corner], 500);
@@ -471,8 +489,8 @@ bool verify_quad_corners(Fixture &f) {
 bool verify_publication(Fixture &f) {
   const int margin = kExpectedMargin;
   const VisibilityCull cull{widePlan(margin)};
-  f.plantObject(kObject, 0x40u);
-  f.plantObject(kQuad, 0x60u);
+  f.plantObject({kObject, 0x40u});
+  f.plantObject({kQuad, 0x60u});
   f.core->mem_w8(kObject + 0x14u, 0xFFu);
   f.core->mem_w8(kQuad + 0x37u, 0xFFu);
 
@@ -519,7 +537,7 @@ bool verify_widened_objects(Fixture &f) {
   CHECK(!retail.inside(rightBand, 120, RetailSlack::kTight, RetailSlack::kTight));
   CHECK(wide.inside(rightBand, 120, RetailSlack::kTight, RetailSlack::kTight));
 
-  f.plantObject(kObject, 0x40u);
+  f.plantObject({kObject, 0x40u});
   f.core->mem_w8(kObject + x4::cull::kObjectActiveOffset, 1);
   f.core->mem_w8(kObject + x4::cull::kObjectIdOffset, 7);
   f.core->mem_w8(kObject + kOnScreenOffset, 0);

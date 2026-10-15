@@ -46,14 +46,18 @@ struct State {
   uint64_t loadingPresentationsRemoved = 0;
 };
 
+// One retail loader: its issuer, the ready callback it registers at `expectedCallbackVa`, and
+// `postprocess`, the archive ring-drain or null for a direct request.
+struct SynchronousLoad {
+  GuestBody retailIssuer;
+  GuestBody readyCallback;
+  GuestBody postprocess;
+  uint32_t expectedCallbackVa;
+  const char *what;
+};
+
 // Run the issuer init, then feed its guest callback consecutive raw sectors.
-// `postprocess` is the archive ring-drain, or null for a direct request.
-void load_synchronously(Core *core,
-                        GuestBody retailIssuer,
-                        GuestBody readyCallback,
-                        GuestBody postprocess,
-                        uint32_t expectedCallbackVa,
-                        const char *what);
+void load_synchronously(Core *core, const SynchronousLoad &request);
 
 // Archive issuer's CD setup: retail waits three guest fields between Setmode and Setloc; skipped here
 // because the native controller completes both synchronously.

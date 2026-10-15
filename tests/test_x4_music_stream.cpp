@@ -1,6 +1,7 @@
 #include "core.h"
 #include "game.h"
 #include "music_stream.h"
+#include "stub_game.h"
 
 #include <cstdint>
 #include <cstdio>
@@ -37,8 +38,8 @@ void cdControl(Core *core) {
   core->r[2] = g_controlResult;
 }
 
-void yieldFields(Core &core, std::uint32_t returnAddress, std::uint32_t fields) {
-  g_musicStream->yieldFields(returnAddress, fields);
+void yieldFields(Core &core) {
+  g_musicStream->yieldFields();
   core.r[2] = 0u;
 }
 
@@ -128,7 +129,8 @@ bool verifyCommandRefusal(Core &core, x4::music_stream::State &state) {
 } // namespace
 
 int main() {
-  auto game = std::make_unique<Game>();
+  x4::test::StubGame stub;
+  Game *game = &stub.game();
   x4::music_stream::State state(game->core);
   if (!verifySuccessfulTransition(game->core, state) || !verifyStatusError(game->core, state) ||
       !verifyNotReady(game->core, state) || !verifyCommandRefusal(game->core, state)) {

@@ -2,11 +2,12 @@
 
 #include "core.h"
 #include "disc.h"
+#include "enhancement_gate.h"
 #include "enhancements.h"
 #include "execution_services.h"
 #include "game.h"
 #include "r3000.h"
-#include "x4_context.h"
+#include "x4_session.h"
 
 #include <cstdlib>
 #include <lucent/log.h>
@@ -41,7 +42,7 @@ constexpr uint32_t kArchiveRingSlots = 16u;
 }
 
 State &state(Core &core) {
-  return x4::context(core).fastWait;
+  return x4::session(core).fastWait;
 }
 
 void require_body(GuestBody body, const char *what, State &load) {
@@ -101,71 +102,66 @@ void drain_archive_postprocess(
 
 } // namespace
 
-void load_synchronously(Core *core,
-                        GuestBody retailIssuer,
-                        GuestBody readyCallback,
-                        GuestBody postprocess,
-                        uint32_t expectedCallbackVa,
-                        const char *what) {
+void load_synchronously(Core *core, const SynchronousLoad &request) {
   if (!core || !core->game) {
-    lucent::error("x4-fastwait", "{} requires a bound Core/Game", what);
+    lucent::error("x4-fastwait", "{} requires a bound Core/Game", request.what);
     std::abort();
   }
   State &load = state(*core);
-  require_body(retailIssuer, what, load);
-  require_body(readyCallback, what, load);
-  if (!enh(fastWaitCvar())) {
-    retailIssuer(core);
+  require_body(request.retailIssuer, request.what, load);
+  require_body(request.readyCallback, request.what, load);
+  if (!psx::config::enh(fastWaitCvar())) {
+    request.retailIssuer(core);
     return;
   }
   if (scoped(load)) {
-    refuse(what, "nested synchronous request", load);
+    refuse(request.what, "nested synchronous request", load);
   }
 
   read_request_entry(*core, load);
   load.sectorsDelivered = 0;
   load.phase = Phase::Preparing;
-  retailIssuer(core);
+  request.retailIssuer(core);
 
-  if (core->mem_r32(kReadyCallbackSlot) != expectedCallbackVa) {
-    refuse(what, "issuer registered an unexpected ready callback", load);
+  if (core->mem_r32(kReadyCallbackSlot) != request.expectedCallbackVa) {
+    refuse(request.what, "issuer registered an unexpected ready callback", load);
   }
   if (core->mem_r8(kLoadState) != 1u) {
-    refuse(what, "issuer did not enter retail state 1", load);
+    refuse(request.what, "issuer did not enter retail state 1", load);
   }
 
   const R3000 issuerRegisters = static_cast<R3000 &>(*core);
   const uint32_t sectorCount = (load.requestBytes + kSectorPayloadBytes - 1u) / kSectorPayloadBytes;
   if (load.requestLba > UINT32_MAX - (sectorCount - 1u)) {
-    refuse(what, "retail request LBA range overflows", load);
+    refuse(request.what, "retail request LBA range overflows", load);
   }
   load.phase = Phase::Delivering;
   for (uint32_t sector = 0; sector < sectorCount; ++sector) {
     if (!disc_read_raw(&core->game->disc, load.requestLba + sector, load.rawSector.data(), load.rawSector.size())) {
-      refuse(what, "disc backend could not read a required raw sector", load);
+      refuse(request.what, "disc backend could not read a required raw sector", load);
     }
     load.sectorCursor = kRawDataOffset;
-    dispatch_preserving_registers(*core, readyCallback, issuerRegisters);
+    dispatch_preserving_registers(*core, request.readyCallback, issuerRegisters);
     ++load.sectorsDelivered;
     // The producers reject seven outstanding records, so drain after each ready callback.
-    drain_archive_postprocess(*core, postprocess, issuerRegisters, what, load);
+    drain_archive_postprocess(*core, request.postprocess, issuerRegisters, request.what, load);
 
     const bool last = sector + 1u == sectorCount;
     const uint8_t guestState = core->mem_r8(kLoadState);
     if (!last && guestState == 2u) {
-      refuse(what, "guest callback completed before the table-derived byte length", load);
+      refuse(request.what, "guest callback completed before the table-derived byte length", load);
     }
   }
 
   if (core->mem_r8(kLoadState) != 2u) {
-    refuse(what, "guest callback did not publish terminal state 2 at the table-derived bound", load);
+    refuse(request.what, "guest callback did not publish terminal state 2 at the table-derived bound", load);
   }
 
   load.phase = Phase::Inactive;
   ++load.loadsCompleted;
   lucent::info("x4-fastwait",
                "{} completed synchronously: request {} LBA {} bytes {} sectors {}",
-               what,
+               request.what,
                load.requestId,
                load.requestLba,
                load.requestBytes,
@@ -184,7 +180,7 @@ void archive_cd_setup(Core *core,
   }
   State &load = state(*core);
   require_body(retailBody, "archive CD setup", load);
-  if (!enh(fastWaitCvar()) || !scoped(load)) {
+  if (!psx::config::enh(fastWaitCvar()) || !scoped(load)) {
     retailBody(core);
     return;
   }
@@ -276,7 +272,7 @@ void direct_cd_setup(Core *core,
   }
   State &load = state(*core);
   require_body(retailBody, "direct CD setup", load);
-  if (!enh(fastWaitCvar()) || !scoped(load)) {
+  if (!psx::config::enh(fastWaitCvar()) || !scoped(load)) {
     retailBody(core);
     return;
   }
@@ -404,7 +400,7 @@ void cd_get_sector(Core *core, GuestBody retailBody) {
 
 void loading_presentation_wait(Core *core, GuestBody retailBody) {
   State &load = state(*core);
-  if (!enh(fastWaitCvar())) {
+  if (!psx::config::enh(fastWaitCvar())) {
     retailBody(core);
     return;
   }

@@ -1,6 +1,5 @@
 #include "display_init.h"
 
-#include "cfg.h"
 #include "core.h"
 #include "execution_services.h"
 #include "guest_execution.h"
@@ -21,7 +20,7 @@ void require(Core *core, GuestBody body, const char *name) {
   if (core && core->game && body) {
     return;
   }
-  cfg_loge("x4-display-init", "display initialization is missing Core/Game or %s body", name);
+  lucent::error("x4-display-init", "display initialization is missing Core/Game or {} body", name);
   std::abort();
 }
 

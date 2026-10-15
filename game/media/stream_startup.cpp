@@ -3,7 +3,6 @@
 #include "bios_threads.h"
 #include "c_subsys.h"
 #include "cd_controller.h"
-#include "cfg.h"
 #include "core.h"
 #include "disc.h"
 #include "execution_services.h"
@@ -11,7 +10,7 @@
 #include "guest_execution.h"
 #include "movie_cleanup.h"
 #include "native_dispatch.h"
-#include "x4_context.h"
+#include "x4_session.h"
 
 #include <array>
 #include <cstdlib>
@@ -62,14 +61,6 @@ void tick(Core &core, std::uint32_t ticks) {
   psx::cpu::accountGuestInstructions(core, ticks);
 }
 
-void call(Core &core, GuestDispatch dispatch, std::uint32_t entry, std::uint32_t returnAddress, std::uint32_t ticks) {
-  // callWithRegisterReturn refuses an r[31] that is not in a code image.
-  // 0x80018AA0 follows the jal to DecDCTvlc at 0x800189A0; the other call site is 0x80018E24.
-  core.r[31] = returnAddress;
-  tick(core, ticks);
-  dispatch(&core, entry);
-}
-
 void serviceFields(Core &core, FieldService serviceField, std::uint32_t count) {
   for (std::uint32_t field = 0; field < count; ++field) {
     serviceField(core);
@@ -92,10 +83,9 @@ void writePosition(Core &core, std::uint32_t lba, const std::array<std::uint8_t,
   core.mem_w8(kStreamLocation + 2u, bcd(absoluteFrame % 75u));
 }
 
-bool startNativeCdStream(
-    Core &core, std::uint32_t lba, std::uint32_t readMode, std::uint32_t filter, FieldService serviceField) {
+bool startNativeCdStream(Core &core, const StreamRequest &request, FieldService serviceField) {
   if (!core.game) {
-    cfg_loge("x4-stream-startup", "STR startup requires a bound Game");
+    lucent::error("x4-stream-startup", "STR startup requires a bound Game");
     return false;
   }
 
@@ -106,26 +96,26 @@ bool startNativeCdStream(
 
   Game &game = *core.game;
   CdcState &controller = game.cdc;
-  const std::uint8_t file = static_cast<std::uint8_t>(core.mem_r8(filter));
-  const std::uint8_t channel = static_cast<std::uint8_t>(core.mem_r8(filter + 1u));
+  const std::uint8_t file = static_cast<std::uint8_t>(core.mem_r8(request.filter));
+  const std::uint8_t channel = static_cast<std::uint8_t>(core.mem_r8(request.filter + 1u));
   xa_stream_stop(&game.xa);
   xa_stream_setfilter(&game.xa, file, channel);
   core.r[4] = 3u;
   serviceFields(core, serviceField, 3u);
 
-  const std::uint8_t mode = static_cast<std::uint8_t>(readMode);
+  const std::uint8_t mode = static_cast<std::uint8_t>(request.readMode);
   cd_controller::setMode(core, mode);
 
   std::array<std::uint8_t, 8> position{};
-  if (!disc_get_subq_position(&game.disc, lba, position.data())) {
-    cfg_loge("x4-stream-startup", "cannot resolve STR start LBA %u to a disc position", lba);
+  if (!disc_get_subq_position(&game.disc, request.lba, position.data())) {
+    lucent::error("x4-stream-startup", "cannot resolve STR start LBA {} to a disc position", request.lba);
     return false;
   }
-  writePosition(core, lba, position);
+  writePosition(core, request.lba, position);
 
   // CdRead2's non-wait effects: libstr callbacks (bit 8), sector framing flag, Setmode, ReadS.
-  installReadCallbacks(core, readMode);
-  game.cd.setloc_lba = static_cast<std::int32_t>(lba);
+  installReadCallbacks(core, request.readMode);
+  game.cd.setloc_lba = static_cast<std::int32_t>(request.lba);
   game.cd.sec_pos = 0;
   game.cd.sec_len = 0;
   game.cd.sec_lba = -1;
@@ -137,7 +127,7 @@ bool startNativeCdStream(
                    static_cast<std::uint8_t>(core.mem_r8(kStreamLocation + 1u)),
                    static_cast<std::uint8_t>(core.mem_r8(kStreamLocation + 2u)));
   xa_stream_start(&game.xa);
-  cdc_begin_read(&controller, lba);
+  cdc_begin_read(&controller, request.lba);
   core.r[4] = 3u;
   serviceFields(core, serviceField, 3u);
   return true;
@@ -166,12 +156,12 @@ void installReadCallbacks(Core &core, std::uint32_t readMode) {
 }
 
 void run(Core &core,
-         GuestDispatch dispatch,
+         guest::Dispatch dispatch,
          FieldService serviceField,
          CdTransaction startCdStream,
          movie_cleanup::State &movie) {
   if (!dispatch || !serviceField || !startCdStream) {
-    cfg_loge("x4-stream-startup", "STR startup requires dispatch, field, and CD services");
+    lucent::error("x4-stream-startup", "STR startup requires dispatch, field, and CD services");
     std::abort();
   }
 
@@ -220,49 +210,49 @@ void run(Core &core,
   tick(core, 39u);
 
   core.r[4] = 0u;
-  call(core, dispatch, kSetStreamMode, 0x80018824u, 0u);
+  guest::call(core, dispatch, {kSetStreamMode, 0x80018824u, 0u});
   core.r[4] = 0u;
-  call(core, dispatch, kDecDctReset, 0x8001882Cu, 2u);
+  guest::call(core, dispatch, {kDecDctReset, 0x8001882Cu, 2u});
   core.r[4] = kDecDctOutput;
-  call(core, dispatch, kDecDctOutCallback, 0x8001883Cu, 4u);
+  guest::call(core, dispatch, {kDecDctOutCallback, 0x8001883Cu, 4u});
   core.r[4] = ring;
   core.r[5] = ringSize;
-  call(core, dispatch, kStSetRing, 0x80018848u, 3u);
+  guest::call(core, dispatch, {kStSetRing, 0x80018848u, 3u});
   core.r[4] = core.mem_r32(kVlcTables + 16u);
   core.r[5] = streamArg1;
   core.r[6] = 0x0FFFFFFFu;
   core.r[7] = kStVblankCallback;
   core.mem_w32(core.r[29] + 16u, 0u);
-  call(core, dispatch, kStSetStream, 0x8001886Cu, 9u);
-  call(core, dispatch, kResetMovieState, 0x80018874u, 2u);
+  guest::call(core, dispatch, {kStSetStream, 0x8001886Cu, 9u});
+  guest::call(core, dispatch, {kResetMovieState, 0x80018874u, 2u});
   core.mem_w8(kStreamFilter, 1u);
   core.r[4] = 127u;
-  call(core, dispatch, kSetCdVolume, 0x80018888u, 5u);
+  guest::call(core, dispatch, {kSetCdVolume, 0x80018888u, 5u});
   core.r[4] = streamLba;
   core.r[5] = kStreamLocation;
-  call(core, dispatch, kCdIntToPos, 0x80018898u, 4u);
+  guest::call(core, dispatch, {kCdIntToPos, 0x80018898u, 4u});
   core.mem_w32(kStreamStartLba, streamLba);
 
   const std::uint32_t readMode = core.mem_r32(kStreamFlavor) == 0u ? kDefaultReadMode : kAlternateReadMode;
-  if (!startCdStream(core, streamLba, readMode, kStreamFilter, serviceField)) {
+  if (!startCdStream(core, {.lba = streamLba, .readMode = readMode, .filter = kStreamFilter}, serviceField)) {
     fail();
     return;
   }
 
   core.r[4] = kStreamPosition + 5u;
-  call(core, dispatch, kCdPosToInt, 0x80018968u, 4u);
+  guest::call(core, dispatch, {kCdPosToInt, 0x80018968u, 4u});
   const std::uint32_t headLba = core.r[2];
   if (headLba < streamLba - 20u || headLba > streamLba + 5u) {
     fail();
     return;
   }
 
-  call(core, dispatch, kPrepareFirstFrame, 0x8001899Cu, 2u);
+  guest::call(core, dispatch, {kPrepareFirstFrame, 0x8001899Cu, 2u});
   std::uint32_t waits = 0u;
   for (;;) {
     core.r[4] = core.r[29] + 24u;
     core.r[5] = core.r[29] + 28u;
-    call(core, dispatch, kStGetNext, 0x800189A8u, 2u);
+    guest::call(core, dispatch, {kStGetNext, 0x800189A8u, 2u});
     if (core.r[2] == 0u) {
       break;
     }
@@ -291,9 +281,10 @@ void run(Core &core,
   const std::uint32_t tableIndex = core.mem_r32(kVlcTableIndex);
   core.r[4] = frameData;
   core.r[5] = core.mem_r32(kVlcTables + tableIndex * 4u);
-  call(core, dispatch, kDecDctVlc, 0x80018AA0u, 12u);
+  // 0x80018AA0 follows the jal to DecDCTvlc at 0x800189A0; the other call site is 0x80018E24.
+  guest::call(core, dispatch, {kDecDctVlc, 0x80018AA0u, 12u});
   core.r[4] = frameData;
-  call(core, dispatch, kStFreeRing, 0x80018AACu, 3u);
+  guest::call(core, dispatch, {kStFreeRing, 0x80018AACu, 3u});
   finish(core, 0u);
 }
 
@@ -307,10 +298,10 @@ void awaitField(Core &, bios_threads::Service &threads) {
 
 void run(Core *core) {
   if (!core) {
-    cfg_loge("x4-stream-startup", "STR startup received a null Core");
+    lucent::error("x4-stream-startup", "STR startup received a null Core");
     std::abort();
   }
-  run(*core, guest::callWithRegisterReturn, awaitField, startNativeCdStream, context(*core).movieCleanup);
+  run(*core, guest::callWithRegisterReturn, awaitField, startNativeCdStream, session(*core).movieCleanup);
 }
 
 void registerOverride(Core &core) {

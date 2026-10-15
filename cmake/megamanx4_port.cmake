@@ -3,6 +3,7 @@ include(${PSXPORT_DIR}/cmake/psxport.cmake)
 # Include path shared by every first-party target.
 set(X4_TITLE_DIRS
   ${CMAKE_SOURCE_DIR}/game/boot
+  ${CMAKE_SOURCE_DIR}/game/debug
   ${CMAKE_SOURCE_DIR}/game/execution
   ${CMAKE_SOURCE_DIR}/game/frame
   ${CMAKE_SOURCE_DIR}/game/input
@@ -15,7 +16,7 @@ set(X4_TITLE_DIRS
 
 set(SEAM_SRC
   game/boot/x4_runtime.cpp
-  game/boot/x4_context.cpp
+  game/boot/x4_session.cpp
   game/frame/x4_frame_driver.cpp
   game/frame/vsync_sync.cpp
   game/input/input_path.cpp
@@ -45,8 +46,7 @@ set(SEAM_SRC
   game/execution/guest_execution.cpp
   game/execution/native_overrides.cpp
   game/execution/bios_threads.cpp
-  game/title/game_config.cpp
-  game/title/game_hooks.cpp
+  game/debug/stage_warp.cpp
   game/title/enhancements.cpp
 )
 add_library(megamanx4_seam OBJECT ${SEAM_SRC})
@@ -63,7 +63,7 @@ if(BUILD_TESTING)
     ${CMAKE_SOURCE_DIR}/game/execution/guest_execution.cpp
   )
   target_include_directories(x4_guest_execution PUBLIC ${X4_TITLE_DIRS})
-  target_link_libraries(x4_guest_execution PUBLIC psxport)
+  target_link_libraries(x4_guest_execution PUBLIC psxport psxport_test_support)
   set_target_properties(x4_guest_execution PROPERTIES
     CXX_STANDARD 20
     CXX_STANDARD_REQUIRED ON
@@ -88,8 +88,7 @@ if(BUILD_TESTING)
     ${CMAKE_SOURCE_DIR}/game/media/fast_wait.cpp
     ${CMAKE_SOURCE_DIR}/tests/test_x4_runtime.cpp
     ${CMAKE_SOURCE_DIR}/game/title/enhancements.cpp
-    ${CMAKE_SOURCE_DIR}/game/title/game_config.cpp
-    ${CMAKE_SOURCE_DIR}/game/title/game_hooks.cpp
+    ${CMAKE_SOURCE_DIR}/game/debug/stage_warp.cpp
     ${CMAKE_SOURCE_DIR}/game/render/gpu_timeout.cpp
     ${CMAKE_SOURCE_DIR}/game/media/movie_cleanup.cpp
     ${CMAKE_SOURCE_DIR}/game/media/music_cd.cpp
@@ -112,7 +111,7 @@ if(BUILD_TESTING)
     ${CMAKE_SOURCE_DIR}/game/frame/vsync_sync.cpp
     ${CMAKE_SOURCE_DIR}/game/input/input_path.cpp
     ${CMAKE_SOURCE_DIR}/game/widescreen/widescreen_controller.cpp
-    ${CMAKE_SOURCE_DIR}/game/boot/x4_context.cpp
+    ${CMAKE_SOURCE_DIR}/game/boot/x4_session.cpp
     ${CMAKE_SOURCE_DIR}/game/frame/x4_frame_driver.cpp
     ${CMAKE_SOURCE_DIR}/game/boot/x4_runtime.cpp
   )
@@ -139,7 +138,7 @@ if(BUILD_TESTING)
     ${CMAKE_SOURCE_DIR}/game/media/cd_control_boundary.cpp
     ${CMAKE_SOURCE_DIR}/game/media/cd_controller.cpp
     ${CMAKE_SOURCE_DIR}/game/media/movie_cleanup.cpp
-    ${CMAKE_SOURCE_DIR}/game/boot/x4_context.cpp
+    ${CMAKE_SOURCE_DIR}/game/boot/x4_session.cpp
     ${CMAKE_SOURCE_DIR}/tests/test_x4_movie_cleanup.cpp
   )
   target_include_directories(mmx4_movie_cleanup_test PRIVATE ${X4_TITLE_DIRS})
@@ -154,10 +153,11 @@ if(BUILD_TESTING)
     ${CMAKE_SOURCE_DIR}/game/media/cd_controller.cpp
     ${CMAKE_SOURCE_DIR}/game/media/movie_cleanup.cpp
     ${CMAKE_SOURCE_DIR}/game/media/music_stream.cpp
-    ${CMAKE_SOURCE_DIR}/game/boot/x4_context.cpp
+    ${CMAKE_SOURCE_DIR}/game/boot/x4_session.cpp
     ${CMAKE_SOURCE_DIR}/game/frame/x4_frame_driver.cpp
     ${CMAKE_SOURCE_DIR}/game/frame/vsync_sync.cpp
     ${CMAKE_SOURCE_DIR}/game/input/input_path.cpp
+    ${CMAKE_SOURCE_DIR}/game/debug/stage_warp.cpp
     ${CMAKE_SOURCE_DIR}/tests/test_x4_frame_driver.cpp
   )
   target_include_directories(mmx4_frame_driver_test PRIVATE ${X4_TITLE_DIRS})
@@ -169,7 +169,7 @@ if(BUILD_TESTING)
   add_test(NAME x4_frame_driver COMMAND mmx4_frame_driver_test)
   add_executable(mmx4_music_stream_test
     ${CMAKE_SOURCE_DIR}/game/media/music_stream.cpp
-    ${CMAKE_SOURCE_DIR}/game/boot/x4_context.cpp
+    ${CMAKE_SOURCE_DIR}/game/boot/x4_session.cpp
     ${CMAKE_SOURCE_DIR}/tests/test_x4_music_stream.cpp
   )
   target_include_directories(mmx4_music_stream_test PRIVATE ${X4_TITLE_DIRS})
@@ -181,6 +181,7 @@ if(BUILD_TESTING)
   add_test(NAME x4_music_stream COMMAND mmx4_music_stream_test)
   add_executable(mmx4_music_cd_test
     ${CMAKE_SOURCE_DIR}/game/media/music_cd.cpp
+    ${CMAKE_SOURCE_DIR}/game/boot/x4_session.cpp
     ${CMAKE_SOURCE_DIR}/tests/test_x4_music_cd.cpp
   )
   target_include_directories(mmx4_music_cd_test PRIVATE ${X4_TITLE_DIRS})
@@ -242,7 +243,7 @@ if(BUILD_TESTING)
     ${CMAKE_SOURCE_DIR}/game/media/stream_startup.cpp
     ${CMAKE_SOURCE_DIR}/game/frame/vsync_sync.cpp
     ${CMAKE_SOURCE_DIR}/game/input/input_path.cpp
-    ${CMAKE_SOURCE_DIR}/game/boot/x4_context.cpp
+    ${CMAKE_SOURCE_DIR}/game/boot/x4_session.cpp
     ${CMAKE_SOURCE_DIR}/tests/test_x4_stream_startup.cpp
   )
   target_include_directories(mmx4_stream_startup_test PRIVATE ${X4_TITLE_DIRS})
@@ -267,7 +268,7 @@ if(BUILD_TESTING)
     ${CMAKE_SOURCE_DIR}/tests/test_x4_player_object.cpp
   )
   target_include_directories(mmx4_player_object_test PRIVATE ${X4_TITLE_DIRS})
-  target_link_libraries(mmx4_player_object_test PRIVATE psxport)
+  target_link_libraries(mmx4_player_object_test PRIVATE psxport psxport_test_support)
   set_target_properties(mmx4_player_object_test PROPERTIES
     CXX_STANDARD 20
     CXX_STANDARD_REQUIRED ON
@@ -291,7 +292,7 @@ if(BUILD_TESTING)
     ${CMAKE_SOURCE_DIR}/tests/test_x4_visibility_cull.cpp
   )
   target_include_directories(mmx4_visibility_cull_test PRIVATE ${X4_TITLE_DIRS})
-  target_link_libraries(mmx4_visibility_cull_test PRIVATE psxport)
+  target_link_libraries(mmx4_visibility_cull_test PRIVATE psxport psxport_test_support)
   set_target_properties(mmx4_visibility_cull_test PROPERTIES
     CXX_STANDARD 20
     CXX_STANDARD_REQUIRED ON
@@ -303,7 +304,7 @@ if(BUILD_TESTING)
     ${CMAKE_SOURCE_DIR}/tests/test_x4_background_tiles.cpp
   )
   target_include_directories(mmx4_background_tiles_test PRIVATE ${X4_TITLE_DIRS})
-  target_link_libraries(mmx4_background_tiles_test PRIVATE psxport)
+  target_link_libraries(mmx4_background_tiles_test PRIVATE psxport psxport_test_support)
   set_target_properties(mmx4_background_tiles_test PROPERTIES
     CXX_STANDARD 20
     CXX_STANDARD_REQUIRED ON
@@ -315,7 +316,7 @@ if(BUILD_TESTING)
     ${CMAKE_SOURCE_DIR}/tests/test_x4_hud_anchor.cpp
   )
   target_include_directories(mmx4_hud_anchor_test PRIVATE ${X4_TITLE_DIRS})
-  target_link_libraries(mmx4_hud_anchor_test PRIVATE psxport)
+  target_link_libraries(mmx4_hud_anchor_test PRIVATE psxport psxport_test_support)
   set_target_properties(mmx4_hud_anchor_test PROPERTIES
     CXX_STANDARD 20
     CXX_STANDARD_REQUIRED ON
@@ -327,7 +328,7 @@ if(BUILD_TESTING)
     ${CMAKE_SOURCE_DIR}/tests/test_x4_sequence_skip.cpp
   )
   target_include_directories(mmx4_sequence_skip_test PRIVATE ${X4_TITLE_DIRS})
-  target_link_libraries(mmx4_sequence_skip_test PRIVATE psxport)
+  target_link_libraries(mmx4_sequence_skip_test PRIVATE psxport psxport_test_support)
   set_target_properties(mmx4_sequence_skip_test PROPERTIES
     CXX_STANDARD 20
     CXX_STANDARD_REQUIRED ON
@@ -381,7 +382,7 @@ add_executable(mmx4_thread_global_pointer_test
   ${CMAKE_SOURCE_DIR}/tests/test_x4_thread_global_pointer.cpp)
 # r3000.h (via bios_threads.h) comes through psxport's exported include directories.
 target_include_directories(mmx4_thread_global_pointer_test PRIVATE ${X4_TITLE_DIRS})
-target_link_libraries(mmx4_thread_global_pointer_test PRIVATE psxport)
+target_link_libraries(mmx4_thread_global_pointer_test PRIVATE psxport psxport_test_support)
 set_target_properties(mmx4_thread_global_pointer_test PROPERTIES
   CXX_STANDARD 20
   CXX_STANDARD_REQUIRED ON

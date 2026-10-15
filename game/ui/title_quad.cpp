@@ -23,7 +23,7 @@ constexpr std::uint16_t kInitialTimer = 0x14u;
 
 void initializeWhiteLogoQuad(Core *core) {
   const std::uint32_t object = core->r[4];
-  const std::int32_t variant = static_cast<std::int8_t>(core->mem_r8(object + Fields::kVariant));
+  const std::int32_t variant = core->mem_r8s(object + Fields::kVariant);
   const std::uint32_t preset = kVertexPresets + static_cast<std::uint32_t>(variant * kPresetStride);
 
   core->mem_w8(object + Fields::kBackgroundOffset, 0xFFu);

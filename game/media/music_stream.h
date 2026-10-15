@@ -1,5 +1,7 @@
 #pragma once
 
+#include "guest_execution.h"
+
 #include <cstdint>
 #include <memory>
 
@@ -9,8 +11,8 @@ class Coro;
 namespace x4::music_stream {
 
 using GuestBody = void (*)(Core *);
-using GuestDispatch = void (*)(Core *, std::uint32_t);
-using FieldYield = void (*)(Core &, std::uint32_t, std::uint32_t);
+// Yields the fields of the guest VSync call in r[4], returning to r[31].
+using FieldYield = void (*)(Core &);
 
 inline constexpr std::uint32_t kSetModeEntry = 0x80016E84u;
 inline constexpr std::uint32_t kBeforeObjectsB = 0x800169D8u;
@@ -31,13 +33,14 @@ public:
   State(const State &) = delete;
   State &operator=(const State &) = delete;
 
-  [[nodiscard]] bool dispatchBeforeObjectsB(GuestDispatch dispatch);
-  void yieldFields(std::uint32_t returnAddress, std::uint32_t fields);
+  [[nodiscard]] bool dispatchBeforeObjectsB(guest::Dispatch dispatch);
+  // The guest's VSync(3) at 0x80016ED4: a0 is the count, ra the return edge.
+  void yieldFields();
   [[nodiscard]] bool pending() const;
 
 private:
   Core &core_;
-  GuestDispatch dispatch_ = nullptr;
+  guest::Dispatch dispatch_ = nullptr;
   std::unique_ptr<Coro> transaction_;
 };
 

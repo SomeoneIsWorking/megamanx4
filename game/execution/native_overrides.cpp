@@ -1,6 +1,5 @@
 #include "native_overrides.h"
 
-#include "cd_control.h"
 #include "cd_control_boundary.h"
 #include "cd_controller.h"
 #include "core.h"
@@ -12,7 +11,7 @@
 #include "music_cd.h"
 #include "stream_interrupt.h"
 #include "vram_rect_queue.h"
-#include "x4_context.h"
+#include "x4_session.h"
 
 #include <cstdint>
 
@@ -42,11 +41,11 @@ void originalSetDefDrawEnv(Core *core) {
 }
 
 void publishProjection(Core *core) {
-  context(*core).widescreen.publishProjection(*core, originalSetGeomOffset);
+  session(*core).widescreen.publishProjection(*core, originalSetGeomOffset);
 }
 
 void publishDrawEnvironment(Core *core) {
-  context(*core).widescreen.publishDrawEnvironment(*core, originalSetDefDrawEnv);
+  session(*core).widescreen.publishDrawEnvironment(*core, originalSetDefDrawEnv);
 }
 
 void originalDirectRequest(Core *core) {
@@ -59,11 +58,11 @@ void directReadyCallback(Core *core) {
 
 void runDirectRequest(Core *core) {
   fast_wait::load_synchronously(core,
-                                originalDirectRequest,
-                                directReadyCallback,
-                                nullptr,
-                                fast_wait::kDirectReadyCallback,
-                                "direct CD request 0x80013890");
+                                {.retailIssuer = originalDirectRequest,
+                                 .readyCallback = directReadyCallback,
+                                 .postprocess = nullptr,
+                                 .expectedCallbackVa = fast_wait::kDirectReadyCallback,
+                                 .what = "direct CD request 0x80013890"});
 }
 
 void originalDirectCdSetup(Core *core) {
@@ -104,11 +103,11 @@ void archivePostprocess(Core *core) {
 
 void runArchiveRequest(Core *core) {
   fast_wait::load_synchronously(core,
-                                originalArchiveRequest,
-                                archiveReadyCallback,
-                                archivePostprocess,
-                                fast_wait::kArchiveReadyCallback,
-                                "archive CD request 0x80013AD8");
+                                {.retailIssuer = originalArchiveRequest,
+                                 .readyCallback = archiveReadyCallback,
+                                 .postprocess = archivePostprocess,
+                                 .expectedCallbackVa = fast_wait::kArchiveReadyCallback,
+                                 .what = "archive CD request 0x80013AD8"});
 }
 
 void originalArchiveCdSetup(Core *core) {
@@ -146,7 +145,7 @@ void originalCdControl(Core *core) {
 
 void synchronousCdControl(Core *core) {
   // XA/BGM command steps own this entry first; the rest keeps the existing policy.
-  if (music_cd::serveCdControl(core, cd_control_sync)) {
+  if (music_cd::serveCdControl(core, stockCdControl)) {
     return;
   }
   cd_control_boundary::control(core, originalCdControl, fast_wait::cd_control, cd_controller::setMode);
@@ -157,7 +156,7 @@ void originalCdControlBlocking(Core *core) {
 }
 
 void synchronousCdControlBlocking(Core *core) {
-  cd_control_boundary::blocking(core, originalCdControlBlocking, cd_control_sync, fast_wait::cd_control);
+  cd_control_boundary::blocking(core, originalCdControlBlocking, stockCdControl, fast_wait::cd_control);
 }
 
 void originalCdGetSector(Core *core) {

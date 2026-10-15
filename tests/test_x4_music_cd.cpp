@@ -1,14 +1,17 @@
 #include "music_cd.h"
 
-#include "cd_control.h"
 #include "core.h"
 #include "game.h"
+#include "stock_libcd.h"
+#include "stub_game.h"
 
 #include <cstdint>
 #include <cstdio>
 #include <memory>
 
 namespace {
+
+const psx::cd::StockLibcd *gLibcd = nullptr;
 
 std::uint32_t gStockSyncCalls = 0u;
 std::uint32_t gOriginalSyncCalls = 0u;
@@ -24,7 +27,7 @@ bool check(bool condition, const char *message) {
 // Framework's stock-Sony authorities, so the test runs the shipping owners.
 void stockSync(Core *core) {
   ++gStockSyncCalls;
-  cd_sync_stock_sync(core);
+  gLibcd->sync(*core);
 }
 
 void originalSync(Core *core) {
@@ -34,7 +37,7 @@ void originalSync(Core *core) {
 
 void stockControl(Core *core) {
   ++gStockControlCalls;
-  cd_control_sync(core);
+  gLibcd->control(*core);
 }
 
 void reset(Core &core) {
@@ -232,7 +235,9 @@ bool verifyMeasuredStepTable() {
 } // namespace
 
 int main() {
-  auto game = std::make_unique<Game>();
+  x4::test::StubGame stub;
+  gLibcd = &stub.libcd();
+  Game *game = &stub.game();
   Core &core = game->core;
   if (!verifyMeasuredStepTable() || !verifyEdgesAreDistinct() || !verifyMeasuredEdgesAreServed(core) ||
       !verifyStateChainAdvances(core) || !verifyUnmeasuredCallersAreNotAbsorbed(core) ||

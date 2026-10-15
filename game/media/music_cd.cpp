@@ -1,9 +1,9 @@
 #include "music_cd.h"
 
-#include "cd_control.h"
 #include "core.h"
 #include "native_dispatch.h"
 #include "resumable_guest_call.h"
+#include "x4_session.h"
 
 #include <array>
 #include <cstdlib>
@@ -71,20 +71,12 @@ void require(Core *core, GuestBody leaf, const char *name) {
   }
 }
 
-void frameworkCdSync(Core *core) {
-  cd_sync_stock_sync(core);
-}
-
-void frameworkCdControl(Core *core) {
-  cd_control_sync(core);
-}
-
 void originalCdSync(Core *core) {
   psx::cpu::callOriginalResumingToReturn(*core, "music_cd::CdSync original", kCdSyncEntry, core->r[31]);
 }
 
 void serveCdSyncEntry(Core *core) {
-  if (!serveCdSync(core, frameworkCdSync, originalCdSync)) {
+  if (!serveCdSync(core, stockCdSync, originalCdSync)) {
     originalCdSync(core);
   }
 }

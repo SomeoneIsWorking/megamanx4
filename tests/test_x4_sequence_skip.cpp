@@ -4,6 +4,7 @@
 #include "core.h"
 #include "game.h"
 #include "player_object.h"
+#include "stub_game.h"
 
 #include <cstdio>
 #include <memory>
@@ -32,7 +33,8 @@ using x4::sequence_skip::SequenceSkip;
   } while (0)
 
 struct Fixture {
-  std::unique_ptr<Game> game = std::make_unique<Game>();
+  x4::test::StubGame stub;
+  Game *game = &stub.game();
   Core &core = game->core;
 
   void engine(std::uint8_t state, std::uint8_t subState) {

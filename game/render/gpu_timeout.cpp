@@ -1,9 +1,9 @@
 #include "gpu_timeout.h"
 
-#include "cfg.h"
 #include "core.h"
 #include "execution_services.h"
 #include "native_dispatch.h"
+#include "vsync_sync.h"
 
 #include <cstdlib>
 #include <lucent/log.h>
@@ -12,7 +12,6 @@ namespace x4::gpu_timeout {
 namespace {
 
 // set_alarm deadline is the VBlank counter plus four seconds at 60 Hz.
-constexpr std::uint32_t kVblankCounter = 0x8011DC50u;
 constexpr std::uint32_t kAlarmDeadline = 0x8011E2A0u;
 constexpr std::uint32_t kAlarmPollCount = 0x8011E2A4u;
 constexpr std::uint32_t kGpuStatusPointerPointer = 0x8011CB8Cu;
@@ -22,7 +21,7 @@ constexpr std::uint32_t kAlarmFields = 240u;
 
 void setAlarm(Core *core) {
   if (!core) {
-    cfg_loge("x4-gpu-timeout", "set_alarm received a null Core");
+    lucent::error("x4-gpu-timeout", "set_alarm received a null Core");
     std::abort();
   }
 
@@ -44,7 +43,7 @@ void setAlarm(Core *core) {
   core->r[3] = core->mem_r32(kGpuStatusPointerPointer);
   core->r[17] = (core->r[2] - core->mem_r32(core->r[3])) & 0xFFFFu;
   psx::cpu::accountGuestInstructions(*core, 16u);
-  core->r[2] = core->mem_r32(kVblankCounter);
+  core->r[2] = core->mem_r32(vsync::kVblankCounter);
   psx::cpu::accountGuestInstructions(*core, 4u);
 
   // VSync epilogue; r3/r4 keep the negative-query path values.

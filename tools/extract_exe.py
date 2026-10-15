@@ -77,7 +77,7 @@ def main():
     if got == want:
         print(f"[exe] MATCH mmx4's target sha1 {want} (from {os.path.relpath(why, ROOT)}) — the decomp's "
               "symbol addresses are OUR addresses, with no translation (docs/references.md). That is a "
-              "fact about the SUPPLY; it fills no GameConfig field.")
+              "fact about the SUPPLY; it measures no address.")
         return 0
     print(f"[exe] MISMATCH: this disc yields {got}, mmx4 targets {want} (from "
           f"{os.path.relpath(why, ROOT)}). A different region/revision. Its addresses do NOT necessarily "

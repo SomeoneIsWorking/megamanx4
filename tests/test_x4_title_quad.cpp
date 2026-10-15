@@ -4,6 +4,7 @@
 
 #include "core.h"
 #include "game.h"
+#include "stub_game.h"
 
 #include <array>
 #include <cstdio>
@@ -31,7 +32,8 @@ int g_checks = 0;
 } // namespace
 
 int main() {
-  auto game = std::make_unique<Game>();
+  x4::test::StubGame stub;
+  Game *game = &stub.game();
   Core &core = game->core;
   const std::uint32_t preset = x4::title_quad::kVertexPresets + kVariant * 16u;
 

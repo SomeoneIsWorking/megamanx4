@@ -21,10 +21,18 @@ bool reportedThisField = false;
 
 // Band loop of 0x80015F74-0x80015FD4; the cursor advances in the delay slot at 0x80015FD4, so it moves
 // once per entry, not per call.
-void emitBands(
-    Core &core, std::uint32_t source, std::int32_t x, std::int32_t y, std::int32_t remaining, Append &record) {
+// One decompressed graphic: its pixels, the rectangle origin and its band count.
+struct BandRun {
+  std::uint32_t source;
+  RectOrigin origin;
+  std::int32_t bands;
+};
+
+void emitBands(Core &core, const BandRun &run, Append &record) {
   std::uint32_t cursor = core.mem_r32(kCursorGlobal);
-  std::int32_t top = y;
+  std::uint32_t source = run.source;
+  std::int32_t remaining = run.bands;
+  std::int32_t top = run.origin.y;
   // v1 at loop exit is the band count the last head read (`sra` @ 0x80015F74).
   std::int32_t lastHeadCount = remaining;
   while (remaining != 0) {
@@ -37,7 +45,7 @@ void emitBands(
     const bool trailing = remaining < kBandHeight;
     const std::int32_t height = trailing ? kBandHeight : (remaining & ~(kBandHeight - 1));
     Entry entry;
-    entry.rect.x = static_cast<std::int16_t>(x);
+    entry.rect.x = static_cast<std::int16_t>(run.origin.x);
     entry.rect.y = static_cast<std::int16_t>(top);
     entry.rect.w = static_cast<std::int16_t>(trailing ? remaining * 4 : kFullBandWidth);
     entry.rect.h = static_cast<std::int16_t>(height);
@@ -86,15 +94,23 @@ std::uint32_t decompressedBuffer(Core &core, std::uint32_t object) {
   return kPerSlotGfxBuffer + static_cast<std::uint32_t>(slot * static_cast<std::int32_t>(kGfxBufferStride));
 }
 
-void runGuest(
-    Core &core, std::uint32_t entry, std::uint32_t returnPc, std::uint32_t a0, std::uint32_t a1, std::uint32_t caller) {
+// A guest leaf called from inside an override: entry, its return pc, a0/a1 and the override's own link.
+struct LeafCall {
+  std::uint32_t entry;
+  std::uint32_t returnPc;
+  std::uint32_t a0;
+  std::uint32_t a1;
+  std::uint32_t caller;
+};
+
+void runGuest(Core &core, const LeafCall &leaf) {
   // The guest body leaves $31 as it found it (`sw/lw ra,0x20(sp)` @ 0x80015ED8/0x80015FE4).
   const std::uint32_t savedLink = core.r[31];
-  core.r[4] = a0;
-  core.r[5] = a1;
+  core.r[4] = leaf.a0;
+  core.r[5] = leaf.a1;
   // Callee returns to the override entry link so `jr $ra` lands on the dispatcher boundary.
-  core.r[31] = caller;
-  psx::cpu::callGuestToReturnResuming(core, "vram_rect::flushRect", entry, returnPc);
+  core.r[31] = leaf.caller;
+  psx::cpu::callGuestToReturnResuming(core, "vram_rect::flushRect", leaf.entry, leaf.returnPc);
   core.r[31] = savedLink;
 }
 
@@ -128,7 +144,7 @@ void upload(Core &core) {
       continue;
     }
     // LoadImage @ 0x80015E8C reads the RECT from guest memory.
-    runGuest(core, kLoadImageGuest, kLoadImageGuestReturn, entry, pixels, caller);
+    runGuest(core, {kLoadImageGuest, kLoadImageGuestReturn, entry, pixels, caller});
     stats.uploadedEntries += 1;
   }
   core.mem_w32(kCursorGlobal, kQueueBase);
@@ -138,15 +154,15 @@ void upload(Core &core) {
   core.r[3] = kUploadFinalV1;
 }
 
-void append(Core &core, std::uint32_t object, std::int32_t x, std::int32_t y) {
+void append(Core &core, std::uint32_t object, const RectOrigin &origin) {
   stats.calls += 1;
   const std::uint32_t caller = core.r[31];
   Append record;
   record.field = core.mem_r32(kFieldCounter);
   record.caller = caller;
   record.object = object;
-  record.x = x;
-  record.y = y;
+  record.x = origin.x;
+  record.y = origin.y;
 
   // Unchanged animation index returns before decompressing; `sb` @ 0x80015F04 latches the new one.
   const std::uint32_t current = core.mem_r8(object + kCurrentAnimOffset);
@@ -166,9 +182,9 @@ void append(Core &core, std::uint32_t object, std::int32_t x, std::int32_t y) {
   const std::uint32_t buffer = decompressedBuffer(core, object);
 
   // `jal 0x80016FF4` @ 0x80015F54, the only call to it; returns to 0x80015F5C.
-  runGuest(core, kDecompressGfxGuest, kDecompressGfxReturn, stream, buffer, caller);
+  runGuest(core, {kDecompressGfxGuest, kDecompressGfxReturn, stream, buffer, caller});
 
-  emitBands(core, buffer, x, y, bands, record);
+  emitBands(core, {.source = buffer, .origin = origin, .bands = bands}, record);
 
   if (record.refused != 0u) {
     stats.refused += record.refused;
@@ -207,9 +223,8 @@ void install(Core &core) {
   // Arguments are registers: $4 object, $5/$6 x/y as s16 (`sh` @ 0x80015F7C / 0x80015F80).
   psx::cpu::installNativeOverride(core, kAppendBandsGuest, "vram_rect::append", [](Core *active) {
     const std::uint32_t object = active->r[4];
-    const std::int32_t x = static_cast<std::int16_t>(active->r[5]);
-    const std::int32_t y = static_cast<std::int16_t>(active->r[6]);
-    append(*active, object, x, y);
+    append(
+        *active, object, {.x = static_cast<std::int16_t>(active->r[5]), .y = static_cast<std::int16_t>(active->r[6])});
   });
 }
 

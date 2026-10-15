@@ -3,6 +3,7 @@
 
 #include "core.h"
 #include "game.h"
+#include "stub_game.h"
 
 #include <cstdio>
 #include <memory>
@@ -121,7 +122,8 @@ bool verify_pad_lens(Core &core) {
 } // namespace
 
 int main() {
-  auto game = std::make_unique<Game>();
+  x4::test::StubGame stub;
+  Game *game = &stub.game();
   Core &core = game->core;
 
   if (!verify_player_lens(core) || !verify_camera_lens(core) || !verify_pad_lens(core)) {

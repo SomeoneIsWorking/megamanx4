@@ -1,9 +1,10 @@
-#include "cd_control.h"
 #include "cd_control_boundary.h"
 #include "cd_controller.h"
 #include "core.h"
 #include "game.h"
 #include "movie_cleanup.h"
+#include "stock_libcd.h"
+#include "stub_game.h"
 
 #include <array>
 #include <cstdint>
@@ -12,6 +13,8 @@
 #include <vector>
 
 namespace {
+
+const psx::cd::StockLibcd *gLibcd = nullptr;
 
 struct Call {
   std::uint32_t entry;
@@ -49,7 +52,7 @@ void existingBlocking(Core *, x4::cd_control_boundary::GuestBody, bool) {
 }
 
 void synchronousControl(Core *core) {
-  cd_control_sync(core);
+  gLibcd->control(*core);
 }
 
 void resetController(Core &core) {
@@ -68,7 +71,7 @@ void dispatch(Core *core, std::uint32_t entry) {
     x4::cd_control_boundary::blocking(core, retainedBlocking, synchronousControl, existingBlocking);
     return;
   case 0x800E5D90u:
-    cd_control_sync(core);
+    gLibcd->control(*core);
     return;
   case 0x800E4DB0u:
     ++gGuestVsyncCalls;
@@ -182,7 +185,9 @@ bool verifyTransaction(Core &core, Game &game, x4::movie_cleanup::State &state) 
 } // namespace
 
 int main() {
-  auto game = std::make_unique<Game>();
+  x4::test::StubGame stub;
+  gLibcd = &stub.libcd();
+  Game *game = &stub.game();
   x4::movie_cleanup::State state(game->core, suspendField);
   if (!verifyTransaction(game->core, *game, state)) {
     return 1;

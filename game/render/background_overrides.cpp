@@ -7,7 +7,7 @@
 #include "native_dispatch.h"
 #include "resumable_guest_call.h"
 
-#include "x4_context.h"
+#include "x4_session.h"
 
 namespace x4::background {
 namespace {
@@ -22,12 +22,12 @@ void original(Core *core, std::uint32_t address, const char *owner) {
 void drawLayer(Core *core) {
   const int layer = static_cast<int>(core->r[kArg0]);
   original(core, kDrawLayer, "background::drawLayer original");
-  WideBackground{context(*core).widescreen.plan()}.drawLayer(*core, layer);
+  WideBackground{session(*core).widescreen.plan()}.drawLayer(*core, layer);
 }
 
 void refillRing(Core *core) {
   original(core, kRefillRing, "background::refillRing original");
-  WideBackground{context(*core).widescreen.plan()}.refillRing(*core);
+  WideBackground{session(*core).widescreen.plan()}.refillRing(*core);
 }
 
 } // namespace

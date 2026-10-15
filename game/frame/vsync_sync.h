@@ -11,9 +11,8 @@ class Service;
 
 namespace x4::vsync {
 
-// Full libetc VSync entry and its half-open four-byte window; every mode is served as retail decodes it.
+// The libetc VSync entry; every mode is served as retail decodes it.
 inline constexpr std::uint32_t kVSync = 0x800E4DB0u;
-inline constexpr std::uint32_t kVSyncEntryEnd = 0x800E4DB4u;
 
 // kVblankCounter: incremented per field by the IRQ-0 handler 0x800E56FC; kRegisterCell0/1 hold GPUSTAT
 // 0x1F801814 and root counter 1 0x1F801110; kLastSample/kLastSync are the previous RCNT1 sample and
@@ -38,7 +37,7 @@ void yieldField(Core &core, std::uint32_t returnAddress, bios_threads::Service &
 
 void serveVSync(Core *core);
 
-// Install `serveVSync` as the image-scoped owner of the entry; `.vsyncTrap` stays as the fail-fast backstop.
+// Install `serveVSync` as the image-scoped owner of the entry, ahead of the stock VSync binding.
 void registerOverrides(Core &core);
 
 } // namespace x4::vsync

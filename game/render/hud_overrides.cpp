@@ -7,7 +7,7 @@
 #include "native_dispatch.h"
 #include "resumable_guest_call.h"
 
-#include "x4_context.h"
+#include "x4_session.h"
 
 namespace x4::hud {
 namespace {
@@ -15,7 +15,7 @@ namespace {
 void hudPass(Core *core) {
   const ArenaPositions before = HudAnchor::positions(*core);
   psx::cpu::callOriginalResumingToReturn(*core, "hud::hudPass original", kHudPass, core->r[31]);
-  HudAnchor{context(*core).widescreen.plan()}.anchor(*core, before);
+  HudAnchor{session(*core).widescreen.plan()}.anchor(*core, before);
 }
 
 } // namespace

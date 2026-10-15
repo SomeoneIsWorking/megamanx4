@@ -7,7 +7,8 @@
 #include "guest_execution.h"
 #include "native_dispatch.h"
 #include "platform_hle.h"
-#include "x4_context.h"
+#include "vsync_sync.h"
+#include "x4_session.h"
 
 #include <cstdlib>
 #include <lucent/log.h>
@@ -16,9 +17,6 @@
 
 namespace x4::bios_threads {
 namespace {
-
-// libetc VBlank counter; game/frame/vsync_sync.h owns the boundary it counts.
-constexpr uint32_t kVblankCounter = 0x8011DC50u;
 
 // A pc outside every code image reports at once; otherwise every Nth resume does.
 constexpr std::uint64_t kSwitchCensusReportStride = 1000u;
@@ -117,8 +115,8 @@ void Service::runGuestEntry(Core &core, uint32_t entry) {
                       "guest loop: reported rather than spun on",
                       kMaxTurnFields,
                       result.guestPc,
-                      core.mem_r32(kVblankCounter),
-                      kVblankCounter);
+                      core.mem_r32(vsync::kVblankCounter),
+                      vsync::kVblankCounter);
         std::abort();
       }
       ++turnCensus_.budgetResumes;
@@ -151,7 +149,7 @@ void Service::runGuestEntry(Core &core, uint32_t entry) {
                     entry,
                     core.pc,
                     core.r[31],
-                    core.mem_r32(kVblankCounter));
+                    core.mem_r32(vsync::kVblankCounter));
       lucent::error("x4-thread",
                     "guest task 0x{:08X} register file at the fault: r0=0x{:08X} r1=0x{:08X} r2=0x{:08X} "
                     "r3=0x{:08X} r4=0x{:08X} r5=0x{:08X} r6=0x{:08X} r7=0x{:08X}",
@@ -506,13 +504,13 @@ bool Service::isDone(uint32_t handle) const {
 }
 
 Service &from(Core &core) {
-  return x4::context(core).biosThreads;
+  return x4::session(core).biosThreads;
 }
 
 void install(Game &game) {
-  game.platform_hle.register_(kOpenThread, open_thread);
-  game.platform_hle.register_(kCloseThread, close_thread);
-  game.platform_hle.register_(kChangeThread, change_thread);
+  game.platform_hle.bindStock(kOpenThread, open_thread);
+  game.platform_hle.bindStock(kCloseThread, close_thread);
+  game.platform_hle.bindStock(kChangeThread, change_thread);
   lucent::info("x4-thread",
                "retail BIOS thread services installed at OpenTh=0x{:08X}, CloseTh=0x{:08X}, "
                "ChangeTh=0x{:08X}",
